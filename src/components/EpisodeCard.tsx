@@ -1,0 +1,46 @@
+import React, { useState, useEffect } from 'react';
+import { URL_PATHS } from '../api/api';
+import type { MediaItem } from '../types';
+
+interface EpisodeCardProps {
+    item: MediaItem;
+    onClick: (item: MediaItem) => void;
+}
+
+const EpisodeCard: React.FC<EpisodeCardProps> = ({ item, onClick }) => {
+    const [imageError, setImageError] = useState(false);
+    const displayTitle = item.title || item.name;
+    const initials = displayTitle ? displayTitle.substring(0, 2).toUpperCase() : '??';
+    const imageUrl = item.screenshot_uri ? (item.screenshot_uri.startsWith("http") ? item.screenshot_uri : `${URL_PATHS.HOST}/api/images${item.screenshot_uri}`) : null;
+
+    useEffect(() => {
+        setImageError(false);
+    }, [item.screenshot_uri]);
+
+    return (
+         <div
+            className="bg-gray-800 rounded-lg overflow-hidden cursor-pointer flex items-center transform transition-all duration-300 hover:bg-gray-700 hover:shadow-lg hover:border-blue-500 border-2 border-transparent w-full group"
+            onClick={() => onClick(item)}
+        >
+            <div className="relative w-32 h-20 bg-gray-700 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                {imageUrl && !imageError ? (
+                    <img
+                        src={imageUrl}
+                        alt={displayTitle}
+                        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
+                        onError={() => setImageError(true)}
+                    />
+                ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-700 to-gray-800">
+                        <span className="text-2xl font-bold text-gray-400 select-none">{initials}</span>
+                    </div>
+                )}
+            </div>
+            <div className="p-4 overflow-hidden">
+                <h3 className="text-white text-lg font-semibold truncate transition-colors duration-300 group-hover:text-blue-400">{displayTitle}</h3>
+            </div>
+        </div>
+    );
+};
+
+export default EpisodeCard;
