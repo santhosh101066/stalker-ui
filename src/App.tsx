@@ -30,6 +30,7 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [contentType, setContentType] = useState<"movie" | "series">("movie"); // 'movie' or 'series'
   const [showAdmin, setShowAdmin] = useState(false);
+  const [currentItemId, setCurrentItemId] = useState<string | null>(null);
 
   const fetchData = useCallback(
     async (newContext: ContextType, typeOverride?: "movie" | "series") => {
@@ -147,6 +148,7 @@ export default function App() {
             if (typeof cmd === "string") {
               setRawStreamUrl(cmd);
               setStreamUrl(`${BASE_URL}/proxy?url=${btoa(cmd)}`);
+              setCurrentItemId(item.id);
             } else {
               throw new Error("Episode stream URL (cmd) not found.");
             }
@@ -178,6 +180,7 @@ export default function App() {
             const rawUrl = linkData.js.cmd;
             setRawStreamUrl(rawUrl);
             setStreamUrl(`${BASE_URL}/proxy?url=${btoa(rawUrl)}`);
+            setCurrentItemId(item.id);
           } else {
             throw new Error("Movie stream URL not found.");
           }
@@ -204,6 +207,7 @@ export default function App() {
     if (streamUrl) {
       setStreamUrl(null);
       setRawStreamUrl(null);
+      setCurrentItemId(null);
       return;
     }
 
@@ -352,6 +356,7 @@ export default function App() {
                         streamUrl={streamUrl}
                         rawStreamUrl={rawStreamUrl}
                         onBack={handleBack}
+                        itemId={currentItemId}
                       />
                     ) : (
                       <>
