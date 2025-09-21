@@ -10,13 +10,16 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@videojs/themes": "^1.0.1",
     "hls.js": "^1.6.12",
     "postcss": "^8.4.31",
     "postcss-import": "^16.1.1",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "react-toastify": "^10.0.5",
-    "tailwindcss": "^3.4.1"
+    "tailwindcss": "^3.4.1",
+    "video.js": "^8.23.4",
+    "videojs-contrib-hls": "^5.15.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.35.0",

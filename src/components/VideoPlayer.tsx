@@ -7,13 +7,15 @@ interface VideoPlayerProps {
     streamUrl: string | null;
     rawStreamUrl: string | null;
     onBack: () => void;
+    itemId: string | null;
 }
 
-const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBack }) => {
+const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBack, itemId }) => {
     const videoRef = useRef<HTMLVideoElement>(null);
     const playerContainerRef = useRef<HTMLDivElement>(null);
     const hlsInstance = useRef<Hls | null>(null);
     const controlsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const lastSaveTime = useRef<number>(0);
 
     const [isPlaying, setIsPlaying] = useState(true);
     const [isMuted, setIsMuted] = useState(false);
@@ -28,6 +30,11 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBa
     const [seeking, setSeeking] = useState(false);
     const [useProxy, setUseProxy] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [hoverTime, setHoverTime] = useState(0);
+    const [hoverPosition, setHoverPosition] = useState(0);
+    const [isHovering, setIsHovering] = useState(false);
+    const [cursorVisible, setCursorVisible] = useState(true);
+    const cursorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     useEffect(() => {
         const videoElement = videoRef.current;
@@ -36,6 +43,11 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBa
         if (!videoElement || !urlToPlay) return;
 
         const initializePlayer = () => {
+            const savedTime = localStorage.getItem(`video-progress-${itemId}`);
+            if (savedTime) {
+                videoElement.currentTime = parseFloat(savedTime);
+            }
+
             if ((window as any).Hls && (window as any).Hls.isSupported()) {
                 if (hlsInstance.current) {
                     hlsInstance.current.destroy();
@@ -66,6 +78,10 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBa
             } else if (videoElement.canPlayType('application/vnd.apple.mpegurl')) {
                 videoElement.src = urlToPlay;
                 videoElement.addEventListener('loadedmetadata', () => {
+                    const savedTime = localStorage.getItem(`video-progress-${itemId}`);
+                    if (savedTime) {
+                        videoElement.currentTime = parseFloat(savedTime);
+                    }
                     videoElement.play();
                 });
             }
@@ -88,7 +104,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBa
                 hlsInstance.current.destroy();
             }
         };
-    }, [streamUrl, rawStreamUrl, useProxy]);
+    }, [streamUrl, rawStreamUrl, useProxy, itemId]);
     
     useEffect(() => {
         const video = videoRef.current;
@@ -99,6 +115,12 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBa
                 setProgress((video.currentTime / video.duration) * 100);
             }
             setCurrentTime(video.currentTime);
+
+            const now = Date.now();
+            if (now - lastSaveTime.current > 5000) {
+                localStorage.setItem(`video-progress-${itemId}`, String(video.currentTime));
+                lastSaveTime.current = now;
+            }
         };
         const handleDurationChange = () => setDuration(video.duration);
         const handlePlay = () => setIsPlaying(true);
@@ -154,7 +176,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBa
             video.removeEventListener('playing', handlePlaying);
             video.removeEventListener('error', handleError);
         };
-    }, [seeking]);
+    }, [seeking, itemId]);
 
     useEffect(() => {
         const handleFullscreenChange = () => {
@@ -189,6 +211,18 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBa
     const handleSeekChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setProgress(Number(e.target.value));
     };
+
+    const handleSeekBarHover = (e: React.MouseEvent<HTMLInputElement>) => {
+        const video = videoRef.current;
+        if (video && isFinite(video.duration)) {
+            const rect = e.currentTarget.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const percentage = x / rect.width;
+            const time = percentage * video.duration;
+            setHoverTime(time);
+            setHoverPosition(x);
+        }
+    };
     
     const skip = (seconds: number) => {
         const video = videoRef.current;
@@ -215,11 +249,20 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBa
 
     const handleMouseMove = () => {
         setControlsVisible(true);
+        setCursorVisible(true); // Show cursor on mouse move
+
         if (controlsTimeoutRef.current) {
             clearTimeout(controlsTimeoutRef.current);
         }
         controlsTimeoutRef.current = setTimeout(() => {
             setControlsVisible(false);
+        }, 3000);
+
+        if (cursorTimeoutRef.current) {
+            clearTimeout(cursorTimeoutRef.current);
+        }
+        cursorTimeoutRef.current = setTimeout(() => {
+            setCursorVisible(false); // Hide cursor after 3 seconds of inactivity
         }, 3000);
     };
 
@@ -269,8 +312,14 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBa
                     </div>
                 </label>
             </div>
-            <div ref={playerContainerRef} onMouseMove={handleMouseMove} onMouseLeave={() => setControlsVisible(false)} className="relative aspect-video bg-black rounded-lg overflow-hidden shadow-2xl group">
-                <video ref={videoRef} autoPlay playsInline className="w-full h-full" onClick={togglePlayPause} />
+            <div ref={playerContainerRef} onMouseMove={handleMouseMove} onMouseLeave={() => {
+            setControlsVisible(false);
+            setCursorVisible(false); // Hide cursor immediately on mouse leave
+            if (cursorTimeoutRef.current) {
+                clearTimeout(cursorTimeoutRef.current);
+            }
+        }} className={`relative aspect-video bg-black rounded-lg overflow-hidden shadow-2xl group ${!cursorVisible && !controlsVisible ? 'cursor-none' : ''}`}>
+                <video ref={videoRef} autoPlay playsInline className="w-full h-full" onClick={togglePlayPause} onDoubleClick={toggleFullscreen} />
 
                 {error && (
                     <div className="absolute inset-0 flex flex-col items-center justify-center bg-black bg-opacity-75 z-30">
@@ -294,21 +343,34 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBa
                     </div>
                 )}
 
-                <div className={`absolute inset-0 transition-opacity duration-300 ${controlsVisible || isBuffering ? 'opacity-100' : 'opacity-0'} z-20`}>
+                <div className={`absolute inset-0 transition-opacity duration-300 pointer-events-none ${controlsVisible || isBuffering ? 'opacity-100' : 'opacity-0'} z-20`}>
                      <div className="absolute bottom-0 left-0 right-0 p-4 bg-linear-to-t from-black via-black/70 to-transparent">
-                        <input 
-                            type="range" 
-                            min="0" 
-                            max="100" 
-                            value={progress} 
-                            onMouseDown={handleSeekMouseDown}
-                            onMouseUp={handleSeekMouseUp}
-                            onChange={handleSeekChange} 
-                            className="w-full h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer range-sm" 
-                            style={{accentColor: '#3b82f6'}} 
-                        />
+                        <div className="relative w-full pointer-events-auto">
+                            {isHovering && (
+                                <div
+                                    className="absolute bottom-full mb-2 px-2 py-1 bg-black bg-opacity-75 text-white text-xs rounded"
+                                    style={{ left: `${hoverPosition}px`, transform: 'translateX(-50%)' }}
+                                >
+                                    {formatTime(hoverTime)}
+                                </div>
+                            )}
+                            <input 
+                                type="range" 
+                                min="0" 
+                                max="100" 
+                                value={progress} 
+                                onMouseDown={handleSeekMouseDown}
+                                onMouseUp={handleSeekMouseUp}
+                                onChange={handleSeekChange}
+                                onMouseMove={handleSeekBarHover}
+                                onMouseEnter={() => setIsHovering(true)}
+                                onMouseLeave={() => setIsHovering(false)}
+                                className="w-full h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer range-sm" 
+                                style={{accentColor: '#3b82f6'}} 
+                            />
+                        </div>
 
-                        <div className="flex items-center justify-between text-white mt-2">
+                        <div className="flex items-center justify-between text-white mt-2 pointer-events-auto">
                             <div className="flex items-center space-x-4">
                                 <button onClick={togglePlayPause} className="text-white hover:text-blue-400">
                                     {isPlaying ? 

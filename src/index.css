@@ -5,3 +5,7 @@
 body {
   background-color: #1a202c;
 }
+
+.cursor-none {
+  cursor: none;
+}
