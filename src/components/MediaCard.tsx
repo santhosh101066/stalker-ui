@@ -31,7 +31,7 @@ const MediaCard: React.FC<MediaCardProps> = ({ item, onClick }) => {
                         onError={() => setImageError(true)}
                     />
                 ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-700 to-gray-800">
+                    <div className="w-full h-full flex items-center justify-center bg-linear-to-br from-gray-700 to-gray-800">
                         <span className="text-4xl font-bold text-gray-400 select-none">{initials}</span>
                     </div>
                 )}

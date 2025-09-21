@@ -239,7 +239,7 @@ const Admin = () => {
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="mb-4">
           <div className="flex items-end gap-2">
-            <div className="flex-grow">
+            <div className="grow">
               <label htmlFor="hostname" className="block text-sm font-medium mb-1">
                 Hostname:
               </label>
