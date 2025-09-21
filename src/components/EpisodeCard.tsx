@@ -22,7 +22,7 @@ const EpisodeCard: React.FC<EpisodeCardProps> = ({ item, onClick }) => {
             className="bg-gray-800 rounded-lg overflow-hidden cursor-pointer flex items-center transform transition-all duration-300 hover:bg-gray-700 hover:shadow-lg hover:border-blue-500 border-2 border-transparent w-full group"
             onClick={() => onClick(item)}
         >
-            <div className="relative w-32 h-20 bg-gray-700 flex items-center justify-center flex-shrink-0 overflow-hidden">
+            <div className="relative w-32 h-20 bg-gray-700 flex items-center justify-center shrink-0 overflow-hidden">
                 {imageUrl && !imageError ? (
                     <img
                         src={imageUrl}
@@ -31,7 +31,7 @@ const EpisodeCard: React.FC<EpisodeCardProps> = ({ item, onClick }) => {
                         onError={() => setImageError(true)}
                     />
                 ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-700 to-gray-800">
+                    <div className="w-full h-full flex items-center justify-center bg-linear-to-br from-gray-700 to-gray-800">
                         <span className="text-2xl font-bold text-gray-400 select-none">{initials}</span>
                     </div>
                 )}
