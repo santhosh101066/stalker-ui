@@ -28,7 +28,7 @@ To get a local copy up and running, follow these steps:
 
 1.  **Clone the repository:**
     ```bash
-    git clone <repository-url>
+    git clone git@github.com:santhosh101066/stalker-ui.git
     cd stalker-ui
     ```
 
