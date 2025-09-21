@@ -1,69 +1,108 @@
-# React + TypeScript + Vite
+# Stalker UI
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A modern and responsive web-based UI for browsing and playing media content (movies and series). This application provides features like searching, categorization, video playback with HLS.js, and an administrative interface.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+-   **Browse & Search:** Easily navigate through a collection of movies and series with search and categorization options.
+-   **Video Playback:** Seamless video streaming powered by HLS.js, supporting various media formats.
+-   **Interactive Player Controls:** Full-screen mode, mute/volume control, seek functionality, and skip forward/backward.
+-   **Video Progress Saving:** Automatically saves your playback progress for each video.
+-   **Stream Link Copy:** Easily copy the raw stream URL.
+-   **Proxy Toggle:** Option to toggle between direct and proxied stream URLs.
+-   **Admin Panel:** An integrated administrative interface for managing content (functionality details within the application).
+-   **Responsive Design:** Optimized for various screen sizes, from desktops to mobile devices.
 
-## Expanding the ESLint configuration
+## Technologies Used
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+-   **Frontend:** React.js, TypeScript
+-   **Build Tool:** Vite
+-   **Styling:** Tailwind CSS
+-   **Video Streaming:** HLS.js, video.js
+-   **Notifications:** React-Toastify
+-   **Built with:** Gemini Agent
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+## Installation
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+To get a local copy up and running, follow these steps:
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+1.  **Clone the repository:**
+    ```bash
+    git clone <repository-url>
+    cd stalker-ui
+    ```
+
+2.  **Install dependencies:**
+    ```bash
+    npm install
+    ```
+
+## Usage
+
+### Development Server
+
+To run the development server with hot-reloading:
+
+```bash
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+This will typically start the application on `http://localhost:5173` (or another available port).
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+### Building for Production
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+To build the application for production:
+
+```bash
+npm run build
 ```
+
+This command compiles and bundles the application into the `dist` directory.
+
+### Preview Production Build
+
+To preview the production build locally:
+
+```bash
+npm run preview
+```
+
+### Linting
+
+To run the linter:
+
+```bash
+npm run lint
+```
+
+## Project Structure
+
+```
+stalker-ui/
+├── public/
+├── src/
+│   ├── api/             # API service integrations
+│   ├── assets/          # Static assets
+│   ├── components/      # Reusable React components (e.g., VideoPlayer, MediaCard)
+│   ├── types/           # TypeScript type definitions
+│   ├── utils/           # Utility functions
+│   ├── App.tsx          # Main application component
+│   ├── index.css        # Global styles
+│   └── main.tsx         # Entry point of the React application
+├── .gitignore
+├── index.html
+├── package.json
+├── postcss.config.mjs
+├── tailwind.config.js
+├── tsconfig.json
+├── vite.config.ts
+└── README.md
+```
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
