@@ -37,7 +37,7 @@ const MediaCard: React.FC<MediaCardProps> = ({ item, onClick }) => {
                 )}
             </div>
             <div className="p-4">
-                <h3 className="text-white text-lg font-bold truncate transition-colors duration-300 group-hover:text-blue-400">{displayTitle}</h3>
+                <h3 className="text-white text-md font-bold truncate transition-colors duration-300 group-hover:text-blue-400">{displayTitle}</h3>
             </div>
         </div>
     );

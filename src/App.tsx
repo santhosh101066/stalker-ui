@@ -280,7 +280,8 @@ export default function App() {
                     &larr;
                   </button>
                 )}
-                <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-white tracking-wider">
+                <img src="stalker-logo.svg" width={180}/>
+                <h1 className="text-xl sm:text-l md:text-l font-bold text-white tracking-wider">
                   {currentTitle}
                 </h1>
                 <button
