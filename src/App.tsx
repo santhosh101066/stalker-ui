@@ -9,6 +9,7 @@ import type { MediaItem, ContextType } from "./types";
 import { BASE_URL } from "./api/api";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+import "./App.css"
 
 // --- Main Application Component ---
 export default function App() {
@@ -31,6 +32,7 @@ export default function App() {
   const [contentType, setContentType] = useState<"movie" | "series">("movie"); // 'movie' or 'series'
   const [showAdmin, setShowAdmin] = useState(false);
   const [currentItemId, setCurrentItemId] = useState<string | null>(null);
+  const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
 
   const fetchData = useCallback(
     async (newContext: ContextType, typeOverride?: "movie" | "series") => {
@@ -203,7 +205,7 @@ export default function App() {
     }
   };
 
-  const handleBack = () => {
+  const handleBack = useCallback(() => {
     if (streamUrl) {
       setStreamUrl(null);
       setRawStreamUrl(null);
@@ -216,7 +218,115 @@ export default function App() {
       setHistory((prev) => prev.slice(0, -1));
       fetchData(lastContext);
     }
-  };
+  }, [streamUrl, history, fetchData]);
+
+  useEffect(() => {
+    // Reset focus when the view changes
+    setFocusedIndex(null);
+  }, [items, showAdmin, streamUrl]);
+
+  useEffect(() => {
+    const focusable = Array.from(document.querySelectorAll('[data-focusable="true"]')) as HTMLElement[];
+    if (focusable.length === 0) return;
+
+    const newIndex = focusedIndex === null ? 0 : focusedIndex;
+    if (newIndex >= focusable.length) {
+      setFocusedIndex(focusable.length - 1);
+      return;
+    }
+    
+    if (focusedIndex === null) {
+      setFocusedIndex(0);
+    }
+
+    focusable.forEach((el, index) => {
+      if (index === newIndex) {
+        el.classList.add('focused');
+        el.focus();
+      } else {
+        el.classList.remove('focused');
+      }
+    });
+  }, [focusedIndex, items, showAdmin, streamUrl]);
+
+      useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (streamUrl) return; // Do not handle key events when video player is active
+
+      if (e.target instanceof HTMLInputElement && e.target.type === 'search') {
+        if (e.keyCode === 13) { 
+          return;
+        }
+      }
+      
+      const focusable = Array.from(document.querySelectorAll('[data-focusable="true"]')) as HTMLElement[];
+      if (focusable.length === 0) return;
+
+      let currentIndex = focusedIndex === null ? 0 : focusedIndex;
+      if(currentIndex >= focusable.length) currentIndex = focusable.length - 1;
+      
+      switch (e.keyCode) {
+        case 37: // LEFT
+          e.preventDefault();
+          if (currentIndex > 0) {
+            setFocusedIndex(currentIndex - 1);
+          }
+          break;
+        case 39: // RIGHT
+          e.preventDefault();
+          if (currentIndex < focusable.length - 1) {
+            setFocusedIndex(currentIndex + 1);
+          }
+          break;
+        case 38: // UP
+          { e.preventDefault();
+          const grid = document.querySelector('.grid');
+          if (grid) {
+            const gridComputedStyle = window.getComputedStyle(grid);
+            const gridColumnCount = gridComputedStyle.getPropertyValue('grid-template-columns').split(' ').length;
+            const newIndex = currentIndex - gridColumnCount;
+            if (newIndex >= 0) {
+              setFocusedIndex(newIndex);
+            }
+          } else if (currentIndex > 0) {
+            setFocusedIndex(currentIndex - 1);
+          }
+          break; }
+        case 40: // DOWN
+          { e.preventDefault();
+          const gridDown = document.querySelector('.grid');
+          if (gridDown) {
+            const gridComputedStyle = window.getComputedStyle(gridDown);
+            const gridColumnCount = gridComputedStyle.getPropertyValue('grid-template-columns').split(' ').length;
+            const newIndex = currentIndex + gridColumnCount;
+            if (newIndex < focusable.length) {
+              setFocusedIndex(newIndex);
+            }
+          } else if (currentIndex < focusable.length - 1) {
+            setFocusedIndex(currentIndex + 1);
+          }
+          break; }
+        case 13: // OK
+          e.preventDefault();
+          if (focusedIndex !== null && focusable[focusedIndex]) {
+            focusable[focusedIndex].click();
+          }
+          break;
+        case 0: // BACK on some devices
+        case 10009: // RETURN on Tizen
+        case 8: // Backspace for web
+          e.preventDefault();
+          handleBack();
+          break;
+        default:
+          break;
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [focusedIndex, items, handleBack, showAdmin, streamUrl]);
+
 
   const handleSearch = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -276,6 +386,8 @@ export default function App() {
                   <button
                     onClick={handleBack}
                     className="mr-2 text-2xl text-white hover:text-blue-400 transition-colors"
+                    data-focusable="true"
+                    tabIndex={-1}
                   >
                     &larr;
                   </button>
@@ -287,6 +399,8 @@ export default function App() {
                 <button
                   onClick={() => setShowAdmin(!showAdmin)}
                   className="ml-4 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors"
+                  data-focusable="true"
+                  tabIndex={-1}
                 >
                   {showAdmin ? "Back to Content" : "Admin"}
                 </button>
@@ -302,6 +416,8 @@ export default function App() {
                           ? "bg-blue-600 text-white"
                           : "text-gray-300 hover:bg-gray-700/50"
                       }`}
+                      data-focusable="true"
+                      tabIndex={-1}
                     >
                       Movies
                     </button>
@@ -312,6 +428,8 @@ export default function App() {
                           ? "bg-blue-600 text-white"
                           : "text-gray-300 hover:bg-gray-700/50"
                       }`}
+                      data-focusable="true"
+                      tabIndex={-1}
                     >
                       Series
                     </button>
@@ -324,6 +442,7 @@ export default function App() {
                       defaultValue={context.search}
                       placeholder="Search titles..."
                       className="bg-gray-900/50 text-white rounded-full py-2 px-4 w-full sm:w-64 focus:outline-none focus:ring-2 focus:ring-blue-500 border border-gray-700/80"
+                      data-focusable="true"
                     />
                   </form>
                 </div>
@@ -344,6 +463,8 @@ export default function App() {
                     <button
                       onClick={() => fetchData(context)}
                       className="mt-4 bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 transition-colors"
+                      data-focusable="true"
+                      tabIndex={-1}
                     >
                       Reload
                     </button>
@@ -406,6 +527,8 @@ export default function App() {
                                 onClick={() => handlePageChange(-1)}
                                 disabled={context.page <= 1}
                                 className="bg-gray-800 py-2 px-4 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-700 transition-colors"
+                                data-focusable="true"
+                                tabIndex={-1}
                               >
                                 Previous
                               </button>
@@ -415,6 +538,8 @@ export default function App() {
                               <button
                                 onClick={() => handlePageChange(1)}
                                 className="bg-gray-800 py-2 px-4 rounded-lg hover:bg-gray-700 transition-colors"
+                                data-focusable="true"
+                                tabIndex={-1}
                               >
                                 Next
                               </button>

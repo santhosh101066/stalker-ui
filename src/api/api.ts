@@ -1,5 +1,6 @@
 export const URL_PATHS = {
-    HOST: import.meta.env.DEV ? 'http://localhost:3000' : ''
+    // HOST: import.meta.env.DEV ? 'http://localhost:3000' : ''
+    HOST:  'http://192.168.0.102:3000'
 };
 
 export const BASE_URL = `${URL_PATHS.HOST}/api`;
