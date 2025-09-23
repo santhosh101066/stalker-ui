@@ -8,6 +8,7 @@ export default defineConfig({
   build: {
     target: 'es2015',
   },
+   base: './',
   server: {
     host: "0.0.0.0",
     proxy: {

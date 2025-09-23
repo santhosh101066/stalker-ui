@@ -21,6 +21,8 @@ const MediaCard: React.FC<MediaCardProps> = ({ item, onClick }) => {
         <div
             className="bg-gray-800 rounded-lg overflow-hidden cursor-pointer transform transition-all duration-300 hover:scale-105 hover:shadow-2xl hover:border-blue-500 border-2 border-transparent group"
             onClick={() => onClick(item)}
+            data-focusable="true"
+            tabIndex={-1}
         >
             <div className="relative w-full h-48 md:h-64 bg-gray-700 flex items-center justify-center overflow-hidden">
                 {imageUrl && !imageError ? (

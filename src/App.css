@@ -40,3 +40,9 @@
 .read-the-docs {
   color: #888;
 }
+
+.focused {
+  outline: 2px solid #3b82f6; /* blue-500 */
+  outline-offset: 2px;
+  border-color: #eef5ff !important;
+}

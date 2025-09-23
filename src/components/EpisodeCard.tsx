@@ -21,6 +21,8 @@ const EpisodeCard: React.FC<EpisodeCardProps> = ({ item, onClick }) => {
          <div
             className="bg-gray-800 rounded-lg overflow-hidden cursor-pointer flex items-center transform transition-all duration-300 hover:bg-gray-700 hover:shadow-lg hover:border-blue-500 border-2 border-transparent w-full group"
             onClick={() => onClick(item)}
+            data-focusable="true"
+            tabIndex={-1}
         >
             <div className="relative w-32 h-20 bg-gray-700 flex items-center justify-center shrink-0 overflow-hidden">
                 {imageUrl && !imageError ? (
