@@ -141,7 +141,7 @@ export default function App() {
             if (item.series_number !== undefined) {
               urlParams.series = item.series_number;
             }
-            
+
             const linkData = await getUrl(urlParams);
             const cmd =
               (linkData && linkData.js && linkData.js.cmd) ||
@@ -226,6 +226,8 @@ export default function App() {
   }, [items, showAdmin, streamUrl]);
 
   useEffect(() => {
+    if (streamUrl) return; // Do not manage focus from App.tsx when video player is active
+
     const focusable = Array.from(document.querySelectorAll('[data-focusable="true"]')) as HTMLElement[];
     if (focusable.length === 0) return;
 
@@ -234,7 +236,7 @@ export default function App() {
       setFocusedIndex(focusable.length - 1);
       return;
     }
-    
+
     if (focusedIndex === null) {
       setFocusedIndex(0);
     }
@@ -249,22 +251,22 @@ export default function App() {
     });
   }, [focusedIndex, items, showAdmin, streamUrl]);
 
-      useEffect(() => {
+  useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (streamUrl) return; // Do not handle key events when video player is active
 
       if (e.target instanceof HTMLInputElement && e.target.type === 'search') {
-        if (e.keyCode === 13) { 
+        if (e.keyCode === 13) {
           return;
         }
       }
-      
+
       const focusable = Array.from(document.querySelectorAll('[data-focusable="true"]')) as HTMLElement[];
       if (focusable.length === 0) return;
 
       let currentIndex = focusedIndex === null ? 0 : focusedIndex;
-      if(currentIndex >= focusable.length) currentIndex = focusable.length - 1;
-      
+      if (currentIndex >= focusable.length) currentIndex = focusable.length - 1;
+
       switch (e.keyCode) {
         case 37: // LEFT
           e.preventDefault();
@@ -279,33 +281,37 @@ export default function App() {
           }
           break;
         case 38: // UP
-          { e.preventDefault();
-          const grid = document.querySelector('.grid');
-          if (grid) {
-            const gridComputedStyle = window.getComputedStyle(grid);
-            const gridColumnCount = gridComputedStyle.getPropertyValue('grid-template-columns').split(' ').length;
-            const newIndex = currentIndex - gridColumnCount;
-            if (newIndex >= 0) {
-              setFocusedIndex(newIndex);
+          {
+            e.preventDefault();
+            const grid = document.querySelector('.grid');
+            if (grid) {
+              const gridComputedStyle = window.getComputedStyle(grid);
+              const gridColumnCount = gridComputedStyle.getPropertyValue('grid-template-columns').split(' ').length;
+              const newIndex = currentIndex - gridColumnCount;
+              if (newIndex >= 0) {
+                setFocusedIndex(newIndex);
+              }
+            } else if (currentIndex > 0) {
+              setFocusedIndex(currentIndex - 1);
             }
-          } else if (currentIndex > 0) {
-            setFocusedIndex(currentIndex - 1);
+            break;
           }
-          break; }
         case 40: // DOWN
-          { e.preventDefault();
-          const gridDown = document.querySelector('.grid');
-          if (gridDown) {
-            const gridComputedStyle = window.getComputedStyle(gridDown);
-            const gridColumnCount = gridComputedStyle.getPropertyValue('grid-template-columns').split(' ').length;
-            const newIndex = currentIndex + gridColumnCount;
-            if (newIndex < focusable.length) {
-              setFocusedIndex(newIndex);
+          {
+            e.preventDefault();
+            const gridDown = document.querySelector('.grid');
+            if (gridDown) {
+              const gridComputedStyle = window.getComputedStyle(gridDown);
+              const gridColumnCount = gridComputedStyle.getPropertyValue('grid-template-columns').split(' ').length;
+              const newIndex = currentIndex + gridColumnCount;
+              if (newIndex < focusable.length) {
+                setFocusedIndex(newIndex);
+              }
+            } else if (currentIndex < focusable.length - 1) {
+              setFocusedIndex(currentIndex + 1);
             }
-          } else if (currentIndex < focusable.length - 1) {
-            setFocusedIndex(currentIndex + 1);
+            break;
           }
-          break; }
         case 13: // OK
           e.preventDefault();
           if (focusedIndex !== null && focusable[focusedIndex]) {
@@ -337,8 +343,8 @@ export default function App() {
     const newTitle = search
       ? `Results for "${search}"`
       : contentType === "movie"
-      ? "Movies"
-      : "Series";
+        ? "Movies"
+        : "Series";
     fetchData({
       ...initialContext,
       search,
@@ -392,18 +398,10 @@ export default function App() {
                     &larr;
                   </button>
                 )}
-                <img src="stalker-logo.svg" width={180}/>
+                <img src="stalker-logo.svg" width={180} />
                 <h1 className="text-xl sm:text-l md:text-l font-bold text-white tracking-wider">
                   {currentTitle}
                 </h1>
-                <button
-                  onClick={() => setShowAdmin(!showAdmin)}
-                  className="ml-4 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors"
-                  data-focusable="true"
-                  tabIndex={-1}
-                >
-                  {showAdmin ? "Back to Content" : "Admin"}
-                </button>
               </div>
 
               {!streamUrl && (
@@ -411,11 +409,10 @@ export default function App() {
                   <div className="flex justify-center space-x-2 bg-gray-900/60 p-1 rounded-full w-full sm:w-auto">
                     <button
                       onClick={() => handleContentTypeChange("movie")}
-                      className={`py-2 px-4 sm:px-6 rounded-full font-semibold text-sm transition-colors duration-300 w-full ${
-                        contentType === "movie"
+                      className={`py-2 px-4 sm:px-6 rounded-full font-semibold text-sm transition-colors duration-300 w-full ${contentType === "movie"
                           ? "bg-blue-600 text-white"
                           : "text-gray-300 hover:bg-gray-700/50"
-                      }`}
+                        }`}
                       data-focusable="true"
                       tabIndex={-1}
                     >
@@ -423,11 +420,10 @@ export default function App() {
                     </button>
                     <button
                       onClick={() => handleContentTypeChange("series")}
-                      className={`py-2 px-4 sm:px-6 rounded-full font-semibold text-sm transition-colors duration-300 w-full ${
-                        contentType === "series"
+                      className={`py-2 px-4 sm:px-6 rounded-full font-semibold text-sm transition-colors duration-300 w-full ${contentType === "series"
                           ? "bg-blue-600 text-white"
                           : "text-gray-300 hover:bg-gray-700/50"
-                      }`}
+                        }`}
                       data-focusable="true"
                       tabIndex={-1}
                     >
@@ -445,6 +441,14 @@ export default function App() {
                       data-focusable="true"
                     />
                   </form>
+                  <button
+                    onClick={() => setShowAdmin(!showAdmin)}
+                    className="ml-4 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors"
+                    data-focusable="true"
+                    tabIndex={-1}
+                  >
+                    {showAdmin ? "Back to Content" : "Admin"}
+                  </button>
                 </div>
               )}
             </div>

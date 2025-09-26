@@ -39,6 +39,8 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBa
     const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
     const seekBuffer = useRef(0);
     const seekApplyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const playButtonRef = useRef<HTMLButtonElement>(null);
+
 
     useEffect(() => {
         const videoElement = videoRef.current;
@@ -56,7 +58,10 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBa
                 if (hlsInstance.current) {
                     hlsInstance.current.destroy();
                 }
-                const hls = new (window as any).Hls();
+                const hls = new (window as any).Hls({
+                    maxBufferLength: 20,
+                    maxMaxBufferLength: 60,
+                });
                 hlsInstance.current = hls;
                 hls.loadSource(urlToPlay);
                 hls.attachMedia(videoElement);
@@ -70,7 +75,16 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBa
                                 break;
                             case (window as any).Hls.ErrorTypes.MEDIA_ERROR:
                                 setError(`A media error occurred: ${data.details}`);
-                                hls.recoverMediaError();
+                                if (data.details === 'bufferAppendError') {
+                                    if (streamUrl && rawStreamUrl) {
+                                        setError('Buffer append error. Trying the other stream source...');
+                                        setUseProxy(prev => !prev);
+                                    } else {
+                                        hls.recoverMediaError();
+                                    }
+                                } else {
+                                    hls.recoverMediaError();
+                                }
                                 break;
                             default:
                                 setError(`An unrecoverable error occurred: ${data.details}`);
@@ -141,21 +155,36 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBa
         const handleError = () => {
             const video = videoRef.current;
             if (video && video.error) {
+                console.error(`Video Error (code ${video.error.code}): ${video.error.message}`);
+
                 switch (video.error.code) {
                     case video.error.MEDIA_ERR_ABORTED:
                         setError('Video playback aborted.');
                         break;
                     case video.error.MEDIA_ERR_NETWORK:
-                        setError('A network error caused the video download to fail.');
+                        setError('A network error caused the video download to fail. Retrying...');
+                        if (hlsInstance.current) {
+                            hlsInstance.current.startLoad();
+                        }
                         break;
                     case video.error.MEDIA_ERR_DECODE:
-                        setError('The video playback was aborted due to a corruption problem or because the video used features your browser did not support.');
+                        setError('The video playback was aborted due to a corruption problem. Attempting to recover by switching source...');
+                        if (streamUrl && rawStreamUrl) {
+                            setUseProxy(prev => !prev);
+                        } else if (hlsInstance.current) {
+                            hlsInstance.current.recoverMediaError();
+                        }
                         break;
                     case video.error.MEDIA_ERR_SRC_NOT_SUPPORTED:
-                        setError('The video could not be loaded, either because the server or network failed or because the format is not supported.');
+                        if (streamUrl && rawStreamUrl) {
+                            setError('The video format is not supported. Trying the other stream source...');
+                            setUseProxy(prev => !prev);
+                        } else {
+                            setError('The video could not be loaded, either because the server or network failed or because the format is not supported.');
+                        }
                         break;
                     default:
-                        setError('An unknown error occurred.');
+                        setError(`An unknown error occurred. (Code: ${video.error.code})`);
                         break;
                 }
             }
@@ -180,7 +209,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBa
             video.removeEventListener('playing', handlePlaying);
             video.removeEventListener('error', handleError);
         };
-    }, [seeking, itemId]);
+    }, [seeking, itemId, streamUrl, rawStreamUrl]);
 
     const handleBack = useCallback(() => {
         if (document.fullscreenElement) {
@@ -275,8 +304,6 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBa
 
             const currentIndex = focusedIndex === null ? 0 : focusedIndex;
             const focusedElement = focusable[currentIndex];
-            console.log("Key event", e.keyCode, e.key);
-
 
             switch (e.keyCode) {
                 case 37: // LEFT
@@ -347,6 +374,16 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBa
     }, [focusedIndex, skip, togglePlayPause, showControlsAndCursor, applySeekBuffer, handleSkipButtonClick, handleBack]);
 
     useEffect(() => {
+        if (error) {
+            const focusable = Array.from(playerContainerRef.current?.querySelectorAll('[data-focusable="true"]') || []) as HTMLElement[];
+            const closeButtonIndex = focusable.findIndex(el => el.textContent === 'Close');
+            if (closeButtonIndex !== -1) {
+                setFocusedIndex(closeButtonIndex);
+            }
+        }
+    }, [error]);
+
+    useEffect(() => {
         const focusable = Array.from(playerContainerRef.current?.querySelectorAll('[data-focusable="true"]') || []) as HTMLElement[];
         if (focusable.length === 0) return;
 
@@ -368,15 +405,26 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBa
                 el.classList.remove('focused');
             }
         });
-    }, [focusedIndex]);
+    }, [focusedIndex, error]);
 
     useEffect(() => {
         const handleFullscreenChange = () => {
-            setIsFullscreen(!!document.fullscreenElement);
+            const isFs = !!document.fullscreenElement;
+            setIsFullscreen(isFs);
+            if (!isFs) {
+                // Exited fullscreen, let's ensure focus is correct
+                if (focusedIndex !== null) {
+                    const focusable = Array.from(playerContainerRef.current?.querySelectorAll('[data-focusable="true"]') || []) as HTMLElement[];
+                    const elementToFocus = focusable[focusedIndex];
+                    if (elementToFocus) {
+                        elementToFocus.focus();
+                    }
+                }
+            }
         };
         document.addEventListener('fullscreenchange', handleFullscreenChange);
         return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
-    }, []);
+    }, [focusedIndex]);
 
 
     const handleSeekMouseDown = () => {
@@ -443,6 +491,15 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBa
 
     useEffect(() => {
         toggleFullscreen();
+
+        // Focus on the play/pause button after a short delay to allow the UI to update
+        setTimeout(() => {
+            const focusable = Array.from(playerContainerRef.current?.querySelectorAll('[data-focusable="true"]') || []) as HTMLElement[];
+            const playPauseButtonIndex = focusable.findIndex(el => el.getAttribute('data-control') === 'play-pause');
+            if (playPauseButtonIndex !== -1) {
+                setFocusedIndex(playPauseButtonIndex);
+            }
+        }, 100);
     }, []);
 
     const handleCopyLink = () => {
@@ -494,7 +551,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBa
                         <p className="text-white text-center max-w-md">{error}</p>
                         <button
                             onClick={() => setError(null)}
-                            className="mt-4 bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600"
+                            className="mt-4 bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600" data-focusable="true"
                         >
                             Close
                         </button>
@@ -542,7 +599,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBa
 
                         <div className="flex items-center justify-between text-white mt-2 pointer-events-auto">
                             <div className="flex items-center space-x-4">
-                                <button data-focusable="true" onClick={togglePlayPause} className="text-white hover:text-blue-400">
+                                <button data-focusable="true" data-control="play-pause" onClick={togglePlayPause} ref={playButtonRef} className="text-white hover:text-blue-400">
                                     {isPlaying ?
                                         <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd"></path></svg> :
                                         <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd"></path></svg>}
