@@ -4,12 +4,13 @@ import LoadingSpinner from "./components/LoadingSpinner";
 import MediaCard from "./components/MediaCard";
 import EpisodeCard from "./components/EpisodeCard";
 import VideoPlayer from "./components/VideoPlayer";
-import Admin from "./components/Admin"; // Import Admin component
+import ContinueWatching from "./components/ContinueWatching";
 import type { MediaItem, ContextType } from "./types";
 import { BASE_URL } from "./api/api";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import "./App.css"
+import Admin from "./components/Admin";
 
 // --- Main Application Component ---
 export default function App() {
@@ -32,6 +33,8 @@ export default function App() {
   const [contentType, setContentType] = useState<"movie" | "series">("movie"); // 'movie' or 'series'
   const [showAdmin, setShowAdmin] = useState(false);
   const [currentItemId, setCurrentItemId] = useState<string | null>(null);
+  const [currentItem, setCurrentItem] = useState<MediaItem | null>(null);
+  const [playingMovieId, setPlayingMovieId] = useState<string | null>(null);
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
 
   const fetchData = useCallback(
@@ -95,9 +98,9 @@ export default function App() {
     setHistory((prev) => [...prev, context]);
     const displayTitle = item.title || item.name || "";
 
-    const isInsideMovieCategory =
+ const isInsideMovieCategory =
       contentType === "movie" && context.category !== null;
-
+  
     if (item.is_series == 1) {
       fetchData({
         ...initialContext,
@@ -115,6 +118,7 @@ export default function App() {
       });
     } else if (item.is_episode) {
       setLoading(true);
+      setCurrentItem(item);
       try {
         let episodeFiles: MediaItem[] = [];
         if (contentType === "series") {
@@ -167,22 +171,24 @@ export default function App() {
       } finally {
         setLoading(false);
       }
-    } else if (isInsideMovieCategory) {
+    } else if (isInsideMovieCategory && item.is_playable_movie) {
       setLoading(true);
       try {
         const files = await getMedia({
           movieId: item.id,
-          category: context.category,
+          category: context.category || "*",
         });
         if (files && files.length > 0) {
           const movieFile = files[0];
+          setPlayingMovieId(item.id);
+          setCurrentItem(item);
           const linkData = await getUrl({ id: movieFile.id });
 
           if (linkData && linkData.js && typeof linkData.js.cmd === "string") {
             const rawUrl = linkData.js.cmd;
             setRawStreamUrl(rawUrl);
             setStreamUrl(`${BASE_URL}/proxy?url=${btoa(rawUrl)}`);
-            setCurrentItemId(item.id);
+            setCurrentItemId(movieFile.id);
           } else {
             throw new Error("Movie stream URL not found.");
           }
@@ -483,9 +489,14 @@ export default function App() {
                         rawStreamUrl={rawStreamUrl}
                         onBack={handleBack}
                         itemId={currentItemId}
+                        context={context}
+                        contentType={contentType}
+                        mediaId={contentType === 'movie' ? playingMovieId : context.movieId}
+                        item={currentItem}
                       />
                     ) : (
                       <>
+                        {context.category === null && !context.search && <ContinueWatching onClick={handleItemClick} />}
                         <div
                           className={
                             isEpisodeList

@@ -21,12 +21,39 @@ const EpisodeCard: React.FC<EpisodeCardProps> = ({ item, onClick }) => {
 
     useEffect(() => {
         const completed = localStorage.getItem(`video-completed-${item.id}`);
-        if (completed === 'true') {
-            setIsCompleted(true);
+        if (completed) {
+            try {
+                const completedData = JSON.parse(completed);
+                if (completedData && completedData.fileId === item.id) {
+                    setIsCompleted(true);
+                }
+            } catch (error) {
+                // For backward compatibility
+                if (completed === 'true') {
+                    setIsCompleted(true);
+                }
+                console.error(error);
+                
+            }
         } else {
             const progress = localStorage.getItem(`video-in-progress-${item.id}`);
             if (progress) {
-                setIsInProgress(true);
+                try {
+                    const progressData = JSON.parse(progress);
+                    if (progressData && progressData.fileId === item.id) {
+                        setIsInProgress(true);
+                    } else {
+                        setIsInProgress(false);
+                    }
+                } catch (error) {
+                    // For backward compatibility
+                    if (progress === 'true') {
+                        setIsInProgress(true);
+                    } else {
+                        setIsInProgress(false);
+                    }
+                    console.error(error);
+                }
             } else {
                 setIsInProgress(false);
             }

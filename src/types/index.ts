@@ -7,6 +7,7 @@ export interface MediaItem {
     is_season?: boolean;
     is_episode?: boolean;
     series_number?: number;
+    is_playable_movie?: boolean;
 }
 
 export interface ContextType {

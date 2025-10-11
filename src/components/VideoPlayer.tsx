@@ -3,6 +3,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { formatTime } from '../utils/helpers';
 import type Hls from 'hls.js';
 
+import type { ContextType, MediaItem } from '../types';
+
 interface Subtitle {
     language: string;
     url: string;
@@ -14,9 +16,13 @@ interface VideoPlayerProps {
     onBack: () => void;
     itemId: string | null;
     subtitles?: Subtitle[];
+    context: ContextType;
+    contentType: 'movie' | 'series';
+    mediaId: string | null;
+    item: MediaItem | null;
 }
 
-const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBack, itemId, subtitles: initialSubtitles }) => {
+const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBack, itemId, subtitles: initialSubtitles, contentType, mediaId, item }) => {
     const videoRef = useRef<HTMLVideoElement>(null);
     const playerContainerRef = useRef<HTMLDivElement>(null);
     const seekBarRef = useRef<HTMLInputElement>(null);
@@ -147,11 +153,20 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBa
             if (video.duration > 0) {
                 const progressPercentage = (video.currentTime / video.duration) * 100;
                 if (progressPercentage > 95) {
-                    localStorage.setItem(`video-completed-${itemId}`, 'true');
-                    localStorage.removeItem(`video-in-progress-${itemId}`);
-                } else if (progressPercentage > 5) {
-                    localStorage.setItem(`video-in-progress-${itemId}`, 'true');
-                    localStorage.removeItem(`video-completed-${itemId}`);
+                    localStorage.setItem(`video-completed-${mediaId}`,
+                     JSON.stringify({ mediaId: mediaId, fileId: itemId, type: contentType }));
+                    localStorage.removeItem(`video-in-progress-${mediaId}`);
+                } else if (progressPercentage > 2) {
+                    localStorage.setItem(`video-in-progress-${mediaId}`,
+                     JSON.stringify({
+                        mediaId: mediaId,
+                        fileId: itemId,
+                        type: contentType,
+                        title: item?.title,
+                        name: item?.name,
+                        screenshot_uri: item?.screenshot_uri
+                     }));
+                    localStorage.removeItem(`video-completed-${mediaId}`);
                 }
             }
 

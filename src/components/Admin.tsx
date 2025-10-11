@@ -231,6 +231,17 @@ const Admin = () => {
     }));
   };
 
+  const handleClearWatched = () => {
+    if (window.confirm("Are you sure you want to clear all watched and in-progress statuses?")) {
+      Object.keys(localStorage).forEach((key) => {
+        if (key.startsWith("video-completed-") || key.startsWith("video-in-progress-")) {
+          localStorage.removeItem(key);
+        }
+      });
+      toast.success("All watched and in-progress statuses have been cleared.");
+    }
+  };
+
 
 
   return (
@@ -458,6 +469,13 @@ const Admin = () => {
                 disabled={config.tokens.length === 0}
               >
                 Clear All Tokens
+              </button>
+              <button
+                type="button"
+                className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors"
+                onClick={handleClearWatched}
+              >
+                Clear All Watched
               </button>
             </div>
           </div>
