@@ -134,6 +134,10 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBa
             }
             setCurrentTime(video.currentTime);
 
+            if (video.duration > 0 && (video.currentTime / video.duration) * 100 > 95) {
+                localStorage.setItem(`video-completed-${itemId}`, 'true');
+            }
+
             const now = Date.now();
             if (now - lastSaveTime.current > 5000) {
                 localStorage.setItem(`video-progress-${itemId}`, String(video.currentTime));
@@ -366,7 +370,6 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBa
 
         const playerElement = playerContainerRef.current;
         playerElement?.addEventListener('keydown', handleKeyDown);
-        playerElement?.focus();
 
         return () => {
             playerElement?.removeEventListener('keydown', handleKeyDown);
@@ -490,14 +493,14 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBa
     };
 
     useEffect(() => {
-        toggleFullscreen();
-
         // Focus on the play/pause button after a short delay to allow the UI to update
         setTimeout(() => {
             const focusable = Array.from(playerContainerRef.current?.querySelectorAll('[data-focusable="true"]') || []) as HTMLElement[];
             const playPauseButtonIndex = focusable.findIndex(el => el.getAttribute('data-control') === 'play-pause');
             if (playPauseButtonIndex !== -1) {
                 setFocusedIndex(playPauseButtonIndex);
+            } else {
+                playerContainerRef.current?.focus();
             }
         }, 100);
     }, []);
