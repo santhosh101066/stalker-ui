@@ -10,6 +10,7 @@ interface EpisodeCardProps {
 const EpisodeCard: React.FC<EpisodeCardProps> = ({ item, onClick }) => {
     const [imageError, setImageError] = useState(false);
     const [isCompleted, setIsCompleted] = useState(false);
+    const [isInProgress, setIsInProgress] = useState(false);
     const displayTitle = item.title || item.name;
     const initials = displayTitle ? displayTitle.substring(0, 2).toUpperCase() : '??';
     const imageUrl = item.screenshot_uri ? (item.screenshot_uri.startsWith("http") ? item.screenshot_uri : `${URL_PATHS.HOST}/api/images${item.screenshot_uri}`) : null;
@@ -22,6 +23,13 @@ const EpisodeCard: React.FC<EpisodeCardProps> = ({ item, onClick }) => {
         const completed = localStorage.getItem(`video-completed-${item.id}`);
         if (completed === 'true') {
             setIsCompleted(true);
+        } else {
+            const progress = localStorage.getItem(`video-in-progress-${item.id}`);
+            if (progress) {
+                setIsInProgress(true);
+            } else {
+                setIsInProgress(false);
+            }
         }
     }, [item.id]);
 
@@ -34,6 +42,9 @@ const EpisodeCard: React.FC<EpisodeCardProps> = ({ item, onClick }) => {
         >
             {isCompleted && (
                 <div className="absolute top-2 right-2 w-3 h-3 bg-green-500 rounded-full z-10"></div>
+            )}
+            {!isCompleted && isInProgress && (
+                <div className="absolute top-2 right-2 w-3 h-3 bg-yellow-500 rounded-full z-10"></div>
             )}
             <div className="relative w-32 h-20 bg-gray-700 flex items-center justify-center shrink-0 overflow-hidden">
                 {imageUrl && !imageError ? (

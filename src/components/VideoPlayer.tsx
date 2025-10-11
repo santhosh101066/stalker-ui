@@ -3,14 +3,20 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { formatTime } from '../utils/helpers';
 import type Hls from 'hls.js';
 
+interface Subtitle {
+    language: string;
+    url: string;
+}
+
 interface VideoPlayerProps {
     streamUrl: string | null;
     rawStreamUrl: string | null;
     onBack: () => void;
     itemId: string | null;
+    subtitles?: Subtitle[];
 }
 
-const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBack, itemId }) => {
+const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBack, itemId, subtitles: initialSubtitles }) => {
     const videoRef = useRef<HTMLVideoElement>(null);
     const playerContainerRef = useRef<HTMLDivElement>(null);
     const seekBarRef = useRef<HTMLInputElement>(null);
@@ -34,6 +40,10 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBa
     const [hoverTime, setHoverTime] = useState(0);
     const [hoverPosition, setHoverPosition] = useState(0);
     const [isTooltipVisible, setIsTooltipVisible] = useState(false);
+    const [subtitles, setSubtitles] = useState<Subtitle[]>([]);
+    const [selectedSubtitle, setSelectedSubtitle] = useState<string | null>(null);
+    const [subtitlesEnabled, setSubtitlesEnabled] = useState(true);
+    const [isSubtitleMenuOpen, setIsSubtitleMenuOpen] = useState(false);
     const [cursorVisible, setCursorVisible] = useState(true);
     const cursorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
@@ -134,8 +144,15 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBa
             }
             setCurrentTime(video.currentTime);
 
-            if (video.duration > 0 && (video.currentTime / video.duration) * 100 > 95) {
-                localStorage.setItem(`video-completed-${itemId}`, 'true');
+            if (video.duration > 0) {
+                const progressPercentage = (video.currentTime / video.duration) * 100;
+                if (progressPercentage > 95) {
+                    localStorage.setItem(`video-completed-${itemId}`, 'true');
+                    localStorage.removeItem(`video-in-progress-${itemId}`);
+                } else if (progressPercentage > 5) {
+                    localStorage.setItem(`video-in-progress-${itemId}`, 'true');
+                    localStorage.removeItem(`video-completed-${itemId}`);
+                }
             }
 
             const now = Date.now();
@@ -430,6 +447,60 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBa
     }, [focusedIndex]);
 
 
+    useEffect(() => {
+        if (initialSubtitles) {
+            setSubtitles(initialSubtitles);
+            const englishSubtitle = initialSubtitles.find(s => s.language.toLowerCase() === 'english');
+            if (englishSubtitle) {
+                setSelectedSubtitle(englishSubtitle.url);
+            } else if (initialSubtitles.length > 0) {
+                setSelectedSubtitle(initialSubtitles[0].url);
+            }
+        }
+    }, [initialSubtitles]);
+
+    const handleSubtitleChange = (url: string | null) => {
+        setSelectedSubtitle(url);
+        if (url) {
+            setSubtitlesEnabled(true);
+        } else {
+            setSubtitlesEnabled(false);
+        }
+        setIsSubtitleMenuOpen(false);
+    };
+
+    const toggleSubtitleMenu = () => {
+        setIsSubtitleMenuOpen(!isSubtitleMenuOpen);
+    };
+
+    useEffect(() => {
+        const video = videoRef.current;
+        if (!video) return;
+
+        // Clear existing text tracks
+        Array.from(video.textTracks).forEach(track => {
+            track.mode = 'disabled';
+        });
+
+        if (subtitlesEnabled && selectedSubtitle) {
+            const trackExists = Array.from(video.textTracks).find(t => t.language === selectedSubtitle);
+            if (trackExists) {
+                trackExists.mode = 'showing';
+            } else {
+                const track = document.createElement('track');
+                const subtitleInfo = subtitles.find(s => s.url === selectedSubtitle);
+                if (subtitleInfo) {
+                    track.src = subtitleInfo.url;
+                    track.label = subtitleInfo.language;
+                    track.srclang = subtitleInfo.language;
+                    track.default = true;
+                    // track.mode = 'showing';
+                    video.appendChild(track);
+                }
+            }
+        }
+    }, [selectedSubtitle, subtitlesEnabled, subtitles]);
+
     const handleSeekMouseDown = () => {
         setSeeking(true);
     };
@@ -503,6 +574,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBa
                 playerContainerRef.current?.focus();
             }
         }, 100);
+        toggleFullscreen();
     }, []);
 
     const handleCopyLink = () => {
@@ -623,6 +695,25 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBa
                                         <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM12.293 7.293a1 1 0 011.414 0L15 8.586l1.293-1.293a1 1 0 111.414 1.414L16.414 10l1.293 1.293a1 1 0 01-1.414 1.414L15 11.414l-1.293 1.293a1 1 0 01-1.414-1.414L13.586 10l-1.293-1.293a1 1 0 010-1.414z" clipRule="evenodd"></path></svg> :
                                         <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM14.657 2.929a1 1 0 011.414 0A9.972 9.972 0 0119 10a9.972 9.972 0 01-2.929 7.071 1 1 0 01-1.414-1.414A7.971 7.971 0 0017 10c0-2.21-.894-4.208-2.343-5.657a1 1 0 010-1.414zm-2.829 2.828a1 1 0 011.415 0A5.983 5.983 0 0115 10a5.984 5.984 0 01-1.757 4.243 1 1 0 01-1.415-1.415A3.984 3.984 0 0013 10a3.983 3.983 0 00-1.172-2.828 1 1 0 010-1.415z" clipRule="evenodd"></path></svg>}
                                 </button>
+                                {subtitles && subtitles.length > 0 && (
+                                    <div className="relative">
+                                        <button data-focusable="true" onClick={toggleSubtitleMenu} className="text-white hover:text-blue-400">
+                                            <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20"><path d="M3 3a1 1 0 00-1 1v12a1 1 0 001 1h14a1 1 0 001-1V4a1 1 0 00-1-1H3zm2 4a1 1 0 011-1h2a1 1 0 110 2H6a1 1 0 01-1-1zm0 4a1 1 0 011-1h2a1 1 0 110 2H6a1 1 0 01-1-1zm5-4a1 1 0 011-1h2a1 1 0 110 2h-2a1 1 0 01-1-1zm0 4a1 1 0 011-1h2a1 1 0 110 2h-2a1 1 0 01-1-1z" clipRule="evenodd" fillRule="evenodd"></path></svg>
+                                        </button>
+                                        {isSubtitleMenuOpen && (
+                                            <div className="absolute bottom-full right-0 mb-2 bg-gray-800 bg-opacity-90 rounded-lg py-1 text-white text-sm">
+                                                <button onClick={() => handleSubtitleChange(null)} className={`block w-full text-left px-4 py-2 hover:bg-gray-700 ${!selectedSubtitle ? 'bg-blue-500' : ''}`}>
+                                                    Off
+                                                </button>
+                                                {subtitles.map(subtitle => (
+                                                    <button key={subtitle.url} onClick={() => handleSubtitleChange(subtitle.url)} className={`block w-full text-left px-4 py-2 hover:bg-gray-700 ${selectedSubtitle === subtitle.url ? 'bg-blue-500' : ''}`}>
+                                                        {subtitle.language}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                                 <input data-focusable="true" data-control="volume" type="range" min="0" max="1" step="0.01" value={volume} onChange={handleVolumeChange} className="w-24 h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer range-sm" style={{ accentColor: '#3b82f6' }} />
                                 <button data-focusable="true" onClick={toggleFullscreen} className="text-white hover:text-blue-400">
                                     {isFullscreen ?
