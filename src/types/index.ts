@@ -4,8 +4,8 @@ export interface MediaItem {
     name?: string;
     screenshot_uri?: string;
     is_series?: number;
-    is_season?: boolean;
-    is_episode?: boolean;
+    is_season?: boolean|number;
+    is_episode?: boolean|number;
     series_number?: number;
     is_playable_movie?: boolean;
 }

@@ -12,22 +12,26 @@ const ContinueWatching: React.FC<ContinueWatchingProps> = ({ onClick }) => {
     useEffect(() => {
         const inProgressKeys = Object.keys(localStorage).filter(key => key.startsWith('video-in-progress-'));
         const items: MediaItem[] = [];
+        const addedIds = new Set<string>();
 
         for (const key of inProgressKeys) {
             const progressData = localStorage.getItem(key);
             if (progressData) {
                 try {
                     const itemData = JSON.parse(progressData);
-                    items.push({
-                        id: itemData.mediaId,
-                        title: itemData.title,
-                        name: itemData.name,
-                        screenshot_uri: itemData.screenshot_uri,
-                        is_series: itemData.type === 'series' ? 1 : 0,
-                        is_season: 0,
-                        is_episode: 0,
-                        is_playable_movie: itemData.type === 'movie',
-                    });
+                    if (!addedIds.has(itemData.mediaId)) {
+                        items.push({
+                            id: itemData.mediaId,
+                            title: itemData.title,
+                            name: itemData.name,
+                            screenshot_uri: itemData.screenshot_uri,
+                            is_series: itemData.is_series,
+                            is_season: 0,
+                            is_episode: 0,
+                            is_playable_movie: itemData.type === 'movie' && itemData.is_series != 1,
+                        });
+                        addedIds.add(itemData.mediaId);
+                    }
                 } catch (error) {
                     console.error(`Failed to parse in-progress item for key ${key}`, error);
                 }

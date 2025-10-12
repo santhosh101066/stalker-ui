@@ -34,6 +34,7 @@ export default function App() {
   const [showAdmin, setShowAdmin] = useState(false);
   const [currentItemId, setCurrentItemId] = useState<string | null>(null);
   const [currentItem, setCurrentItem] = useState<MediaItem | null>(null);
+  const [currentSeriesItem, setCurrentSeriesItem] = useState<MediaItem | null>(null);
   const [playingMovieId, setPlayingMovieId] = useState<string | null>(null);
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
 
@@ -100,11 +101,15 @@ export default function App() {
 
  const isInsideMovieCategory =
       contentType === "movie" && context.category !== null;
+  console.log(item,isInsideMovieCategory);
   
     if (item.is_series == 1) {
+      setCurrentSeriesItem(item);
+      console.log(item);
+      
       fetchData({
         ...initialContext,
-        category: context.category,
+        category: context.category|| "*",
         movieId: item.id,
         parentTitle: displayTitle,
       });
@@ -171,7 +176,7 @@ export default function App() {
       } finally {
         setLoading(false);
       }
-    } else if (isInsideMovieCategory && item.is_playable_movie) {
+    } else if ( isInsideMovieCategory ||item.is_playable_movie) {
       setLoading(true);
       try {
         const files = await getMedia({
@@ -221,6 +226,9 @@ export default function App() {
 
     if (history.length > 0) {
       const lastContext = history[history.length - 1];
+      if (!lastContext.movieId) {
+        setCurrentSeriesItem(null);
+      }
       setHistory((prev) => prev.slice(0, -1));
       fetchData(lastContext);
     }
@@ -491,8 +499,9 @@ export default function App() {
                         itemId={currentItemId}
                         context={context}
                         contentType={contentType}
-                        mediaId={contentType === 'movie' ? playingMovieId : context.movieId}
-                        item={currentItem}
+                        mediaId={contentType === 'movie' ? (currentSeriesItem?.id || playingMovieId) : context.movieId}
+                        item={currentSeriesItem || currentItem}
+                        seriesItem={currentSeriesItem}
                       />
                     ) : (
                       <>

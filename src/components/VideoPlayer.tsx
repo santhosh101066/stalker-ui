@@ -20,9 +20,10 @@ interface VideoPlayerProps {
     contentType: 'movie' | 'series';
     mediaId: string | null;
     item: MediaItem | null;
+    seriesItem: MediaItem | null;
 }
 
-const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBack, itemId, subtitles: initialSubtitles, contentType, mediaId, item }) => {
+const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBack, itemId, subtitles: initialSubtitles, contentType, mediaId, item, seriesItem }) => {
     const videoRef = useRef<HTMLVideoElement>(null);
     const playerContainerRef = useRef<HTMLDivElement>(null);
     const seekBarRef = useRef<HTMLInputElement>(null);
@@ -153,20 +154,22 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBa
             if (video.duration > 0) {
                 const progressPercentage = (video.currentTime / video.duration) * 100;
                 if (progressPercentage > 95) {
-                    localStorage.setItem(`video-completed-${mediaId}`,
+                    localStorage.setItem(`video-completed-${itemId}`,
                      JSON.stringify({ mediaId: mediaId, fileId: itemId, type: contentType }));
-                    localStorage.removeItem(`video-in-progress-${mediaId}`);
+                    localStorage.removeItem(`video-in-progress-${itemId}`);
                 } else if (progressPercentage > 2) {
-                    localStorage.setItem(`video-in-progress-${mediaId}`,
+                    const itemToSave = contentType === 'series' && seriesItem ? seriesItem : item;
+                    localStorage.setItem(`video-in-progress-${itemId}`,
                      JSON.stringify({
                         mediaId: mediaId,
                         fileId: itemId,
                         type: contentType,
-                        title: item?.title,
-                        name: item?.name,
-                        screenshot_uri: item?.screenshot_uri
+                        title: itemToSave?.title,
+                        name: itemToSave?.name,
+                        screenshot_uri: itemToSave?.screenshot_uri,
+                        is_series: itemToSave?.is_series,
                      }));
-                    localStorage.removeItem(`video-completed-${mediaId}`);
+                    localStorage.removeItem(`video-completed-${itemId}`);
                 }
             }
 
@@ -245,7 +248,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBa
             video.removeEventListener('playing', handlePlaying);
             video.removeEventListener('error', handleError);
         };
-    }, [seeking, itemId, streamUrl, rawStreamUrl]);
+    }, [seeking, itemId, streamUrl, rawStreamUrl, contentType, mediaId, item, seriesItem]);
 
     const handleBack = useCallback(() => {
         if (document.fullscreenElement) {
