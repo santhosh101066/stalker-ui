@@ -301,7 +301,6 @@ export default function App() {
     [loading, totalItemsCount, items.length, context, fetchData]
   );
 
-
   useEffect(() => {
     // Reset focus when the view changes (e.g., new category, new search)
     // ONLY reset if it's page 1.
@@ -345,28 +344,35 @@ export default function App() {
       // --- START: TIZEN SEARCH LOGIC ---
       if (isTizen && isSearchActive) {
         // When search is active, only allow Enter or Back
-        if (e.keyCode === 13) { // Enter
+        if (e.keyCode === 13) {
+          // Enter
           // Let the 'onSubmit' (handleSearch) trigger normally
-          return; 
+          return;
         }
-        if (e.keyCode === 0 || e.keyCode === 10009 || e.keyCode === 8) { // Back
+        if (e.keyCode === 0 || e.keyCode === 10009 || e.keyCode === 8) {
+          // Back
           e.preventDefault();
           setIsSearchActive(false);
-          
+
           // Manually find and set focus back to the search input in our system
-          const focusable = Array.from(document.querySelectorAll('[data-focusable="true"]')) as HTMLElement[];
-          const searchIndex = focusable.findIndex(el => el.matches('input[type="search"]'));
+          const focusable = Array.from(
+            document.querySelectorAll('[data-focusable="true"]')
+          ) as HTMLElement[];
+          const searchIndex = focusable.findIndex((el) =>
+            el.matches('input[type="search"]')
+          );
           if (searchIndex !== -1) {
             setFocusedIndex(searchIndex);
           }
         }
         // Block all other navigation (Up, Down, Left, Right)
-        return; 
+        return;
       }
       // --- END: TIZEN SEARCH LOGIC ---
 
-
-      const focusable = Array.from(document.querySelectorAll('[data-focusable="true"]')) as HTMLElement[];
+      const focusable = Array.from(
+        document.querySelectorAll('[data-focusable="true"]')
+      ) as HTMLElement[];
       if (focusable.length === 0) return;
 
       let currentIndex = focusedIndex === null ? 0 : focusedIndex;
@@ -385,47 +391,51 @@ export default function App() {
             setFocusedIndex(currentIndex + 1);
           }
           break;
-        case 38: // UP
-          {
-            e.preventDefault();
-            const grid = document.querySelector('.grid');
-            if (grid) {
-              const gridComputedStyle = window.getComputedStyle(grid);
-              const gridColumnCount = gridComputedStyle.getPropertyValue('grid-template-columns').split(' ').length;
-              const newIndex = currentIndex - gridColumnCount;
-              if (newIndex >= 0) {
-                setFocusedIndex(newIndex);
-              }
-            } else if (currentIndex > 0) {
-              setFocusedIndex(currentIndex - 1);
+        case 38: { // UP
+          e.preventDefault();
+          const grid = document.querySelector(".grid");
+          if (grid) {
+            const gridComputedStyle = window.getComputedStyle(grid);
+            const gridColumnCount = gridComputedStyle
+              .getPropertyValue("grid-template-columns")
+              .split(" ").length;
+            const newIndex = currentIndex - gridColumnCount;
+            if (newIndex >= 0) {
+              setFocusedIndex(newIndex);
             }
-            break;
+          } else if (currentIndex > 0) {
+            setFocusedIndex(currentIndex - 1);
           }
-        case 40: // DOWN
-          {
-            e.preventDefault();
-            const gridDown = document.querySelector('.grid');
-            if (gridDown) {
-              const gridComputedStyle = window.getComputedStyle(gridDown);
-              const gridColumnCount = gridComputedStyle.getPropertyValue('grid-template-columns').split(' ').length;
-              const newIndex = currentIndex + gridColumnCount;
-              
-              if (newIndex < focusable.length) {
-                setFocusedIndex(newIndex);
-              } else {
-                const lastRowStartIndex = focusable.length - (focusable.length % gridColumnCount || gridColumnCount);
-                if (currentIndex >= lastRowStartIndex) {
-                  handlePageChange(1); 
-                  setFocusedIndex(currentIndex);
-                } else if (currentIndex < focusable.length - 1) {
-                  setFocusedIndex(focusable.length - 1);
-                }
+          break;
+        }
+        case 40: { // DOWN
+          e.preventDefault();
+          const gridDown = document.querySelector(".grid");
+          if (gridDown) {
+            const gridComputedStyle = window.getComputedStyle(gridDown);
+            const gridColumnCount = gridComputedStyle
+              .getPropertyValue("grid-template-columns")
+              .split(" ").length;
+            const newIndex = currentIndex + gridColumnCount;
+
+            if (newIndex < focusable.length) {
+              setFocusedIndex(newIndex);
+            } else {
+              const lastRowStartIndex =
+                focusable.length -
+                (focusable.length % gridColumnCount || gridColumnCount);
+              if (currentIndex >= lastRowStartIndex) {
+                handlePageChange(1);
+                setFocusedIndex(currentIndex);
+              } else if (currentIndex < focusable.length - 1) {
+                setFocusedIndex(focusable.length - 1);
               }
-            } else if (currentIndex < focusable.length - 1) {
-              setFocusedIndex(currentIndex + 1);
             }
-            break;
+          } else if (currentIndex < focusable.length - 1) {
+            setFocusedIndex(currentIndex + 1);
           }
+          break;
+        }
         case 13: // OK
           e.preventDefault();
           if (focusedIndex !== null && focusable[focusedIndex]) {
@@ -454,9 +464,19 @@ export default function App() {
       }
     };
 
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [focusedIndex, items, handleBack, showAdmin, streamUrl, isTizen, isSearchActive, context, handlePageChange]);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [
+    focusedIndex,
+    items,
+    handleBack,
+    showAdmin,
+    streamUrl,
+    isTizen,
+    isSearchActive,
+    context,
+    handlePageChange,
+  ]);
 
   const handleSearch = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -480,7 +500,6 @@ export default function App() {
     });
   };
 
-  
   const handleContentTypeChange = (type: "movie" | "series") => {
     if (type === contentType) return;
 
@@ -592,7 +611,6 @@ export default function App() {
                       placeholder="Search titles..."
                       className="bg-gray-900/50 text-white rounded-full py-2 px-4 w-full sm:w-64 focus:outline-none focus:ring-2 focus:ring-blue-500 border border-gray-700/80"
                       data-focusable="true"
-                      
                       readOnly={isTizen && !isSearchActive}
                       onClick={() => {
                         if (isTizen) setIsSearchActive(true);

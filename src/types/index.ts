@@ -4,10 +4,11 @@ export interface MediaItem {
     name?: string;
     screenshot_uri?: string;
     is_series?: number;
-    is_season?: boolean|number;
-    is_episode?: boolean|number;
+    is_season?: boolean | number;
+    is_episode?: boolean | number;
     series_number?: number;
     is_playable_movie?: boolean;
+    has_files?: number
 }
 
 export interface ContextType {
@@ -18,4 +19,5 @@ export interface ContextType {
     movieId: string | null;
     seasonId: string | null;
     parentTitle: string;
+    focusedIndex?: number | null;
 }

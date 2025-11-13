@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { formatTime } from '../utils/helpers';
-import type Hls from 'hls.js';
+import Hls from 'hls.js';
 
 import type { ContextType, MediaItem } from '../types';
 
@@ -71,26 +71,27 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBa
                 videoElement.currentTime = parseFloat(savedTime);
             }
 
-            if ((window as any).Hls && (window as any).Hls.isSupported()) {
+            // This line will now work because Hls is a value
+            if (Hls.isSupported()) { 
                 if (hlsInstance.current) {
                     hlsInstance.current.destroy();
                 }
-                const hls = new (window as any).Hls({
+                const hls = new Hls({ // This will also work
                     maxBufferLength: 30,
                     maxMaxBufferLength: 60,
                 });
                 hlsInstance.current = hls;
                 hls.loadSource(urlToPlay);
                 hls.attachMedia(videoElement);
-                hls.on((window as any).Hls.Events.MANIFEST_PARSED, () => { videoElement.play(); });
-                hls.on((window as any).Hls.Events.ERROR, (_: any, data: any) => {
+                hls.on(Hls.Events.MANIFEST_PARSED, () => { videoElement.play(); });
+                hls.on(Hls.Events.ERROR, (_: any, data: any) => {
                     if (data.fatal) {
                         switch (data.type) {
-                            case (window as any).Hls.ErrorTypes.NETWORK_ERROR:
+                            case Hls.ErrorTypes.NETWORK_ERROR:
                                 setError(`A network error occurred: ${data.details}`);
                                 hls.startLoad();
                                 break;
-                            case (window as any).Hls.ErrorTypes.MEDIA_ERROR:
+                            case Hls.ErrorTypes.MEDIA_ERROR:
                                 setError(`A media error occurred: ${data.details}`);
                                 if (data.details === 'bufferAppendError') {
                                     if (streamUrl && rawStreamUrl) {
@@ -122,17 +123,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBa
             }
         };
 
-        if (!(window as any).Hls) {
-            const script = document.createElement('script');
-            const scriptSrc = "https://cdn.jsdelivr.net/npm/hls.js@latest";
-            script.src = scriptSrc;
-            if (!document.querySelector(`script[src="${scriptSrc}"]`)) {
-                document.body.appendChild(script);
-            }
-            script.onload = initializePlayer;
-        } else {
-            initializePlayer();
-        }
+        initializePlayer();
 
         return () => {
             if (hlsInstance.current) {
@@ -146,33 +137,68 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBa
         if (!video) return;
 
         const handleTimeUpdate = () => {
+            const video = videoRef.current;
+            if (!video) return;
+
             if (!seeking) {
                 setProgress((video.currentTime / video.duration) * 100);
             }
             setCurrentTime(video.currentTime);
 
-            if (video.duration > 0) {
+      
+           if (video.duration > 0 && mediaId && itemId) {
                 const progressPercentage = (video.currentTime / video.duration) * 100;
+
+                // This is the JSON object for MediaCard (Movies or Series)
+                const itemToSave = seriesItem || item;
+                const mediaProgressData = JSON.stringify({
+                    mediaId: mediaId,
+                    fileId: itemId,
+                    type: contentType, 
+                    title: itemToSave?.title,
+                    name: itemToSave?.name || itemToSave?.title,
+                    screenshot_uri: itemToSave?.screenshot_uri,
+                    is_series: itemToSave?.is_series,
+                });
+
                 if (progressPercentage > 95) {
-                    localStorage.setItem(`video-completed-${itemId}`,
-                     JSON.stringify({ mediaId: mediaId, fileId: itemId, type: contentType }));
-                    localStorage.removeItem(`video-in-progress-${itemId}`);
+                    // --- COMPLETED ---
+
+                    if (seriesItem) {
+                        // --- IT'S A SERIES EPISODE ---
+                        
+                        // 1. Mark the episode as 'completed' (for EpisodeCard)
+                        localStorage.setItem(`video-completed-${itemId}`, 'true');
+                        localStorage.removeItem(`video-in-progress-${itemId}`);
+                        
+                        // 2. Mark the SERIES as 'in-progress' (for MediaCard)
+                        //    This ensures the series card stays yellow, not green.
+                        localStorage.setItem(`video-in-progress-${mediaId}`, mediaProgressData);
+                        localStorage.removeItem(`video-completed-${mediaId}`); // Remove any old 'completed' flag
+
+                    } else {
+                        // --- IT'S A MOVIE ---
+                        // Mark the movie as 'completed'
+                        localStorage.setItem(`video-completed-${mediaId}`, mediaProgressData);
+                        localStorage.removeItem(`video-in-progress-${mediaId}`);
+                    }
+
                 } else if (progressPercentage > 2) {
-                    const itemToSave = contentType === 'series' && seriesItem ? seriesItem : item;
-                    localStorage.setItem(`video-in-progress-${itemToSave?.is_series == 1? itemId: mediaId}`,
-                        JSON.stringify({
-                            mediaId: mediaId,
-                            fileId: itemId,
-                            type: contentType,
-                            title: itemToSave?.title,
-                            name: itemToSave?.name || itemToSave?.title,
-                            screenshot_uri: itemToSave?.screenshot_uri,
-                            is_series: itemToSave?.is_series,
-                        }));
-                    localStorage.removeItem(`video-completed-${itemToSave?.is_series == 1? itemId: mediaId}`);
+                    // --- IN-PROGRESS ---
+
+                    // 1. Mark the media (Movie OR Series) as 'in-progress'
+                    localStorage.setItem(`video-in-progress-${mediaId}`, mediaProgressData);
+                    localStorage.removeItem(`video-completed-${mediaId}`);
+
+                    if (seriesItem) {
+                        // 2. Mark the episode as 'in-progress'
+                        localStorage.setItem(`video-in-progress-${itemId}`, 'true');
+                        localStorage.removeItem(`video-completed-${itemId}`);
+                    }
                 }
             }
 
+            // This part is for resuming playback time, which is working correctly
             const now = Date.now();
             if (now - lastSaveTime.current > 5000) {
                 localStorage.setItem(`video-progress-${itemId}`, String(video.currentTime));
