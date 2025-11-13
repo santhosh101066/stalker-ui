@@ -76,7 +76,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBa
                     hlsInstance.current.destroy();
                 }
                 const hls = new (window as any).Hls({
-                    maxBufferLength: 20,
+                    maxBufferLength: 30,
                     maxMaxBufferLength: 60,
                 });
                 hlsInstance.current = hls;
@@ -159,17 +159,17 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBa
                     localStorage.removeItem(`video-in-progress-${itemId}`);
                 } else if (progressPercentage > 2) {
                     const itemToSave = contentType === 'series' && seriesItem ? seriesItem : item;
-                    localStorage.setItem(`video-in-progress-${itemId}`,
-                     JSON.stringify({
-                        mediaId: mediaId,
-                        fileId: itemId,
-                        type: contentType,
-                        title: itemToSave?.title,
-                        name: itemToSave?.name,
-                        screenshot_uri: itemToSave?.screenshot_uri,
-                        is_series: itemToSave?.is_series,
-                     }));
-                    localStorage.removeItem(`video-completed-${itemId}`);
+                    localStorage.setItem(`video-in-progress-${itemToSave?.is_series == 1? itemId: mediaId}`,
+                        JSON.stringify({
+                            mediaId: mediaId,
+                            fileId: itemId,
+                            type: contentType,
+                            title: itemToSave?.title,
+                            name: itemToSave?.name || itemToSave?.title,
+                            screenshot_uri: itemToSave?.screenshot_uri,
+                            is_series: itemToSave?.is_series,
+                        }));
+                    localStorage.removeItem(`video-completed-${itemToSave?.is_series == 1? itemId: mediaId}`);
                 }
             }
 
@@ -636,7 +636,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBa
                     clearTimeout(cursorTimeoutRef.current);
                 }
             }} className={`relative aspect-video bg-black rounded-lg overflow-hidden shadow-2xl group ${!cursorVisible && !controlsVisible ? 'cursor-none' : ''}`}>
-                <video ref={videoRef} autoPlay playsInline className="w-full h-full" onClick={togglePlayPause} onDoubleClick={toggleFullscreen} />
+                <video ref={videoRef} crossOrigin='anonymous' autoPlay playsInline className="w-full h-full" onClick={togglePlayPause} onDoubleClick={toggleFullscreen} />
 
                 {error && (
                     <div className="absolute inset-0 flex flex-col items-center justify-center bg-black bg-opacity-75 z-30">
