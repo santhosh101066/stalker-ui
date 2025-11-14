@@ -24,6 +24,7 @@ interface VideoPlayerProps {
 }
 
 const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBack, itemId, subtitles: initialSubtitles, contentType, mediaId, item, seriesItem }) => {
+    const isTizen = !!(window as any).tizen;
     const videoRef = useRef<HTMLVideoElement>(null);
     const playerContainerRef = useRef<HTMLDivElement>(null);
     const seekBarRef = useRef<HTMLInputElement>(null);
@@ -77,8 +78,15 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBa
                     hlsInstance.current.destroy();
                 }
                 const hls = new Hls({ // This will also work
-                    maxBufferLength: 30,
-                    maxMaxBufferLength: 60,
+                   // 1. Start playing after 15s of video (half your old setting)
+                    maxBufferLength: 15,
+                    
+                    // 2. Keep the max buffer smaller (30s) to save memory
+                    maxMaxBufferLength: 30,
+                    
+                    // 3. Tell HLS to assume a lower starting bandwidth (500kbps)
+                    // This forces it to load a lower-quality stream first, which is faster.
+                    abrEwmaDefaultEstimate: 500000,
                 });
                 hlsInstance.current = hls;
                 hls.loadSource(urlToPlay);
@@ -141,7 +149,11 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBa
             if (!video) return;
 
             if (!seeking) {
-                setProgress((video.currentTime / video.duration) * 100);
+                if (video.duration && video.duration > 0) {
+                    setProgress((video.currentTime / video.duration) * 100);
+                } else {
+                    setProgress(0); // Force progress to 0 if duration is NaN or 0
+                }
             }
             setCurrentTime(video.currentTime);
 
@@ -594,7 +606,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBa
         showControlsAndCursor();
     };
 
-    const toggleFullscreen = () => {
+    const toggleFullscreen = useCallback(() => {
         const elem = playerContainerRef.current;
         if (elem) {
             if (!document.fullscreenElement) {
@@ -605,21 +617,24 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBa
                 document.exitFullscreen();
             }
         }
-    };
+    }, []);
 
     useEffect(() => {
+        showControlsAndCursor();
+
         // Focus on the play/pause button after a short delay to allow the UI to update
         setTimeout(() => {
             const focusable = Array.from(playerContainerRef.current?.querySelectorAll('[data-focusable="true"]') || []) as HTMLElement[];
             const playPauseButtonIndex = focusable.findIndex(el => el.getAttribute('data-control') === 'play-pause');
             if (playPauseButtonIndex !== -1) {
-                setFocusedIndex(playPauseButtonIndex);
+                 setFocusedIndex(playPauseButtonIndex);
             } else {
                 playerContainerRef.current?.focus();
             }
         }, 100);
+        
         toggleFullscreen();
-    }, []);
+    }, [showControlsAndCursor, toggleFullscreen]);
 
     const handleCopyLink = () => {
         if (rawStreamUrl) {
@@ -734,11 +749,11 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBa
                                 <span className="font-mono text-sm">{formatTime(currentTime)} / {formatTime(duration)}</span>
                             </div>
                             <div className="flex items-center space-x-4">
-                                <button data-focusable="true" onClick={toggleMute} className="text-white hover:text-blue-400">
+                                {!isTizen && <button data-focusable="true" onClick={toggleMute} className="text-white hover:text-blue-400">
                                     {isMuted || volume === 0 ?
                                         <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM12.293 7.293a1 1 0 011.414 0L15 8.586l1.293-1.293a1 1 0 111.414 1.414L16.414 10l1.293 1.293a1 1 0 01-1.414 1.414L15 11.414l-1.293 1.293a1 1 0 01-1.414-1.414L13.586 10l-1.293-1.293a1 1 0 010-1.414z" clipRule="evenodd"></path></svg> :
                                         <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM14.657 2.929a1 1 0 011.414 0A9.972 9.972 0 0119 10a9.972 9.972 0 01-2.929 7.071 1 1 0 01-1.414-1.414A7.971 7.971 0 0017 10c0-2.21-.894-4.208-2.343-5.657a1 1 0 010-1.414zm-2.829 2.828a1 1 0 011.415 0A5.983 5.983 0 0115 10a5.984 5.984 0 01-1.757 4.243 1 1 0 01-1.415-1.415A3.984 3.984 0 0013 10a3.983 3.983 0 00-1.172-2.828 1 1 0 010-1.415z" clipRule="evenodd"></path></svg>}
-                                </button>
+                                </button>}
                                 {subtitles && subtitles.length > 0 && (
                                     <div className="relative">
                                         <button data-focusable="true" onClick={toggleSubtitleMenu} className="text-white hover:text-blue-400">
@@ -758,7 +773,9 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBa
                                         )}
                                     </div>
                                 )}
-                                <input data-focusable="true" data-control="volume" type="range" min="0" max="1" step="0.01" value={volume} onChange={handleVolumeChange} className="w-24 h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer range-sm" style={{ accentColor: '#3b82f6' }} />
+                                {!isTizen && (
+                                    <input data-focusable="true" data-control="volume" type="range" min="0" max="1" step="0.01" value={volume} onChange={handleVolumeChange} className="w-24 h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer range-sm" style={{ accentColor: '#3b82f6' }} />
+                                )}
                                 <button data-focusable="true" onClick={toggleFullscreen} className="text-white hover:text-blue-400">
                                     {isFullscreen ?
                                         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 4H4v6m10 10h6v-6M4 20l6-6m4-4l6-6"></path></svg> :

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import type { MediaItem } from '../types';
 import { api } from './api';
 

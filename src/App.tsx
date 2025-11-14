@@ -7,7 +7,7 @@ import VideoPlayer from "./components/VideoPlayer";
 import ContinueWatching from "./components/ContinueWatching";
 import type { MediaItem, ContextType } from "./types";
 import { BASE_URL } from "./api/api";
-import { ToastContainer } from "react-toastify";
+import { toast, ToastContainer } from "react-toastify";
 import type { PaginatedResponse } from "./api/services";
 import "react-toastify/dist/ReactToastify.css";
 import "./App.css";
@@ -276,6 +276,8 @@ export default function App() {
     }
   }, [streamUrl, history, fetchData]);
 
+
+
   const handlePageChange = useCallback(
     (direction: number) => {
       if (direction <= 0) return;
@@ -300,6 +302,20 @@ export default function App() {
     },
     [loading, totalItemsCount, items.length, context, fetchData]
   );
+  const handleClearWatched = useCallback(() => {
+    if (window.confirm("Are you sure you want to clear all watched and in-progress statuses?")) {
+      Object.keys(localStorage).forEach((key) => {
+        // Clear completed, in-progress, AND resume time keys
+        if (key.startsWith("video-completed-") || key.startsWith("video-in-progress-") || key.startsWith("video-progress-")) {
+          localStorage.removeItem(key);
+        }
+      });
+      toast.success("All watched and in-progress statuses have been cleared.");
+      
+      // Re-fetch data to clear the "Continue Watching" list
+      fetchData(initialContext, contentType);
+    }
+  }, [fetchData, initialContext, contentType]); // Add dependencies
 
   useEffect(() => {
     // Reset focus when the view changes (e.g., new category, new search)
@@ -337,42 +353,48 @@ export default function App() {
     });
   }, [focusedIndex, items, showAdmin, streamUrl]);
 
+  const checkAndFetchNextPage = useCallback((newIndex: number, totalItems: number) => {
+    // How many items from the end should trigger the fetch?
+    // Your "last 2" idea is good. Let's make it the last row.
+    const grid = document.querySelector('.grid');
+    let triggerThreshold = 2; // Default for non-grid
+
+    if (grid) {
+      const gridComputedStyle = window.getComputedStyle(grid);
+      const gridColumnCount = gridComputedStyle.getPropertyValue('grid-template-columns').split(' ').length;
+      triggerThreshold = gridColumnCount; // Trigger on the last row
+    }
+
+    if (newIndex >= totalItems - triggerThreshold) {
+      // We are focusing on one of the last items.
+      // It's safe to call this multiple times because
+      // handlePageChange has the 'isFetchingMore' lock.
+      handlePageChange(1);
+    }
+  }, [handlePageChange]);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (streamUrl) return; // Do not handle key events when video player is active
 
       // --- START: TIZEN SEARCH LOGIC ---
       if (isTizen && isSearchActive) {
-        // When search is active, only allow Enter or Back
-        if (e.keyCode === 13) {
-          // Enter
-          // Let the 'onSubmit' (handleSearch) trigger normally
-          return;
-        }
+        if (e.keyCode === 13) { return; }
         if (e.keyCode === 0 || e.keyCode === 10009 || e.keyCode === 8) {
-          // Back
           e.preventDefault();
           setIsSearchActive(false);
-
-          // Manually find and set focus back to the search input in our system
-          const focusable = Array.from(
-            document.querySelectorAll('[data-focusable="true"]')
-          ) as HTMLElement[];
-          const searchIndex = focusable.findIndex((el) =>
-            el.matches('input[type="search"]')
-          );
+          const focusable = Array.from(document.querySelectorAll('[data-focusable="true"]')) as HTMLElement[];
+          const searchIndex = focusable.findIndex(el => el.matches('input[type="search"]'));
           if (searchIndex !== -1) {
             setFocusedIndex(searchIndex);
           }
         }
-        // Block all other navigation (Up, Down, Left, Right)
-        return;
+        return; 
       }
       // --- END: TIZEN SEARCH LOGIC ---
 
-      const focusable = Array.from(
-        document.querySelectorAll('[data-focusable="true"]')
-      ) as HTMLElement[];
+
+      const focusable = Array.from(document.querySelectorAll('[data-focusable="true"]')) as HTMLElement[];
       if (focusable.length === 0) return;
 
       let currentIndex = focusedIndex === null ? 0 : focusedIndex;
@@ -388,69 +410,69 @@ export default function App() {
         case 39: // RIGHT
           e.preventDefault();
           if (currentIndex < focusable.length - 1) {
-            setFocusedIndex(currentIndex + 1);
+            const newIndex = currentIndex + 1; // Calculate new index
+            setFocusedIndex(newIndex);
+            
+            // --- NEW: Check if this new index is near the end ---
+            checkAndFetchNextPage(newIndex, focusable.length);
           }
           break;
-        case 38: { // UP
-          e.preventDefault();
-          const grid = document.querySelector(".grid");
-          if (grid) {
-            const gridComputedStyle = window.getComputedStyle(grid);
-            const gridColumnCount = gridComputedStyle
-              .getPropertyValue("grid-template-columns")
-              .split(" ").length;
-            const newIndex = currentIndex - gridColumnCount;
-            if (newIndex >= 0) {
-              setFocusedIndex(newIndex);
-            }
-          } else if (currentIndex > 0) {
-            setFocusedIndex(currentIndex - 1);
-          }
-          break;
-        }
-        case 40: { // DOWN
-          e.preventDefault();
-          const gridDown = document.querySelector(".grid");
-          if (gridDown) {
-            const gridComputedStyle = window.getComputedStyle(gridDown);
-            const gridColumnCount = gridComputedStyle
-              .getPropertyValue("grid-template-columns")
-              .split(" ").length;
-            const newIndex = currentIndex + gridColumnCount;
-
-            if (newIndex < focusable.length) {
-              setFocusedIndex(newIndex);
-            } else {
-              const lastRowStartIndex =
-                focusable.length -
-                (focusable.length % gridColumnCount || gridColumnCount);
-              if (currentIndex >= lastRowStartIndex) {
-                handlePageChange(1);
-                setFocusedIndex(currentIndex);
-              } else if (currentIndex < focusable.length - 1) {
-                setFocusedIndex(focusable.length - 1);
+        case 38: // UP
+          {
+            e.preventDefault();
+            const grid = document.querySelector('.grid');
+            if (grid) {
+              const gridComputedStyle = window.getComputedStyle(grid);
+              const gridColumnCount = gridComputedStyle.getPropertyValue('grid-template-columns').split(' ').length;
+              const newIndex = currentIndex - gridColumnCount;
+              if (newIndex >= 0) {
+                setFocusedIndex(newIndex);
               }
+            } else if (currentIndex > 0) {
+              setFocusedIndex(currentIndex - 1);
             }
-          } else if (currentIndex < focusable.length - 1) {
-            setFocusedIndex(currentIndex + 1);
+            break;
           }
-          break;
-        }
+        case 40: // DOWN
+          {
+            e.preventDefault();
+            const gridDown = document.querySelector('.grid');
+            let newIndex = -1; // Flag for new index
+
+            if (gridDown) {
+              const gridComputedStyle = window.getComputedStyle(gridDown);
+              const gridColumnCount = gridComputedStyle.getPropertyValue('grid-template-columns').split(' ').length;
+              const potentialNewIndex = currentIndex + gridColumnCount;
+              
+              if (potentialNewIndex < focusable.length) {
+                newIndex = potentialNewIndex;
+              } else {
+                // --- MODIFIED: At the bottom, load more ---
+                handlePageChange(1); 
+                setFocusedIndex(currentIndex); // Keep focus on current item
+              }
+            } else if (currentIndex < focusable.length - 1) {
+              // Not a grid, just move down one
+              newIndex = currentIndex + 1;
+            }
+
+            if (newIndex !== -1) {
+                setFocusedIndex(newIndex);
+                // --- NEW: Check if this new index is near the end ---
+                checkAndFetchNextPage(newIndex, focusable.length);
+            }
+            break;
+          }
         case 13: // OK
           e.preventDefault();
           if (focusedIndex !== null && focusable[focusedIndex]) {
             const focusedElement = focusable[focusedIndex] as HTMLElement;
-
-            // --- START: TIZEN SEARCH ACTIVATION ---
             if (isTizen && focusedElement.matches('input[type="search"]')) {
-              // It's the search bar, activate it and manually focus
               setIsSearchActive(true);
               focusedElement.focus();
             } else {
-              // Default behavior for all other buttons
               focusedElement.click();
             }
-            // --- END: TIZEN SEARCH ACTIVATION ---
           }
           break;
         case 0: // BACK on some devices
@@ -464,18 +486,19 @@ export default function App() {
       }
     };
 
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
   }, [
-    focusedIndex,
-    items,
-    handleBack,
-    showAdmin,
-    streamUrl,
-    isTizen,
-    isSearchActive,
-    context,
-    handlePageChange,
+      focusedIndex, 
+      items, 
+      handleBack, 
+      showAdmin, 
+      streamUrl, 
+      isTizen, 
+      isSearchActive, 
+      context, 
+      handlePageChange, 
+      checkAndFetchNextPage // <-- ADD THIS
   ]);
 
   const handleSearch = (e: React.FormEvent<HTMLFormElement>) => {
@@ -630,6 +653,16 @@ export default function App() {
                       {showAdmin ? "Back to Content" : "Admin"}
                     </button>
                   )}
+                  {isTizen && !streamUrl && (
+                    <button
+                      onClick={handleClearWatched}
+                      className="ml-4 bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors"
+                      data-focusable="true"
+                      tabIndex={-1}
+                    >
+                      Clear History
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -689,8 +722,10 @@ export default function App() {
                       <div
                         className={`
                           ${
-                            isEpisodeList
-                              ? "grid grid-cols-1 md:grid-cols-2 gap-4"
+                            isEpisodeList && !isTizen // <-- Check for episode list AND not Tizen
+                              ? "flex flex-col gap-4" // Web: Vertical list
+                              : isEpisodeList // Tizen: Grid
+                              ? "grid grid-cols-1 md:grid-cols-2 gap-4" 
                               : "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6"
                           }
                           ${
