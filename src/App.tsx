@@ -929,10 +929,12 @@ export default function App() {
                     // --- Content Grid (now visible during load, if !error) ---
                     !error && (
                       <>
-                        {context.category === null && !context.search && (
-                          <ContinueWatching onClick={handleItemClick} />
-                        )}
-
+                        {contentType !== 'tv' && context.category === null && !context.search && (
+                        <ContinueWatching 
+                          onClick={handleItemClick} 
+                          contentType={contentType} 
+                        />
+                      )}
                         <div
                           className={` ${
                             contentType === 'tv' // TV List

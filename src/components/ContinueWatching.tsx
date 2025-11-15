@@ -4,9 +4,10 @@ import type { MediaItem } from '../types';
 
 interface ContinueWatchingProps {
   onClick: (item: MediaItem) => void;
+  contentType: "movie" | "series" | "tv";
 }
 
-const ContinueWatching: React.FC<ContinueWatchingProps> = ({ onClick }) => {
+const ContinueWatching: React.FC<ContinueWatchingProps> = ({ onClick,contentType }) => {
   const [inProgressItems, setInProgressItems] = useState<MediaItem[]>([]);
 
   useEffect(() => {
@@ -21,6 +22,9 @@ const ContinueWatching: React.FC<ContinueWatchingProps> = ({ onClick }) => {
       if (progressData) {
         try {
           const itemData = JSON.parse(progressData);
+          if (itemData.type !== contentType) {
+            continue; // Skip if it's not the right content type
+          }
           if (!addedIds.has(itemData.mediaId)) {
             items.push({
               id: itemData.mediaId,
@@ -44,7 +48,7 @@ const ContinueWatching: React.FC<ContinueWatchingProps> = ({ onClick }) => {
       }
     }
     setInProgressItems(items);
-  }, []);
+  }, [contentType]);
 
   if (inProgressItems.length === 0) {
     return null;

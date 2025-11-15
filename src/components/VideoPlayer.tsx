@@ -983,15 +983,15 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
                 {/* Top Row: Channel Info */}
                 <div className="mb-2 flex items-center justify-between">
                   <div className="flex min-w-0 items-center">
-                    {channelInfo?.screenshot_uri && (
-                      <img
+                    {(previewChannelInfo || channelInfo)?.screenshot_uri && (
+                      <img 
                         src={
-                          channelInfo.screenshot_uri.startsWith('http')
-                            ? channelInfo.screenshot_uri
-                            : `${URL_PATHS.HOST}/api/images${channelInfo.screenshot_uri}`
-                        }
-                        alt={channelInfo.name}
-                        className="mr-3 h-10 w-12 flex-shrink-0 rounded-sm bg-black object-contain p-0.5"
+                          (previewChannelInfo || channelInfo)!.screenshot_uri?.startsWith("http")
+                            ? (previewChannelInfo || channelInfo)!.screenshot_uri
+                            : `${URL_PATHS.HOST}/api/images${(previewChannelInfo || channelInfo)!.screenshot_uri}`
+                        } 
+                        alt={(previewChannelInfo || channelInfo)!.name} 
+                        className="w-12 h-10 object-contain mr-3 bg-black p-0.5 rounded-sm flex-shrink-0"
                       />
                     )}
                     <span className="text-2xl font-bold">
