@@ -22,8 +22,10 @@ const TvChannelListCard: React.FC<TvChannelListCardProps> = ({
 
   return (
     <div
-      className={`flex items-center p-2 transition-colors duration-150 ${
-        isFocused ? 'bg-blue-600' : 'bg-gray-800 hover:bg-gray-700'
+      className={`flex items-center p-2 transition-colors duration-150 rounded-md ${ // Added rounded-md for a softer look
+        isFocused
+          ? 'bg-blue-600/50' // Solid blue when focused
+          : 'bg-transparent hover:bg-white/10' // Transparent, with a slight white highlight on hover
       }`}
       onClick={() => onClick(item)}
       data-focusable="true"

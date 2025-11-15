@@ -97,7 +97,7 @@ const TvChannelList: React.FC<TvChannelListProps> = ({
   return (
     <div
       ref={listRef}
-      className="absolute left-0 top-0 z-40 h-full w-full max-w-xs overflow-y-auto bg-black bg-opacity-80"
+      className="absolute left-0 top-0 z-40 h-full w-full max-w-xs overflow-y-auto bg-gray-900 bg-opacity-80 backdrop-blur-md"
       tabIndex={-1}
     >
       <div className="p-2">
