@@ -1,17 +1,13 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { formatTime } from '../utils/helpers';
-import Hls from 'hls.js';
+import Hls, { Level, type MediaPlaylist } from 'hls.js';
 import { toast } from 'react-toastify';
 import { URL_PATHS } from '../api/api'; // Import URL_PATHS
 
 import type { ContextType, MediaItem } from '../types';
 import TvChannelList from './TvChannelList';
 
-interface Subtitle {
-  language: string;
-  url: string;
-}
 type VideoFitMode = 'contain' | 'cover' | 'fill';
 const FIT_MODES: VideoFitMode[] = ['contain', 'cover', 'fill'];
 
@@ -20,7 +16,6 @@ interface VideoPlayerProps {
   rawStreamUrl: string | null;
   onBack: () => void;
   itemId: string | null;
-  subtitles?: Subtitle[];
   context: ContextType;
   contentType: 'movie' | 'series' | 'tv';
   mediaId: string | null;
@@ -58,7 +53,6 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   rawStreamUrl,
   onBack,
   itemId,
-  subtitles: initialSubtitles,
   contentType,
   mediaId,
   item,
@@ -73,6 +67,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const isTizen = !!(window as any).tizen;
   const videoRef = useRef<HTMLVideoElement>(null);
   const playerContainerRef = useRef<HTMLDivElement>(null);
+  const settingsMenuRef = useRef<HTMLDivElement>(null);
   const seekBarRef = useRef<HTMLInputElement>(null);
   const hlsInstance = useRef<Hls | null>(null);
   const controlsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -95,10 +90,6 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [hoverTime, setHoverTime] = useState(0);
   const [hoverPosition, setHoverPosition] = useState(0);
   const [isTooltipVisible, setIsTooltipVisible] = useState(false);
-  const [subtitles, setSubtitles] = useState<Subtitle[]>([]);
-  const [selectedSubtitle, setSelectedSubtitle] = useState<string | null>(null);
-  const [subtitlesEnabled, setSubtitlesEnabled] = useState(true);
-  const [isSubtitleMenuOpen, setIsSubtitleMenuOpen] = useState(false);
   const [cursorVisible, setCursorVisible] = useState(true);
   const cursorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
@@ -106,6 +97,18 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const seekApplyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const playButtonRef = useRef<HTMLButtonElement>(null);
   const [showChannelList, setShowChannelList] = useState(false);
+
+  const [videoLevels, setVideoLevels] = useState<Level[]>([]);
+  const [audioTracks, setAudioTracks] = useState<MediaPlaylist[]>([]);
+  const [subtitleTracks, setSubtitleTracks] = useState<MediaPlaylist[]>([]);
+  const [currentVideoLevel, setCurrentVideoLevel] = useState(-1); // -1 is 'auto'
+  const [currentAudioTrack, setCurrentAudioTrack] = useState(-1);
+  const [currentSubtitleTrack, setCurrentSubtitleTrack] = useState(-1);
+  const [isSettingsMenuOpen, setIsSettingsMenuOpen] = useState(false);
+  const [activeSettingsMenu, setActiveSettingsMenu] = useState<
+    'main' | 'quality' | 'audio' | 'subtitles'
+  >('main');
+
   const [fitMode, setFitMode] = useState<VideoFitMode>(() => {
     return (localStorage.getItem('videoFitMode') as VideoFitMode) || 'contain';
   });
@@ -138,6 +141,8 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
           hlsInstance.current.destroy();
         }
         const hls = new Hls({
+          enableWorker: true,
+          lowLatencyMode: true,
           maxBufferLength: 15,
           maxMaxBufferLength: 30,
           abrEwmaDefaultEstimate: 500000,
@@ -151,8 +156,28 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         hlsInstance.current = hls;
         hls.loadSource(urlToPlay);
         hls.attachMedia(videoElement);
-        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        hls.on(Hls.Events.MANIFEST_PARSED, (_, data) => {
           videoElement.play();
+          setVideoLevels(data.levels);
+          setCurrentVideoLevel(hls.currentLevel); // Set initial level
+        });
+        hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, (_, data) => {
+          setAudioTracks(data.audioTracks);
+          setCurrentAudioTrack(hls.audioTrack);
+        });
+        hls.on(Hls.Events.SUBTITLE_TRACKS_UPDATED, (_, data) => {
+          setSubtitleTracks(data.subtitleTracks);
+          setCurrentSubtitleTrack(hls.subtitleTrack);
+        });
+        // Listen for changes (e.g., ABR)
+        hls.on(Hls.Events.LEVEL_SWITCHED, (_, data) => {
+          setCurrentVideoLevel(data.level);
+        });
+        hls.on(Hls.Events.AUDIO_TRACK_SWITCHED, (_, data) => {
+          setCurrentAudioTrack(data.id);
+        });
+        hls.on(Hls.Events.SUBTITLE_TRACK_SWITCH, (_, data) => {
+          setCurrentSubtitleTrack(data.id);
         });
         hls.on(Hls.Events.ERROR, (_: any, data: any) => {
           if (data.fatal) {
@@ -486,14 +511,9 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   );
 
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (showChannelList) {
-        e.stopPropagation();
-        return;
-      }
-
-      showControlsAndCursor();
-      e.stopPropagation();
+    // Helper function for the main player controls
+    const handlePlayerControlsKeyDown = (e: KeyboardEvent) => {
+      
       const focusable = Array.from(
         playerContainerRef.current?.querySelectorAll(
           '[data-focusable="true"]'
@@ -591,26 +611,91 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       }
     };
 
+    // Helper function for the settings menu
+    const handleSettingsMenuKeyDown = (e: KeyboardEvent) => {
+      const focusable = Array.from(
+        settingsMenuRef.current?.querySelectorAll('[data-focusable="true"]') ||
+          []
+      ) as HTMLElement[];
+      if (focusable.length === 0) return;
+
+      let currentIndex = focusedIndex === null ? 0 : focusedIndex;
+      if (currentIndex < 0) currentIndex = 0;
+
+      switch (e.keyCode) {
+        case 38: // UP
+          e.preventDefault();
+          setFocusedIndex((prev) =>
+            prev !== null && prev > 0 ? prev - 1 : focusable.length - 1
+          );
+          break;
+        case 40: // DOWN
+          e.preventDefault();
+          setFocusedIndex((prev) =>
+            prev !== null && prev < focusable.length - 1 ? prev + 1 : 0
+          );
+          break;
+        case 13: // ENTER
+          e.preventDefault();
+          if (focusable[currentIndex]) {
+            focusable[currentIndex].click();
+          }
+          break;
+        case 0: // BACK on some devices
+        case 10009: // RETURN on Tizen
+        case 8: // BACK
+          e.preventDefault();
+          if (activeSettingsMenu !== 'main') {
+            setActiveSettingsMenu('main');
+            setFocusedIndex(0); // Reset focus to first item in main menu
+          } else {
+            setIsSettingsMenuOpen(false);
+          }
+          break;
+        default:
+          break;
+      }
+    };
+
+    // --- Main Key Handler ---
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (showChannelList) {
+        // Let TvChannelList handle its own keys
+        e.stopPropagation();
+        return;
+      }
+
+      showControlsAndCursor();
+      e.stopPropagation();
+
+      if (isSettingsMenuOpen) {
+        handleSettingsMenuKeyDown(e);
+      } else {
+        handlePlayerControlsKeyDown(e);
+      }
+    };
+
     document.addEventListener('keydown', handleKeyDown);
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
   }, [
     focusedIndex,
+    isSettingsMenuOpen,
+    activeSettingsMenu,
+    showChannelList,
     skip,
     togglePlayPause,
     showControlsAndCursor,
     applySeekBuffer,
     handleSkipButtonClick,
     handleBack,
-    showChannelList,
     contentType,
     onPrevChannel,
     onNextChannel,
   ]);
-
   useEffect(() => {
-    if (showChannelList) return;
+    if (showChannelList||isSettingsMenuOpen) return;
     const focusable = Array.from(
       playerContainerRef.current?.querySelectorAll('[data-focusable="true"]') ||
         []
@@ -635,7 +720,33 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         el.classList.remove('focused');
       }
     });
-  }, [focusedIndex, showChannelList]);
+  }, [focusedIndex, isSettingsMenuOpen, showChannelList]);
+
+  useEffect(() => {
+    // Only run if the settings menu is open
+    if (!isSettingsMenuOpen || showChannelList) return;
+
+    const focusable = Array.from(
+      settingsMenuRef.current?.querySelectorAll('[data-focusable="true"]') ||
+        []
+    ) as HTMLElement[];
+    if (focusable.length === 0) return;
+
+    const newIndex = focusedIndex === null ? 0 : focusedIndex;
+    if (newIndex >= focusable.length) {
+      setFocusedIndex(focusable.length - 1); // fix for out-of-bounds
+      return;
+    }
+
+    focusable.forEach((el, index) => {
+      if (index === newIndex) {
+        el.classList.add('focused');
+        el.focus();
+      } else {
+        el.classList.remove('focused');
+      }
+    });
+  }, [focusedIndex, isSettingsMenuOpen, activeSettingsMenu, showChannelList]);
 
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -659,62 +770,6 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     return () =>
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
   }, [focusedIndex]);
-
-  useEffect(() => {
-    if (initialSubtitles) {
-      setSubtitles(initialSubtitles);
-      const englishSubtitle = initialSubtitles.find(
-        (s) => s.language.toLowerCase() === 'english'
-      );
-      if (englishSubtitle) {
-        setSelectedSubtitle(englishSubtitle.url);
-      } else if (initialSubtitles.length > 0) {
-        setSelectedSubtitle(initialSubtitles[0].url);
-      }
-    }
-  }, [initialSubtitles]);
-
-  const handleSubtitleChange = (url: string | null) => {
-    setSelectedSubtitle(url);
-    if (url) {
-      setSubtitlesEnabled(true);
-    } else {
-      setSubtitlesEnabled(false);
-    }
-    setIsSubtitleMenuOpen(false);
-  };
-
-  const toggleSubtitleMenu = () => {
-    setIsSubtitleMenuOpen(!isSubtitleMenuOpen);
-  };
-
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    Array.from(video.textTracks).forEach((track) => {
-      track.mode = 'disabled';
-    });
-
-    if (subtitlesEnabled && selectedSubtitle) {
-      const trackExists = Array.from(video.textTracks).find(
-        (t) => t.language === selectedSubtitle
-      );
-      if (trackExists) {
-        trackExists.mode = 'showing';
-      } else {
-        const track = document.createElement('track');
-        const subtitleInfo = subtitles.find((s) => s.url === selectedSubtitle);
-        if (subtitleInfo) {
-          track.src = subtitleInfo.url;
-          track.label = subtitleInfo.language;
-          track.srclang = subtitleInfo.language;
-          track.default = true;
-          video.appendChild(track);
-        }
-      }
-    }
-  }, [selectedSubtitle, subtitlesEnabled, subtitles]);
 
   useEffect(() => {
     if (previewChannelInfo) {
@@ -821,6 +876,39 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     });
   };
 
+  const toggleSettingsMenu = () => {
+    if (isSettingsMenuOpen) {
+      setIsSettingsMenuOpen(false);
+      setActiveSettingsMenu('main');
+    } else {
+      setIsSettingsMenuOpen(true);
+    }
+  };
+
+  const handleVideoLevelChange = (levelIndex: number) => {
+    if (hlsInstance.current) {
+      hlsInstance.current.nextLevel = levelIndex;
+    }
+    setActiveSettingsMenu('main');
+    setIsSettingsMenuOpen(false); // Close menu on selection
+  };
+
+  const handleAudioTrackChange = (trackId: number) => {
+    if (hlsInstance.current) {
+      hlsInstance.current.audioTrack = trackId;
+    }
+    setActiveSettingsMenu('main');
+    setIsSettingsMenuOpen(false);
+  };
+
+  const handleSubtitleTrackChange = (trackId: number) => {
+    if (hlsInstance.current) {
+      hlsInstance.current.subtitleTrack = trackId;
+    }
+    setActiveSettingsMenu('main');
+    setIsSettingsMenuOpen(false);
+  };
+
   const handleCopyLink = () => {
     if (rawStreamUrl) {
       const tempInput = document.createElement('textarea');
@@ -908,7 +996,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
             controlsVisible || isBuffering ? 'opacity-100' : 'opacity-0'
           }`}
         >
-          <div className="pointer-events-auto absolute top-0 left-0 right-0 p-4">
+          <div className="pointer-events-auto absolute left-0 right-0 top-0 p-4">
             <div className="flex items-center space-x-4">
               <button
                 data-focusable="true"
@@ -930,7 +1018,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
                 </svg>
                 Back
               </button>
-              
+
               {/* --- MODIFICATION HERE --- */}
               {!isTizen && (
                 <button
@@ -979,19 +1067,21 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
           {contentType === 'tv' ? (
             // --- NEW TV INFO BANNER (STB Style) ---
             <div className="pointer-events-auto absolute bottom-4 left-4 right-4 p-2.5 text-white">
-              <div className="bg-gray-800 bg-opacity-60  border border-gray-700/80 p-2.5 rounded-lg shadow-2xl">
+              <div className="rounded-lg border border-gray-700/80 bg-gray-800 bg-opacity-60 p-2.5 shadow-2xl">
                 {/* Top Row: Channel Info */}
                 <div className="mb-2 flex items-center justify-between">
                   <div className="flex min-w-0 items-center">
                     {(previewChannelInfo || channelInfo)?.screenshot_uri && (
-                      <img 
+                      <img
                         src={
-                          (previewChannelInfo || channelInfo)!.screenshot_uri?.startsWith("http")
-                            ? (previewChannelInfo || channelInfo)!.screenshot_uri
+                          (previewChannelInfo ||
+                            channelInfo)!.screenshot_uri?.startsWith('http')
+                            ? (previewChannelInfo || channelInfo)!
+                                .screenshot_uri
                             : `${URL_PATHS.HOST}/api/images${(previewChannelInfo || channelInfo)!.screenshot_uri}`
-                        } 
-                        alt={(previewChannelInfo || channelInfo)!.name} 
-                        className="w-12 h-10 object-contain mr-3 bg-black p-0.5 rounded-sm flex-shrink-0"
+                        }
+                        alt={(previewChannelInfo || channelInfo)!.name}
+                        className="mr-3 h-10 w-12 flex-shrink-0 rounded-sm bg-black object-contain p-0.5"
                       />
                     )}
                     <span className="text-2xl font-bold">
@@ -1107,6 +1197,126 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
                       {fitMode === 'cover' && 'Fill'}
                       {fitMode === 'fill' && 'Stretch'}
                     </button>
+                    <div className="relative">
+                    <button
+                      data-focusable="true"
+                      onClick={toggleSettingsMenu}
+                      className="text-white hover:text-blue-400"
+                    >
+                      <svg
+                        className="h-6 w-6"
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01-.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106A1.532 1.532 0 0111.49 3.17zM10 13a3 3 0 100-6 3 3 0 000 6z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                    </button>
+                    {/* --- ADD SETTINGS MENU --- */}
+                    {isSettingsMenuOpen && (
+                      <div ref={settingsMenuRef} className="absolute bottom-full right-0 mb-2 w-48 rounded-lg bg-gray-800 bg-opacity-90 py-1 text-sm text-white">
+                        {activeSettingsMenu === 'main' && (
+                          <>
+                            {videoLevels.length > 1 && (
+                              <button
+                                onClick={() => setActiveSettingsMenu('quality')}
+                                className="block w-full px-4 py-2 text-left hover:bg-gray-700"
+                                data-focusable="true"
+                              >
+                                Quality
+                              </button>
+                            )}
+                            {audioTracks.length > 1 && (
+                              <button
+                                onClick={() => setActiveSettingsMenu('audio')}
+                                className="block w-full px-4 py-2 text-left hover:bg-gray-700"
+                                data-focusable="true"
+                              >
+                                Audio
+                              </button>
+                            )}
+                            {subtitleTracks.length > 0 && (
+                              <button
+                                onClick={() =>
+                                  setActiveSettingsMenu('subtitles')
+                                }
+                                className="block w-full px-4 py-2 text-left hover:bg-gray-700"
+                                data-focusable="true"
+                              >
+                                Subtitles
+                              </button>
+                            )}
+                          </>
+                        )}
+
+                        {activeSettingsMenu === 'quality' && (
+                          <>
+                            <button
+                              onClick={() => handleVideoLevelChange(-1)}
+                              className={`block w-full px-4 py-2 text-left hover:bg-gray-700 ${currentVideoLevel === -1 ? 'bg-blue-500' : ''}`}
+                              data-focusable="true"
+                            >
+                              Auto
+                            </button>
+                            {videoLevels.map((level, index) => (
+                              <button
+                                key={String(level.url) + index}
+                                onClick={() => handleVideoLevelChange(index)}
+                                data-focusable="true"
+                                className={`block w-full px-4 py-2 text-left hover:bg-gray-700 ${currentVideoLevel === index ? 'bg-blue-500' : ''}`}
+                              >
+                                {level.height}p{' '}
+                                {level.bitrate > 0 &&
+                                  `(${(level.bitrate / 1000000).toFixed(1)} Mbps)`}
+                              </button>
+                            ))}
+                          </>
+                        )}
+
+                        {activeSettingsMenu === 'audio' && (
+                          <>
+                            {audioTracks.map((track) => (
+                              <button
+                                key={track.id}
+                                data-focusable="true"
+                                onClick={() => handleAudioTrackChange(track.id)}
+                                className={`block w-full px-4 py-2 text-left hover:bg-gray-700 ${currentAudioTrack === track.id ? 'bg-blue-500' : ''}`}
+                              >
+                                {track.name} {track.lang && `(${track.lang})`}
+                              </button>
+                            ))}
+                          </>
+                        )}
+
+                        {activeSettingsMenu === 'subtitles' && (
+                          <>
+                            <button
+                              onClick={() => handleSubtitleTrackChange(-1)}
+                              data-focusable="true"
+                              className={`block w-full px-4 py-2 text-left hover:bg-gray-700 ${currentSubtitleTrack === -1 ? 'bg-blue-500' : ''}`}
+                            >
+                              Off
+                            </button>
+                            {subtitleTracks.map((track) => (
+                              <button
+                              data-focusable="true"
+                                key={track.id}
+                                onClick={() =>
+                                  handleSubtitleTrackChange(track.id)
+                                }
+                                className={`block w-full px-4 py-2 text-left hover:bg-gray-700 ${currentSubtitleTrack === track.id ? 'bg-blue-500' : ''}`}
+                              >
+                                {track.name} {track.lang && `(${track.lang})`}
+                              </button>
+                            ))}
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
 
                     {!isTizen && (
                       <button
@@ -1352,46 +1562,126 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
                     </button>
                   )}
 
-                  {subtitles && subtitles.length > 0 && (
-                    <div className="relative">
-                      <button
-                        data-focusable="true"
-                        onClick={toggleSubtitleMenu}
-                        className="text-white hover:text-blue-400"
+                  <div className="relative">
+                    <button
+                      data-focusable="true"
+                      onClick={toggleSettingsMenu}
+                      className="text-white hover:text-blue-400"
+                    >
+                      <svg
+                        className="h-6 w-6"
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
                       >
-                        <svg
-                          className="h-6 w-6"
-                          fill="currentColor"
-                          viewBox="0 0 20 20"
-                        >
-                          <path
-                            d="M3 3a1 1 0 00-1 1v12a1 1 0 001 1h14a1 1 0 001-1V4a1 1 0 00-1-1H3zm2 4a1 1 0 011-1h2a1 1 0 110 2H6a1 1 0 01-1-1zm0 4a1 1 0 011-1h2a1 1 0 110 2H6a1 1 0 01-1-1zm5-4a1 1 0 011-1h2a1 1 0 110 2h-2a1 1 0 01-1-1zm0 4a1 1 0 011-1h2a1 1 0 110 2h-2a1 1 0 01-1-1z"
-                            clipRule="evenodd"
-                            fillRule="evenodd"
-                          ></path>
-                        </svg>
-                      </button>
-                      {isSubtitleMenuOpen && (
-                        <div className="absolute bottom-full right-0 mb-2 rounded-lg bg-gray-800 bg-opacity-90 py-1 text-sm text-white">
-                          <button
-                            onClick={() => handleSubtitleChange(null)}
-                            className={`block w-full px-4 py-2 text-left hover:bg-gray-700 ${!selectedSubtitle ? 'bg-blue-500' : ''}`}
-                          >
-                            Off
-                          </button>
-                          {subtitles.map((subtitle) => (
+                        <path
+                          fillRule="evenodd"
+                          d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01-.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106A1.532 1.532 0 0111.49 3.17zM10 13a3 3 0 100-6 3 3 0 000 6z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                    </button>
+                    {/* --- ADD SETTINGS MENU --- */}
+                    {isSettingsMenuOpen && (
+                      <div ref={settingsMenuRef} className="absolute bottom-full right-0 mb-2 w-48 rounded-lg bg-gray-800 bg-opacity-90 py-1 text-sm text-white">
+                        {activeSettingsMenu === 'main' && (
+                          <>
+                            {videoLevels.length > 1 && (
+                              <button
+                                onClick={() => setActiveSettingsMenu('quality')}
+                                className="block w-full px-4 py-2 text-left hover:bg-gray-700"
+                                data-focusable="true"
+                              >
+                                Quality
+                              </button>
+                            )}
+                            {audioTracks.length > 1 && (
+                              <button
+                                onClick={() => setActiveSettingsMenu('audio')}
+                                className="block w-full px-4 py-2 text-left hover:bg-gray-700"
+                                data-focusable="true"
+                              >
+                                Audio
+                              </button>
+                            )}
+                            {subtitleTracks.length > 0 && (
+                              <button
+                                onClick={() =>
+                                  setActiveSettingsMenu('subtitles')
+                                }
+                                className="block w-full px-4 py-2 text-left hover:bg-gray-700"
+                                data-focusable="true"
+                              >
+                                Subtitles
+                              </button>
+                            )}
+                          </>
+                        )}
+
+                        {activeSettingsMenu === 'quality' && (
+                          <>
                             <button
-                              key={subtitle.url}
-                              onClick={() => handleSubtitleChange(subtitle.url)}
-                              className={`block w-full px-4 py-2 text-left hover:bg-gray-700 ${selectedSubtitle === subtitle.url ? 'bg-blue-500' : ''}`}
+                              onClick={() => handleVideoLevelChange(-1)}
+                              className={`block w-full px-4 py-2 text-left hover:bg-gray-700 ${currentVideoLevel === -1 ? 'bg-blue-500' : ''}`}
+                              data-focusable="true"
                             >
-                              {subtitle.language}
+                              Auto
                             </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
+                            {videoLevels.map((level, index) => (
+                              <button
+                                key={String(level.url) + index}
+                                onClick={() => handleVideoLevelChange(index)}
+                                data-focusable="true"
+                                className={`block w-full px-4 py-2 text-left hover:bg-gray-700 ${currentVideoLevel === index ? 'bg-blue-500' : ''}`}
+                              >
+                                {level.height}p{' '}
+                                {level.bitrate > 0 &&
+                                  `(${(level.bitrate / 1000000).toFixed(1)} Mbps)`}
+                              </button>
+                            ))}
+                          </>
+                        )}
+
+                        {activeSettingsMenu === 'audio' && (
+                          <>
+                            {audioTracks.map((track) => (
+                              <button
+                                key={track.id}
+                                data-focusable="true"
+                                onClick={() => handleAudioTrackChange(track.id)}
+                                className={`block w-full px-4 py-2 text-left hover:bg-gray-700 ${currentAudioTrack === track.id ? 'bg-blue-500' : ''}`}
+                              >
+                                {track.name} {track.lang && `(${track.lang})`}
+                              </button>
+                            ))}
+                          </>
+                        )}
+
+                        {activeSettingsMenu === 'subtitles' && (
+                          <>
+                            <button
+                              onClick={() => handleSubtitleTrackChange(-1)}
+                              data-focusable="true"
+                              className={`block w-full px-4 py-2 text-left hover:bg-gray-700 ${currentSubtitleTrack === -1 ? 'bg-blue-500' : ''}`}
+                            >
+                              Off
+                            </button>
+                            {subtitleTracks.map((track) => (
+                              <button
+                              data-focusable="true"
+                                key={track.id}
+                                onClick={() =>
+                                  handleSubtitleTrackChange(track.id)
+                                }
+                                className={`block w-full px-4 py-2 text-left hover:bg-gray-700 ${currentSubtitleTrack === track.id ? 'bg-blue-500' : ''}`}
+                              >
+                                {track.name} {track.lang && `(${track.lang})`}
+                              </button>
+                            ))}
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
 
                   <button
                     data-focusable="true"

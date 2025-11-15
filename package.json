@@ -12,6 +12,7 @@
     "format:check": "prettier --check ."
   },
   "dependencies": {
+    "@types/hls.js": "^0.13.3",
     "@videojs/themes": "^1.0.1",
     "hls.js": "^1.6.12",
     "postcss": "^8.4.31",
@@ -25,7 +26,6 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.35.0",
-    "@types/hls.js": "^0.13.3",
     "@types/react": "^19.1.13",
     "@types/react-dom": "^19.1.9",
     "@vitejs/plugin-react": "^5.0.2",
