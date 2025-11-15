@@ -8,10 +8,14 @@ interface TvChannelListCardProps {
   isFocused: boolean;
 }
 
-const TvChannelListCard: React.FC<TvChannelListCardProps> = ({ item, onClick, isFocused }) => {
+const TvChannelListCard: React.FC<TvChannelListCardProps> = ({
+  item,
+  onClick,
+  isFocused,
+}) => {
   const displayTitle = item.name || item.title || 'Unknown Channel';
   const imageUrl = item.screenshot_uri
-    ? item.screenshot_uri.startsWith("http")
+    ? item.screenshot_uri.startsWith('http')
       ? item.screenshot_uri
       : `${URL_PATHS.HOST}/api/images${item.screenshot_uri}`
     : null;
@@ -25,17 +29,21 @@ const TvChannelListCard: React.FC<TvChannelListCardProps> = ({ item, onClick, is
       data-focusable="true"
       tabIndex={-1}
     >
-      <span className="text-gray-400 w-12 text-left text-sm font-medium pr-2">
+      <span className="w-12 pr-2 text-left text-sm font-medium text-gray-400">
         {item.number}
       </span>
-      <div className="flex-shrink-0 w-16 h-12 bg-gray-700 flex items-center justify-center rounded-sm overflow-hidden mr-3">
+      <div className="mr-3 flex h-12 w-16 flex-shrink-0 items-center justify-center overflow-hidden rounded-sm bg-gray-700">
         {imageUrl ? (
-          <img src={imageUrl} alt={displayTitle} className="w-full h-full object-contain" />
+          <img
+            src={imageUrl}
+            alt={displayTitle}
+            className="h-full w-full object-contain"
+          />
         ) : (
-          <span className="text-gray-500 text-xs">No Logo</span>
+          <span className="text-xs text-gray-500">No Logo</span>
         )}
       </div>
-      <h3 className="text-white text-base font-semibold truncate">
+      <h3 className="truncate text-base font-semibold text-white">
         {displayTitle}
       </h3>
     </div>

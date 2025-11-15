@@ -9,10 +9,15 @@ interface TvChannelListProps {
   currentItemId: string | null;
 }
 
-const TvChannelList: React.FC<TvChannelListProps> = ({ channels, onChannelSelect, onBack,currentItemId }) => {
+const TvChannelList: React.FC<TvChannelListProps> = ({
+  channels,
+  onChannelSelect,
+  onBack,
+  currentItemId,
+}) => {
   const [focusedIndex, setFocusedIndex] = useState(() => {
     if (currentItemId) {
-      const index = channels.findIndex(c => c.id === currentItemId);
+      const index = channels.findIndex((c) => c.id === currentItemId);
       if (index > -1) return index;
     }
     return 0; // Default to 0 if not found
@@ -30,7 +35,9 @@ const TvChannelList: React.FC<TvChannelListProps> = ({ channels, onChannelSelect
           setFocusedIndex((prev) => (prev > 0 ? prev - 1 : 0));
           break;
         case 40: // DOWN
-          setFocusedIndex((prev) => (prev < channels.length - 1 ? prev + 1 : channels.length - 1));
+          setFocusedIndex((prev) =>
+            prev < channels.length - 1 ? prev + 1 : channels.length - 1
+          );
           break;
         case 13: // ENTER
           onChannelSelect(channels[focusedIndex]);
@@ -64,7 +71,9 @@ const TvChannelList: React.FC<TvChannelListProps> = ({ channels, onChannelSelect
 
   useEffect(() => {
     if (listRef.current) {
-      const focusable = Array.from(listRef.current.querySelectorAll('[data-focusable="true"]')) as HTMLElement[];
+      const focusable = Array.from(
+        listRef.current.querySelectorAll('[data-focusable="true"]')
+      ) as HTMLElement[];
       if (focusable.length === 0) return;
 
       focusable.forEach((el, index) => {
@@ -79,7 +88,7 @@ const TvChannelList: React.FC<TvChannelListProps> = ({ channels, onChannelSelect
   }, [focusedIndex, channels]);
 
   useEffect(() => {
-    const index = channels.findIndex(c => c.id === currentItemId);
+    const index = channels.findIndex((c) => c.id === currentItemId);
     if (index > -1) {
       setFocusedIndex(index);
     }
@@ -88,7 +97,7 @@ const TvChannelList: React.FC<TvChannelListProps> = ({ channels, onChannelSelect
   return (
     <div
       ref={listRef}
-      className="absolute top-0 left-0 w-full max-w-xs h-full bg-black bg-opacity-80 overflow-y-auto z-40"
+      className="absolute left-0 top-0 z-40 h-full w-full max-w-xs overflow-y-auto bg-black bg-opacity-80"
       tabIndex={-1}
     >
       <div className="p-2">

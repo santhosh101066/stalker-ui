@@ -1,68 +1,67 @@
 [
-    
-    {
-        "name": "KEY_CHANNELUP",
-        "code": 427
-    },
-    {
-        "name": "KEY_CHANNELDOWN",
-        "code": 428
-    },
-    {
-        "name": "KEY_PREVIOUS",
-        "code": 412
-    },
-    {
-        "name": "KEY_NEXT",
-        "code": 417
-    },
-    {
-        "name": "KEY_PAUSE",
-        "code": 19
-    },
-    {
-        "name": "KEY_PLAY",
-        "code": 415
-    },
-    
-    {
-        "name": "KEY_LEFT",
-        "code": 37
-    },
-    {
-        "name": "KEY_RIGHT",
-        "code": 39
-    },
-    {
-        "name": "KEY_UP",
-        "code": 38
-    },
-    {
-        "name": "KEY_DOWN",
-        "code": 40
-    },
-    {
-        "name": "KEY_ENTER",
-        "code": 13
-    },
-    {
-        "name": "KEY_BACK",
-        "code": 0
-    },
-    {
-        "name": "KEY_RED",
-        "code": 403
-    },
-    {
-        "name": "KEY_GREEN",
-        "code": 404
-    },
-    {
-        "name": "KEY_YELLOW",
-        "code": 405
-    },
-    {
-        "name": "KEY_BLUE",
-        "code": 406
-    }
+  {
+    "name": "KEY_CHANNELUP",
+    "code": 427
+  },
+  {
+    "name": "KEY_CHANNELDOWN",
+    "code": 428
+  },
+  {
+    "name": "KEY_PREVIOUS",
+    "code": 412
+  },
+  {
+    "name": "KEY_NEXT",
+    "code": 417
+  },
+  {
+    "name": "KEY_PAUSE",
+    "code": 19
+  },
+  {
+    "name": "KEY_PLAY",
+    "code": 415
+  },
+
+  {
+    "name": "KEY_LEFT",
+    "code": 37
+  },
+  {
+    "name": "KEY_RIGHT",
+    "code": 39
+  },
+  {
+    "name": "KEY_UP",
+    "code": 38
+  },
+  {
+    "name": "KEY_DOWN",
+    "code": 40
+  },
+  {
+    "name": "KEY_ENTER",
+    "code": 13
+  },
+  {
+    "name": "KEY_BACK",
+    "code": 0
+  },
+  {
+    "name": "KEY_RED",
+    "code": 403
+  },
+  {
+    "name": "KEY_GREEN",
+    "code": 404
+  },
+  {
+    "name": "KEY_YELLOW",
+    "code": 405
+  },
+  {
+    "name": "KEY_BLUE",
+    "code": 406
+  }
 ]

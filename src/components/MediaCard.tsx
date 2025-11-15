@@ -3,95 +3,104 @@ import { URL_PATHS } from '../api/api';
 import type { MediaItem } from '../types';
 
 interface MediaCardProps {
-    item: MediaItem;
-    onClick: (item: MediaItem) => void;
+  item: MediaItem;
+  onClick: (item: MediaItem) => void;
 }
 
 const MediaCard: React.FC<MediaCardProps> = ({ item, onClick }) => {
-    const [imageError, setImageError] = useState(false);
-    const [isCompleted, setIsCompleted] = useState(false);
-    const [isInProgress, setIsInProgress] = useState(false);
-    const displayTitle = item.title || item.name;
-    const initials = displayTitle ? displayTitle.substring(0, 2).toUpperCase() : '??';
-    const imageUrl = item.screenshot_uri ? (item.screenshot_uri.startsWith("http") ? item.screenshot_uri : `${URL_PATHS.HOST}/api/images${item.screenshot_uri}`) : null;
+  const [imageError, setImageError] = useState(false);
+  const [isCompleted, setIsCompleted] = useState(false);
+  const [isInProgress, setIsInProgress] = useState(false);
+  const displayTitle = item.title || item.name;
+  const initials = displayTitle
+    ? displayTitle.substring(0, 2).toUpperCase()
+    : '??';
+  const imageUrl = item.screenshot_uri
+    ? item.screenshot_uri.startsWith('http')
+      ? item.screenshot_uri
+      : `${URL_PATHS.HOST}/api/images${item.screenshot_uri}`
+    : null;
 
-    useEffect(() => {
-        setImageError(false);
-    }, [item.screenshot_uri]);
+  useEffect(() => {
+    setImageError(false);
+  }, [item.screenshot_uri]);
 
-    useEffect(() => {
-        const completed = localStorage.getItem(`video-completed-${item.id}`);
-        if (completed) {
-            try {
-                const completedData = JSON.parse(completed);
-                if (completedData && completedData.mediaId === item.id) {
-                    setIsCompleted(true);
-                }
-            } catch (error) {
-                // For backward compatibility
-                if (completed === 'true') {
-                    setIsCompleted(true);
-                }
-                console.error(error);
-                
-            }
-        } else {
-            const progress = localStorage.getItem(`video-in-progress-${item.id}`);
-            if (progress) {
-                try {
-                    const progressData = JSON.parse(progress);
-                    if (progressData && progressData.mediaId === item.id) {
-                        setIsInProgress(true);
-                    } else {
-                        setIsInProgress(false);
-                    }
-                } catch (error) {
-                    // For backward compatibility
-                    if (progress === 'true') {
-                        setIsInProgress(true);
-                    } else {
-                        setIsInProgress(false);
-                    }
-                    console.error(error);
-                }
-            } else {
-                setIsInProgress(false);
-            }
+  useEffect(() => {
+    const completed = localStorage.getItem(`video-completed-${item.id}`);
+    if (completed) {
+      try {
+        const completedData = JSON.parse(completed);
+        if (completedData && completedData.mediaId === item.id) {
+          setIsCompleted(true);
         }
-    }, [item.id]);
+      } catch (error) {
+        // For backward compatibility
+        if (completed === 'true') {
+          setIsCompleted(true);
+        }
+        console.error(error);
+      }
+    } else {
+      const progress = localStorage.getItem(`video-in-progress-${item.id}`);
+      if (progress) {
+        try {
+          const progressData = JSON.parse(progress);
+          if (progressData && progressData.mediaId === item.id) {
+            setIsInProgress(true);
+          } else {
+            setIsInProgress(false);
+          }
+        } catch (error) {
+          // For backward compatibility
+          if (progress === 'true') {
+            setIsInProgress(true);
+          } else {
+            setIsInProgress(false);
+          }
+          console.error(error);
+        }
+      } else {
+        setIsInProgress(false);
+      }
+    }
+  }, [item.id]);
 
-    return (
-        <div
-            className="bg-gray-800 rounded-lg overflow-hidden cursor-pointer transform transition-all duration-300 hover:scale-105 hover:shadow-2xl hover:border-blue-500 border-2 border-transparent group relative"
-            onClick={() => onClick(item)}
-            data-focusable="true"
-            tabIndex={-1}
-        >
-            {isCompleted && (
-                <div className="absolute top-2 right-2 w-3 h-3 bg-green-500 rounded-full z-10"></div>
-            )}
-            {!isCompleted && isInProgress && (
-                <div className="absolute top-2 right-2 w-3 h-3 bg-yellow-500 rounded-full z-10"></div>
-            )}
-            <div className="relative w-full h-48 md:h-64 bg-gray-700 flex items-center justify-center overflow-hidden">
-                {imageUrl && !imageError ? (
-                    <img
-                        src={imageUrl}
-                        alt={displayTitle}
-                        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
-                        onError={() => setImageError(true)}
-                    />
-                ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-linear-to-br from-gray-700 to-gray-800">
-                        <span className="text-4xl font-bold text-gray-400 select-none">{initials}</span>
-                    </div>
-                )}
-            </div>
-            <div className="p-4">
-                <h3 className="text-white text-md font-bold truncate transition-colors duration-300 group-hover:text-blue-400">{displayTitle}</h3>
-            </div>
-        </div>
-    );
+  return (
+    <div
+      className="group relative transform cursor-pointer overflow-hidden rounded-lg border-2 border-transparent bg-gray-800 transition-all duration-300 hover:scale-105 hover:border-blue-500 hover:shadow-2xl"
+      onClick={() => onClick(item)}
+      data-focusable="true"
+      tabIndex={-1}
+    >
+      {isCompleted && (
+        <div className="absolute right-2 top-2 z-10 h-3 w-3 rounded-full bg-green-500"></div>
+      )}
+      {!isCompleted && isInProgress && (
+        <div className="absolute right-2 top-2 z-10 h-3 w-3 rounded-full bg-yellow-500"></div>
+      )}
+      <div className="relative flex h-48 w-full items-center justify-center overflow-hidden bg-gray-700 md:h-64">
+        {imageUrl && !imageError ? (
+          <img
+            src={imageUrl}
+            alt={displayTitle}
+            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-110"
+            onError={() => setImageError(true)}
+          />
+        ) : (
+          <div className="bg-linear-to-br flex h-full w-full items-center justify-center from-gray-700 to-gray-800">
+            <span className="select-none text-4xl font-bold text-gray-400">
+              {initials}
+            </span>
+          </div>
+        )}
+      </div>
+      <div className="p-4">
+        <h3 className="text-md truncate font-bold text-white transition-colors duration-300 group-hover:text-blue-400">
+          {displayTitle}
+        </h3>
+      </div>
+    </div>
+  );
 };
 
 export default MediaCard;

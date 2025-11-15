@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from "react";
-import { toast } from "react-toastify";
-import { api } from "../api/api"; // Assuming api.ts is in ../api
+import React, { useEffect, useState } from 'react';
+import { toast } from 'react-toastify';
+import { api } from '../api/api'; // Assuming api.ts is in ../api
 
 type Config = {
   hostname: string;
@@ -22,21 +22,21 @@ type Group = {
 
 const Admin = () => {
   const [config, setConfig] = useState<Config>({
-    hostname: "",
-    port: "",
-    contextPath: "",
-    mac: "",
-    deviceId1: "",
-    deviceId2: "",
-    serialNumber: "",
-    stbType: "",
+    hostname: '',
+    port: '',
+    contextPath: '',
+    mac: '',
+    deviceId1: '',
+    deviceId2: '',
+    serialNumber: '',
+    stbType: '',
     groups: [],
     proxy: false,
     tokens: [],
   });
   const [groups, setGroups] = useState<Group[]>([]);
   const [showImportModal, setShowImportModal] = useState(false);
-  const [importText, setImportText] = useState("");
+  const [importText, setImportText] = useState('');
 
   // Load groups and config on mount
   useEffect(() => {
@@ -52,31 +52,34 @@ const Admin = () => {
 
   const handleModalClose = () => {
     setShowImportModal(false);
-    setImportText(""); // Clear text when closing
+    setImportText(''); // Clear text when closing
   };
 
   const handleParseAndApply = () => {
-    const lines = importText.split("\n");
+    const lines = importText.split('\n');
     const newConfig: Partial<Config> = {};
 
     lines.forEach((line) => {
-      if (line.includes("http")) {
+      if (line.includes('http')) {
         try {
           const url = new URL(line.trim());
           newConfig.hostname = url.hostname;
-          newConfig.port = url.port || "80";
-          const pathSegments = url.pathname.split('/').filter(segment => segment !== '');
-          newConfig.contextPath = pathSegments.length > 0 ? pathSegments[0] : '';
+          newConfig.port = url.port || '80';
+          const pathSegments = url.pathname
+            .split('/')
+            .filter((segment) => segment !== '');
+          newConfig.contextPath =
+            pathSegments.length > 0 ? pathSegments[0] : '';
         } catch (error) {
-          console.error("Invalid URL in import text:", error);
-          toast.error("Invalid URL detected. Please check the input.");
+          console.error('Invalid URL in import text:', error);
+          toast.error('Invalid URL detected. Please check the input.');
         }
-      } else if (line.toLowerCase().startsWith("mac-")) {
-        newConfig.mac = line.substring(line.indexOf("-") + 1).trim();
-      } else if (line.toLowerCase().startsWith("sn-")) {
-        newConfig.serialNumber = line.substring(line.indexOf("-") + 1).trim();
-      } else if (line.toLowerCase().startsWith("device id 1&2-")) {
-        const deviceIds = line.substring(line.indexOf("-") + 1).trim();
+      } else if (line.toLowerCase().startsWith('mac-')) {
+        newConfig.mac = line.substring(line.indexOf('-') + 1).trim();
+      } else if (line.toLowerCase().startsWith('sn-')) {
+        newConfig.serialNumber = line.substring(line.indexOf('-') + 1).trim();
+      } else if (line.toLowerCase().startsWith('device id 1&2-')) {
+        const deviceIds = line.substring(line.indexOf('-') + 1).trim();
         // Assuming deviceId1 and deviceId2 are the same if only one is provided
         newConfig.deviceId1 = deviceIds;
         newConfig.deviceId2 = deviceIds;
@@ -87,23 +90,23 @@ const Admin = () => {
       ...prev,
       ...newConfig,
     }));
-    toast.success("Configuration imported successfully!");
+    toast.success('Configuration imported successfully!');
     handleModalClose();
   };
 
   const loadGroups = async () => {
     try {
-      const response = await api.get("/v2/groups");
+      const response = await api.get('/v2/groups');
       const data = response.data;
       setGroups(data);
     } catch {
-      toast.error("Error loading groups");
+      toast.error('Error loading groups');
     }
   };
 
   const loadConfig = async () => {
     try {
-      const response = await api.get("/config");
+      const response = await api.get('/config');
       const data = response.data;
       setConfig((prev) => ({
         ...prev,
@@ -113,16 +116,18 @@ const Admin = () => {
         tokens: Array.isArray(data.tokens) ? data.tokens : [],
       }));
     } catch {
-      toast.error("Error loading configuration");
+      toast.error('Error loading configuration');
     }
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleInputChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => {
     const target = e.target as HTMLInputElement;
     const { name, value, type } = target;
     setConfig((prev) => ({
       ...prev,
-      [name]: type === "checkbox" ? target.checked : value,
+      [name]: type === 'checkbox' ? target.checked : value,
     }));
   };
 
@@ -134,7 +139,7 @@ const Admin = () => {
     }));
   };
 
-  type SubmitEvent = React.FormEvent<HTMLFormElement>
+  type SubmitEvent = React.FormEvent<HTMLFormElement>;
 
   interface ConfigUpdateResponse {
     message?: string;
@@ -144,65 +149,65 @@ const Admin = () => {
   const handleSubmit = async (e: SubmitEvent) => {
     e.preventDefault();
     try {
-      const response = await api.post<ConfigUpdateResponse>("/config", config);
+      const response = await api.post<ConfigUpdateResponse>('/config', config);
       const result = response.data;
-      toast.success(result.message || "Configuration updated successfully");
+      toast.success(result.message || 'Configuration updated successfully');
     } catch {
-      toast.error("Error updating configuration");
+      toast.error('Error updating configuration');
     }
   };
 
   const handleReloadGroups = async () => {
     try {
-      await api.get("/v2/refresh-groups");
-      toast.success("Groups refreshed successfully");
+      await api.get('/v2/refresh-groups');
+      toast.success('Groups refreshed successfully');
     } catch {
-      toast.error("Error refreshing groups");
+      toast.error('Error refreshing groups');
     }
     await loadGroups();
   };
 
   const handleRefreshChannels = async () => {
     try {
-      await api.get("/v2/refresh-channels");
-      toast.success("Channels refreshed successfully");
+      await api.get('/v2/refresh-channels');
+      toast.success('Channels refreshed successfully');
     } catch {
-      toast.error("Error refreshing channels");
+      toast.error('Error refreshing channels');
     }
   };
 
   const handleRefreshMovieGroups = async () => {
     try {
-      await api.get("/v2/refresh-movie-groups");
-      toast.success("Movie groups refreshed successfully");
+      await api.get('/v2/refresh-movie-groups');
+      toast.success('Movie groups refreshed successfully');
     } catch {
-      toast.error("Error refreshing movie groups");
+      toast.error('Error refreshing movie groups');
     }
   };
   const handleRefreshSeriesGroups = async () => {
     try {
-      await api.get("/v2/refresh-series-groups");
-      toast.success("Series groups refreshed successfully");
+      await api.get('/v2/refresh-series-groups');
+      toast.success('Series groups refreshed successfully');
     } catch {
-      toast.error("Error refreshing Series groups");
+      toast.error('Error refreshing Series groups');
     }
   };
 
   const handleAddToken = async () => {
     try {
-      const response = await api.get("/v2/get-token");
+      const response = await api.get('/v2/get-token');
       const newToken = response.data.token;
       if (newToken) {
         setConfig((prev) => ({
           ...prev,
           tokens: [...prev.tokens, newToken],
         }));
-        toast.success("Token added successfully");
+        toast.success('Token added successfully');
       } else {
-        toast.error("Failed to add token");
+        toast.error('Failed to add token');
       }
     } catch {
-      toast.error("Error adding token");
+      toast.error('Error adding token');
     }
   };
 
@@ -220,10 +225,10 @@ const Admin = () => {
 
   const handleClearTokens = async () => {
     try {
-      await api.post("/v2/clear-tokens", {});
-      toast.success("All tokens cleared");
+      await api.post('/v2/clear-tokens', {});
+      toast.success('All tokens cleared');
     } catch {
-      toast.error("Error clearing tokens on server");
+      toast.error('Error clearing tokens on server');
     }
     setConfig((prev) => ({
       ...prev,
@@ -232,30 +237,40 @@ const Admin = () => {
   };
 
   const handleClearWatched = () => {
-    if (window.confirm("Are you sure you want to clear all watched and in-progress statuses?")) {
+    if (
+      window.confirm(
+        'Are you sure you want to clear all watched and in-progress statuses?'
+      )
+    ) {
       Object.keys(localStorage).forEach((key) => {
-        if (key.startsWith("video-completed-") || key.startsWith("video-in-progress-")) {
+        if (
+          key.startsWith('video-completed-') ||
+          key.startsWith('video-in-progress-')
+        ) {
           localStorage.removeItem(key);
         }
       });
-      toast.success("All watched and in-progress statuses have been cleared.");
+      toast.success('All watched and in-progress statuses have been cleared.');
     }
   };
 
-
-
   return (
-    <div className="font-sans max-w-4xl mx-auto my-5 p-5 text-white bg-gray-800 rounded-lg shadow-lg">
-      <h1 className="text-3xl font-bold mb-6 text-center">Stalker Configuration</h1>
+    <div className="mx-auto my-5 max-w-4xl rounded-lg bg-gray-800 p-5 font-sans text-white shadow-lg">
+      <h1 className="mb-6 text-center text-3xl font-bold">
+        Stalker Configuration
+      </h1>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="mb-4">
           <div className="flex items-end gap-2">
             <div className="grow">
-              <label htmlFor="hostname" className="block text-sm font-medium mb-1">
+              <label
+                htmlFor="hostname"
+                className="mb-1 block text-sm font-medium"
+              >
                 Hostname:
               </label>
               <input
-                className="w-full p-2 rounded-lg bg-gray-700 border border-gray-600 text-white focus:outline-none focus:border-blue-500"
+                className="w-full rounded-lg border border-gray-600 bg-gray-700 p-2 text-white focus:border-blue-500 focus:outline-none"
                 type="text"
                 id="hostname"
                 name="hostname"
@@ -265,7 +280,7 @@ const Admin = () => {
             </div>
             <button
               type="button"
-              className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition-colors h-10"
+              className="h-10 rounded-lg bg-green-600 px-4 py-2 font-bold text-white transition-colors hover:bg-green-700"
               onClick={handleImportClick}
             >
               Import from Text
@@ -273,11 +288,11 @@ const Admin = () => {
           </div>
         </div>
         <div className="mb-4">
-          <label htmlFor="port" className="block text-sm font-medium mb-1">
+          <label htmlFor="port" className="mb-1 block text-sm font-medium">
             Port:
           </label>
           <input
-            className="w-full p-2 rounded-lg bg-gray-700 border border-gray-600 text-white focus:outline-none focus:border-blue-500"
+            className="w-full rounded-lg border border-gray-600 bg-gray-700 p-2 text-white focus:border-blue-500 focus:outline-none"
             type="number"
             id="port"
             name="port"
@@ -286,11 +301,14 @@ const Admin = () => {
           />
         </div>
         <div className="mb-4">
-          <label htmlFor="contextPath" className="block text-sm font-medium mb-1">
+          <label
+            htmlFor="contextPath"
+            className="mb-1 block text-sm font-medium"
+          >
             Context Path:
           </label>
           <input
-            className="w-full p-2 rounded-lg bg-gray-700 border border-gray-600 text-white focus:outline-none focus:border-blue-500"
+            className="w-full rounded-lg border border-gray-600 bg-gray-700 p-2 text-white focus:border-blue-500 focus:outline-none"
             type="text"
             id="contextPath"
             name="contextPath"
@@ -299,11 +317,11 @@ const Admin = () => {
           />
         </div>
         <div className="mb-4">
-          <label htmlFor="mac" className="block text-sm font-medium mb-1">
+          <label htmlFor="mac" className="mb-1 block text-sm font-medium">
             MAC:
           </label>
           <input
-            className="w-full p-2 rounded-lg bg-gray-700 border border-gray-600 text-white focus:outline-none focus:border-blue-500"
+            className="w-full rounded-lg border border-gray-600 bg-gray-700 p-2 text-white focus:border-blue-500 focus:outline-none"
             type="text"
             id="mac"
             name="mac"
@@ -312,11 +330,11 @@ const Admin = () => {
           />
         </div>
         <div className="mb-4">
-          <label htmlFor="deviceId1" className="block text-sm font-medium mb-1">
+          <label htmlFor="deviceId1" className="mb-1 block text-sm font-medium">
             Device ID 1:
           </label>
           <input
-            className="w-full p-2 rounded-lg bg-gray-700 border border-gray-600 text-white focus:outline-none focus:border-blue-500"
+            className="w-full rounded-lg border border-gray-600 bg-gray-700 p-2 text-white focus:border-blue-500 focus:outline-none"
             type="text"
             id="deviceId1"
             name="deviceId1"
@@ -325,11 +343,11 @@ const Admin = () => {
           />
         </div>
         <div className="mb-4">
-          <label htmlFor="deviceId2" className="block text-sm font-medium mb-1">
+          <label htmlFor="deviceId2" className="mb-1 block text-sm font-medium">
             Device ID 2:
           </label>
           <input
-            className="w-full p-2 rounded-lg bg-gray-700 border border-gray-600 text-white focus:outline-none focus:border-blue-500"
+            className="w-full rounded-lg border border-gray-600 bg-gray-700 p-2 text-white focus:border-blue-500 focus:outline-none"
             type="text"
             id="deviceId2"
             name="deviceId2"
@@ -338,11 +356,14 @@ const Admin = () => {
           />
         </div>
         <div className="mb-4">
-          <label htmlFor="serialNumber" className="block text-sm font-medium mb-1">
+          <label
+            htmlFor="serialNumber"
+            className="mb-1 block text-sm font-medium"
+          >
             Serial Number:
           </label>
           <input
-            className="w-full p-2 rounded-lg bg-gray-700 border border-gray-600 text-white focus:outline-none focus:border-blue-500"
+            className="w-full rounded-lg border border-gray-600 bg-gray-700 p-2 text-white focus:border-blue-500 focus:outline-none"
             type="text"
             id="serialNumber"
             name="serialNumber"
@@ -351,11 +372,11 @@ const Admin = () => {
           />
         </div>
         <div className="mb-4">
-          <label htmlFor="stbType" className="block text-sm font-medium mb-1">
+          <label htmlFor="stbType" className="mb-1 block text-sm font-medium">
             STB Type:
           </label>
           <input
-            className="w-full p-2 rounded-lg bg-gray-700 border border-gray-600 text-white focus:outline-none focus:border-blue-500"
+            className="w-full rounded-lg border border-gray-600 bg-gray-700 p-2 text-white focus:border-blue-500 focus:outline-none"
             type="text"
             id="stbType"
             name="stbType"
@@ -364,7 +385,7 @@ const Admin = () => {
           />
         </div>
         <div className="mb-4">
-          <label htmlFor="groups" className="block text-sm font-medium mb-1">
+          <label htmlFor="groups" className="mb-1 block text-sm font-medium">
             Groups:
           </label>
           <div className="flex flex-col gap-2">
@@ -373,7 +394,7 @@ const Admin = () => {
                 id="groups"
                 name="groups"
                 multiple
-                className="w-full p-2 rounded-lg bg-gray-700 border border-gray-600 text-white focus:outline-none focus:border-blue-500 h-40"
+                className="h-40 w-full rounded-lg border border-gray-600 bg-gray-700 p-2 text-white focus:border-blue-500 focus:outline-none"
                 value={config.groups}
                 onChange={handleGroupsChange}
               >
@@ -385,39 +406,39 @@ const Admin = () => {
               </select>
               <button
                 type="button"
-                className="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition-colors h-10"
+                className="h-10 rounded-lg bg-gray-700 px-4 py-2 font-bold text-white transition-colors hover:bg-gray-600"
                 onClick={handleReloadGroups}
               >
                 🔄 Reload Groups
               </button>
             </div>
-            <div className="flex flex-wrap gap-2 mt-2">
+            <div className="mt-2 flex flex-wrap gap-2">
               <button
                 type="button"
-                className="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition-colors h-10"
+                className="h-10 rounded-lg bg-gray-700 px-4 py-2 font-bold text-white transition-colors hover:bg-gray-600"
                 onClick={handleRefreshChannels}
               >
                 🔄 Refresh Channels
               </button>
               <button
                 type="button"
-                className="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition-colors h-10"
+                className="h-10 rounded-lg bg-gray-700 px-4 py-2 font-bold text-white transition-colors hover:bg-gray-600"
                 onClick={handleRefreshMovieGroups}
               >
                 🎬 Refresh Movie Groups
               </button>
               <button
                 type="button"
-                className="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition-colors h-10"
+                className="h-10 rounded-lg bg-gray-700 px-4 py-2 font-bold text-white transition-colors hover:bg-gray-600"
                 onClick={handleRefreshSeriesGroups}
               >
                 🎬 Refresh Series Groups
               </button>
             </div>
-            <div className="text-sm text-gray-400 mt-1">
+            <div className="mt-1 text-sm text-gray-400">
               Hold Ctrl (Windows) or Command (Mac) to select multiple groups
             </div>
-            <div className="text-sm text-gray-400 mt-1 md:hidden">
+            <div className="mt-1 text-sm text-gray-400 md:hidden">
               Tap multiple groups to select them
             </div>
           </div>
@@ -425,28 +446,33 @@ const Admin = () => {
         <div className="mb-4">
           <div className="flex items-center space-x-2">
             <input
-              className="w-auto h-5"
+              className="h-5 w-auto"
               type="checkbox"
               id="proxy"
               name="proxy"
               checked={config.proxy}
               onChange={handleInputChange}
             />
-            <label htmlFor="proxy" className="text-white">Use Proxy</label>
+            <label htmlFor="proxy" className="text-white">
+              Use Proxy
+            </label>
           </div>
         </div>
 
         {/* Token Keys Section */}
         <div className="mb-4">
-          <label className="block text-sm font-medium mb-1">Token Keys:</label>
+          <label className="mb-1 block text-sm font-medium">Token Keys:</label>
           <div className="flex flex-col gap-2">
-            <ul className="list-none pl-0 mt-2">
+            <ul className="mt-2 list-none pl-0">
               {config.tokens.map((token, index) => (
-                <li key={index} className="flex justify-between items-center bg-gray-700 p-2 rounded-lg mb-2">
+                <li
+                  key={index}
+                  className="mb-2 flex items-center justify-between rounded-lg bg-gray-700 p-2"
+                >
                   <span className="break-all text-gray-300">{token}</span>
                   <button
                     type="button"
-                    className="bg-red-600 hover:bg-red-700 text-white py-1 px-2 rounded-lg"
+                    className="rounded-lg bg-red-600 px-2 py-1 text-white hover:bg-red-700"
                     onClick={() => handleDeleteToken(index)}
                   >
                     Delete
@@ -454,17 +480,17 @@ const Admin = () => {
                 </li>
               ))}
             </ul>
-            <div className="flex flex-wrap gap-2 mt-2">
+            <div className="mt-2 flex flex-wrap gap-2">
               <button
                 type="button"
-                className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors"
+                className="rounded-lg bg-blue-600 px-4 py-2 font-bold text-white transition-colors hover:bg-blue-700"
                 onClick={handleAddToken}
               >
                 + Add Token
               </button>
               <button
                 type="button"
-                className="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded-lg transition-colors"
+                className="rounded-lg bg-yellow-600 px-4 py-2 font-bold text-white transition-colors hover:bg-yellow-700"
                 onClick={handleClearTokens}
                 disabled={config.tokens.length === 0}
               >
@@ -472,7 +498,7 @@ const Admin = () => {
               </button>
               <button
                 type="button"
-                className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors"
+                className="rounded-lg bg-red-600 px-4 py-2 font-bold text-white transition-colors hover:bg-red-700"
                 onClick={handleClearWatched}
               >
                 Clear All Watched
@@ -481,7 +507,10 @@ const Admin = () => {
           </div>
         </div>
 
-        <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors w-full">
+        <button
+          type="submit"
+          className="w-full rounded-lg bg-blue-600 px-4 py-2 font-bold text-white transition-colors hover:bg-blue-700"
+        >
           Save Configuration
         </button>
         {/* <button
@@ -494,11 +523,13 @@ const Admin = () => {
       </form>
 
       {showImportModal && (
-        <div className="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50">
-          <div className="bg-gray-800 p-6 rounded-lg shadow-lg w-full max-w-md">
-            <h2 className="text-xl font-bold mb-4 text-white">Import Configuration from Text</h2>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-75">
+          <div className="w-full max-w-md rounded-lg bg-gray-800 p-6 shadow-lg">
+            <h2 className="mb-4 text-xl font-bold text-white">
+              Import Configuration from Text
+            </h2>
             <textarea
-              className="w-full p-2 rounded-lg bg-gray-700 border border-gray-600 text-white h-40 resize-none focus:outline-none focus:border-blue-500"
+              className="h-40 w-full resize-none rounded-lg border border-gray-600 bg-gray-700 p-2 text-white focus:border-blue-500 focus:outline-none"
               placeholder="Paste your configuration text here (URL, MAC, SN, Device IDs)"
               value={importText}
               onChange={(e) => setImportText(e.target.value)}
@@ -506,14 +537,14 @@ const Admin = () => {
             <div className="mt-4 flex justify-end space-x-2">
               <button
                 type="button"
-                className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors"
+                className="rounded-lg bg-blue-600 px-4 py-2 font-bold text-white transition-colors hover:bg-blue-700"
                 onClick={handleParseAndApply}
               >
                 Parse and Apply
               </button>
               <button
                 type="button"
-                className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg transition-colors"
+                className="rounded-lg bg-gray-600 px-4 py-2 font-bold text-white transition-colors hover:bg-gray-700"
                 onClick={handleModalClose}
               >
                 Cancel
