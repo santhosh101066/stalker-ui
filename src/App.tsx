@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   getChannels,
-  getChannelUrl,
   getMedia,
   getSeries,
   getMovieUrl,
@@ -12,7 +11,7 @@ import EpisodeCard from './components/EpisodeCard';
 import VideoPlayer from './components/VideoPlayer';
 import ContinueWatching from './components/ContinueWatching';
 import type { MediaItem, ContextType } from './types';
-import { BASE_URL } from './api/api';
+import { BASE_URL, URL_PATHS } from './api/api';
 import { toast, ToastContainer } from 'react-toastify';
 import type { PaginatedResponse } from './api/services';
 import 'react-toastify/dist/ReactToastify.css';
@@ -280,32 +279,29 @@ export default function App() {
         }
       } else if (contentType === 'tv') {
         // Handle TV Channel Click
-        setLoading(true);
-        setCurrentItem(item);
-        try {
-          if (!item.cmd) {
-            throw new Error('Channel has no command to play.');
-          }
-          const linkData = await getChannelUrl(item.cmd); // Use new getChannelUrl
-          const cmd =
-            (linkData && linkData.js && linkData.js.cmd) ||
-            (linkData && linkData.cmd);
-
-          if (typeof cmd === 'string') {
-            localStorage.setItem('lastPlayedTvChannelId', item.id);
-            setRawStreamUrl(cmd);
-            setStreamUrl(`${BASE_URL}/proxy?url=${btoa(cmd)}`);
-            setCurrentItemId(item.id);
-          } else {
-            throw new Error('TV stream URL (cmd) not found.');
-          }
-        } catch (err: unknown) {
-          console.error(err);
-          setError('Could not fetch stream URL.');
-          setHistory((prev) => prev.slice(0, -1)); // Revert history
-        } finally {
-          setLoading(false);
+        if (channelChangeTimer.current) {
+          clearTimeout(channelChangeTimer.current);
+          channelChangeTimer.current = null;
         }
+        setPreviewChannel(null);
+
+        if (!item.cmd) {
+          toast.error('Channel has no command to play.');
+          return;
+        }
+
+        // This is the correct, proxied URL your backend provides
+        const channelUrl = `${URL_PATHS.HOST}/live.m3u8?cmd=${item.cmd}`;
+
+        localStorage.setItem('lastPlayedTvChannelId', item.id);
+        setCurrentItem(item);
+        setCurrentItemId(item.id);
+
+        // Set both URLs. The player will pick one.
+        // We don't need to btoa() or use /proxy because /live.m3u8 IS the proxy.
+        setRawStreamUrl(channelUrl);
+        setStreamUrl(channelUrl);
+        // --- END REPLACEMENT ---
       } else {
         fetchData({
           ...initialContext,
@@ -759,7 +755,6 @@ export default function App() {
           rawStreamUrl={rawStreamUrl}
           onBack={handleBack}
           itemId={currentItemId}
-          subtitles={undefined} // Pass subtitles here if you fetch them
           context={context}
           contentType={contentType}
           mediaId={
@@ -929,12 +924,14 @@ export default function App() {
                     // --- Content Grid (now visible during load, if !error) ---
                     !error && (
                       <>
-                        {contentType !== 'tv' && context.category === null && !context.search && (
-                        <ContinueWatching 
-                          onClick={handleItemClick} 
-                          contentType={contentType} 
-                        />
-                      )}
+                        {contentType !== 'tv' &&
+                          context.category === null &&
+                          !context.search && (
+                            <ContinueWatching
+                              onClick={handleItemClick}
+                              contentType={contentType}
+                            />
+                          )}
                         <div
                           className={` ${
                             contentType === 'tv' // TV List

@@ -115,6 +115,11 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
   const liveTime = useLiveClock();
 
+  const showSettingsButton =
+    videoLevels.length > 1 ||
+    audioTracks.length > 1 ||
+    subtitleTracks.length > 0;
+
   useEffect(() => {
     localStorage.setItem('videoFitMode', fitMode);
     if (videoRef.current) {
@@ -513,7 +518,6 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   useEffect(() => {
     // Helper function for the main player controls
     const handlePlayerControlsKeyDown = (e: KeyboardEvent) => {
-      
       const focusable = Array.from(
         playerContainerRef.current?.querySelectorAll(
           '[data-focusable="true"]'
@@ -695,7 +699,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     onNextChannel,
   ]);
   useEffect(() => {
-    if (showChannelList||isSettingsMenuOpen) return;
+    if (showChannelList || isSettingsMenuOpen) return;
     const focusable = Array.from(
       playerContainerRef.current?.querySelectorAll('[data-focusable="true"]') ||
         []
@@ -727,8 +731,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     if (!isSettingsMenuOpen || showChannelList) return;
 
     const focusable = Array.from(
-      settingsMenuRef.current?.querySelectorAll('[data-focusable="true"]') ||
-        []
+      settingsMenuRef.current?.querySelectorAll('[data-focusable="true"]') || []
     ) as HTMLElement[];
     if (focusable.length === 0) return;
 
@@ -1198,125 +1201,134 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
                       {fitMode === 'fill' && 'Stretch'}
                     </button>
                     <div className="relative">
-                    <button
-                      data-focusable="true"
-                      onClick={toggleSettingsMenu}
-                      className="text-white hover:text-blue-400"
-                    >
-                      <svg
-                        className="h-6 w-6"
-                        fill="currentColor"
-                        viewBox="0 0 20 20"
-                      >
-                        <path
-                          fillRule="evenodd"
-                          d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01-.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106A1.532 1.532 0 0111.49 3.17zM10 13a3 3 0 100-6 3 3 0 000 6z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
-                    </button>
-                    {/* --- ADD SETTINGS MENU --- */}
-                    {isSettingsMenuOpen && (
-                      <div ref={settingsMenuRef} className="absolute bottom-full right-0 mb-2 w-48 rounded-lg bg-gray-800 bg-opacity-90 py-1 text-sm text-white">
-                        {activeSettingsMenu === 'main' && (
-                          <>
-                            {videoLevels.length > 1 && (
-                              <button
-                                onClick={() => setActiveSettingsMenu('quality')}
-                                className="block w-full px-4 py-2 text-left hover:bg-gray-700"
-                                data-focusable="true"
-                              >
-                                Quality
-                              </button>
-                            )}
-                            {audioTracks.length > 1 && (
-                              <button
-                                onClick={() => setActiveSettingsMenu('audio')}
-                                className="block w-full px-4 py-2 text-left hover:bg-gray-700"
-                                data-focusable="true"
-                              >
-                                Audio
-                              </button>
-                            )}
-                            {subtitleTracks.length > 0 && (
-                              <button
-                                onClick={() =>
-                                  setActiveSettingsMenu('subtitles')
-                                }
-                                className="block w-full px-4 py-2 text-left hover:bg-gray-700"
-                                data-focusable="true"
-                              >
-                                Subtitles
-                              </button>
-                            )}
-                          </>
-                        )}
+                      {showSettingsButton && (
+                        <button
+                          data-focusable="true"
+                          onClick={toggleSettingsMenu}
+                          className="text-white hover:text-blue-400"
+                        >
+                          <svg
+                            className="h-6 w-6"
+                            fill="currentColor"
+                            viewBox="0 0 20 20"
+                          >
+                            <path
+                              fillRule="evenodd"
+                              d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01-.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106A1.532 1.532 0 0111.49 3.17zM10 13a3 3 0 100-6 3 3 0 000 6z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
+                        </button>
+                      )}
+                      {/* --- ADD SETTINGS MENU --- */}
+                      {isSettingsMenuOpen && (
+                        <div
+                          ref={settingsMenuRef}
+                          className="absolute bottom-full right-0 mb-2 w-48 rounded-lg bg-gray-800 bg-opacity-90 py-1 text-sm text-white"
+                        >
+                          {activeSettingsMenu === 'main' && (
+                            <>
+                              {videoLevels.length > 1 && (
+                                <button
+                                  onClick={() =>
+                                    setActiveSettingsMenu('quality')
+                                  }
+                                  className="block w-full px-4 py-2 text-left hover:bg-gray-700"
+                                  data-focusable="true"
+                                >
+                                  Quality
+                                </button>
+                              )}
+                              {audioTracks.length > 1 && (
+                                <button
+                                  onClick={() => setActiveSettingsMenu('audio')}
+                                  className="block w-full px-4 py-2 text-left hover:bg-gray-700"
+                                  data-focusable="true"
+                                >
+                                  Audio
+                                </button>
+                              )}
+                              {subtitleTracks.length > 0 && (
+                                <button
+                                  onClick={() =>
+                                    setActiveSettingsMenu('subtitles')
+                                  }
+                                  className="block w-full px-4 py-2 text-left hover:bg-gray-700"
+                                  data-focusable="true"
+                                >
+                                  Subtitles
+                                </button>
+                              )}
+                            </>
+                          )}
 
-                        {activeSettingsMenu === 'quality' && (
-                          <>
-                            <button
-                              onClick={() => handleVideoLevelChange(-1)}
-                              className={`block w-full px-4 py-2 text-left hover:bg-gray-700 ${currentVideoLevel === -1 ? 'bg-blue-500' : ''}`}
-                              data-focusable="true"
-                            >
-                              Auto
-                            </button>
-                            {videoLevels.map((level, index) => (
+                          {activeSettingsMenu === 'quality' && (
+                            <>
                               <button
-                                key={String(level.url) + index}
-                                onClick={() => handleVideoLevelChange(index)}
+                                onClick={() => handleVideoLevelChange(-1)}
+                                className={`block w-full px-4 py-2 text-left hover:bg-gray-700 ${currentVideoLevel === -1 ? 'bg-blue-500' : ''}`}
                                 data-focusable="true"
-                                className={`block w-full px-4 py-2 text-left hover:bg-gray-700 ${currentVideoLevel === index ? 'bg-blue-500' : ''}`}
                               >
-                                {level.height}p{' '}
-                                {level.bitrate > 0 &&
-                                  `(${(level.bitrate / 1000000).toFixed(1)} Mbps)`}
+                                Auto
                               </button>
-                            ))}
-                          </>
-                        )}
+                              {videoLevels.map((level, index) => (
+                                <button
+                                  key={String(level.url) + index}
+                                  onClick={() => handleVideoLevelChange(index)}
+                                  data-focusable="true"
+                                  className={`block w-full px-4 py-2 text-left hover:bg-gray-700 ${currentVideoLevel === index ? 'bg-blue-500' : ''}`}
+                                >
+                                  {level.height}p{' '}
+                                  {level.bitrate > 0 &&
+                                    `(${(level.bitrate / 1000000).toFixed(1)} Mbps)`}
+                                </button>
+                              ))}
+                            </>
+                          )}
 
-                        {activeSettingsMenu === 'audio' && (
-                          <>
-                            {audioTracks.map((track) => (
+                          {activeSettingsMenu === 'audio' && (
+                            <>
+                              {audioTracks.map((track) => (
+                                <button
+                                  key={track.id}
+                                  data-focusable="true"
+                                  onClick={() =>
+                                    handleAudioTrackChange(track.id)
+                                  }
+                                  className={`block w-full px-4 py-2 text-left hover:bg-gray-700 ${currentAudioTrack === track.id ? 'bg-blue-500' : ''}`}
+                                >
+                                  {track.name} {track.lang && `(${track.lang})`}
+                                </button>
+                              ))}
+                            </>
+                          )}
+
+                          {activeSettingsMenu === 'subtitles' && (
+                            <>
                               <button
-                                key={track.id}
+                                onClick={() => handleSubtitleTrackChange(-1)}
                                 data-focusable="true"
-                                onClick={() => handleAudioTrackChange(track.id)}
-                                className={`block w-full px-4 py-2 text-left hover:bg-gray-700 ${currentAudioTrack === track.id ? 'bg-blue-500' : ''}`}
+                                className={`block w-full px-4 py-2 text-left hover:bg-gray-700 ${currentSubtitleTrack === -1 ? 'bg-blue-500' : ''}`}
                               >
-                                {track.name} {track.lang && `(${track.lang})`}
+                                Off
                               </button>
-                            ))}
-                          </>
-                        )}
-
-                        {activeSettingsMenu === 'subtitles' && (
-                          <>
-                            <button
-                              onClick={() => handleSubtitleTrackChange(-1)}
-                              data-focusable="true"
-                              className={`block w-full px-4 py-2 text-left hover:bg-gray-700 ${currentSubtitleTrack === -1 ? 'bg-blue-500' : ''}`}
-                            >
-                              Off
-                            </button>
-                            {subtitleTracks.map((track) => (
-                              <button
-                              data-focusable="true"
-                                key={track.id}
-                                onClick={() =>
-                                  handleSubtitleTrackChange(track.id)
-                                }
-                                className={`block w-full px-4 py-2 text-left hover:bg-gray-700 ${currentSubtitleTrack === track.id ? 'bg-blue-500' : ''}`}
-                              >
-                                {track.name} {track.lang && `(${track.lang})`}
-                              </button>
-                            ))}
-                          </>
-                        )}
-                      </div>
-                    )}
-                  </div>
+                              {subtitleTracks.map((track) => (
+                                <button
+                                  data-focusable="true"
+                                  key={track.id}
+                                  onClick={() =>
+                                    handleSubtitleTrackChange(track.id)
+                                  }
+                                  className={`block w-full px-4 py-2 text-left hover:bg-gray-700 ${currentSubtitleTrack === track.id ? 'bg-blue-500' : ''}`}
+                                >
+                                  {track.name} {track.lang && `(${track.lang})`}
+                                </button>
+                              ))}
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
 
                     {!isTizen && (
                       <button
@@ -1563,26 +1575,31 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
                   )}
 
                   <div className="relative">
-                    <button
-                      data-focusable="true"
-                      onClick={toggleSettingsMenu}
-                      className="text-white hover:text-blue-400"
-                    >
-                      <svg
-                        className="h-6 w-6"
-                        fill="currentColor"
-                        viewBox="0 0 20 20"
+                    {showSettingsButton && (
+                      <button
+                        data-focusable="true"
+                        onClick={toggleSettingsMenu}
+                        className="text-white hover:text-blue-400"
                       >
-                        <path
-                          fillRule="evenodd"
-                          d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01-.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106A1.532 1.532 0 0111.49 3.17zM10 13a3 3 0 100-6 3 3 0 000 6z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
-                    </button>
+                        <svg
+                          className="h-6 w-6"
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01-.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106A1.532 1.532 0 0111.49 3.17zM10 13a3 3 0 100-6 3 3 0 000 6z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                      </button>
+                    )}
                     {/* --- ADD SETTINGS MENU --- */}
                     {isSettingsMenuOpen && (
-                      <div ref={settingsMenuRef} className="absolute bottom-full right-0 mb-2 w-48 rounded-lg bg-gray-800 bg-opacity-90 py-1 text-sm text-white">
+                      <div
+                        ref={settingsMenuRef}
+                        className="absolute bottom-full right-0 mb-2 w-48 rounded-lg bg-gray-800 bg-opacity-90 py-1 text-sm text-white"
+                      >
                         {activeSettingsMenu === 'main' && (
                           <>
                             {videoLevels.length > 1 && (
@@ -1667,7 +1684,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
                             </button>
                             {subtitleTracks.map((track) => (
                               <button
-                              data-focusable="true"
+                                data-focusable="true"
                                 key={track.id}
                                 onClick={() =>
                                   handleSubtitleTrackChange(track.id)
