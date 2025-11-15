@@ -2,8 +2,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { formatTime } from '../utils/helpers';
 import Hls from 'hls.js';
+import { toast } from 'react-toastify';
 
 import type { ContextType, MediaItem } from '../types';
+import TvChannelList from './TvChannelList';
 
 interface Subtitle {
     language: string;
@@ -17,13 +19,24 @@ interface VideoPlayerProps {
     itemId: string | null;
     subtitles?: Subtitle[];
     context: ContextType;
-    contentType: 'movie' | 'series';
+    contentType: 'movie' | 'series'|"tv";
     mediaId: string | null;
     item: MediaItem | null;
     seriesItem: MediaItem | null;
+    channels?: MediaItem[];
+    channelInfo?: MediaItem | null;
+    onNextChannel?: () => void;
+    onPrevChannel?: () => void;
+    onChannelSelect?: (item: MediaItem) => void;
+    previewChannelInfo?: MediaItem | null;
 }
 
-const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBack, itemId, subtitles: initialSubtitles, contentType, mediaId, item, seriesItem }) => {
+const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBack, itemId, subtitles: initialSubtitles, contentType, mediaId, item, seriesItem ,channels,
+    previewChannelInfo,
+    channelInfo,
+    onNextChannel,
+    onPrevChannel,
+    onChannelSelect}) => {
     const isTizen = !!(window as any).tizen;
     const videoRef = useRef<HTMLVideoElement>(null);
     const playerContainerRef = useRef<HTMLDivElement>(null);
@@ -44,7 +57,6 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBa
     const [isBuffering, setIsBuffering] = useState(false);
     const [seeking, setSeeking] = useState(false);
     const [useProxy, setUseProxy] = useState((window as any).tizen ? false : true);
-    const [error, setError] = useState<string | null>(null);
     const [hoverTime, setHoverTime] = useState(0);
     const [hoverPosition, setHoverPosition] = useState(0);
     const [isTooltipVisible, setIsTooltipVisible] = useState(false);
@@ -58,6 +70,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBa
     const seekBuffer = useRef(0);
     const seekApplyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const playButtonRef = useRef<HTMLButtonElement>(null);
+    const [showChannelList, setShowChannelList] = useState(false);
 
 
     useEffect(() => {
@@ -67,9 +80,12 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBa
         if (!videoElement || !urlToPlay) return;
 
         const initializePlayer = () => {
-            const savedTime = localStorage.getItem(`video-progress-${itemId}`);
-            if (savedTime) {
-                videoElement.currentTime = parseFloat(savedTime);
+            if (contentType !== 'tv') {
+                const savedTime = localStorage.getItem(`video-progress-${itemId}`);
+                if (savedTime) {
+                    videoElement.currentTime = 
+parseFloat(savedTime);
+                }
             }
 
             // This line will now work because Hls is a value
@@ -87,6 +103,12 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBa
                     // 3. Tell HLS to assume a lower starting bandwidth (500kbps)
                     // This forces it to load a lower-quality stream first, which is faster.
                     abrEwmaDefaultEstimate: 500000,
+                    ...(contentType === 'tv' && {
+                        liveSyncDuration: 10,
+                        liveMaxLatencyDuration: 20,
+                        maxBufferLength: 10,
+                        maxMaxBufferLength: 20,
+                    })
                 });
                 hlsInstance.current = hls;
                 hls.loadSource(urlToPlay);
@@ -94,27 +116,29 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBa
                 hls.on(Hls.Events.MANIFEST_PARSED, () => { videoElement.play(); });
                 hls.on(Hls.Events.ERROR, (_: any, data: any) => {
                     if (data.fatal) {
+                        let errorMessage = `An error occurred: ${data.details}`;
                         switch (data.type) {
                             case Hls.ErrorTypes.NETWORK_ERROR:
-                                setError(`A network error occurred: ${data.details}`);
+                                errorMessage = `A network error occurred: ${data.details}. Retrying...`;
+                                toast.warn(errorMessage);
                                 hls.startLoad();
                                 break;
                             case Hls.ErrorTypes.MEDIA_ERROR:
-                                setError(`A media error occurred: ${data.details}`);
-                                if (data.details === 'bufferAppendError') {
-                                    if (streamUrl && rawStreamUrl) {
-                                        setError('Buffer append error. Trying the other stream source...');
-                                        setUseProxy(prev => !prev);
-                                    } else {
-                                        hls.recoverMediaError();
-                                    }
+                                errorMessage = `A media error occurred: ${data.details}`;
+                                if (data.details === 'bufferAppendError' && streamUrl && rawStreamUrl) {
+                                    errorMessage = 'Buffer append error. Trying the other stream source...';
+                                    toast.warn(errorMessage);
+                                    setUseProxy(prev => !prev); // Keep the source switching
                                 } else {
+                                    toast.error(errorMessage);
                                     hls.recoverMediaError();
                                 }
                                 break;
                             default:
-                                setError(`An unrecoverable error occurred: ${data.details}`);
+                                errorMessage = `An unrecoverable error occurred: ${data.details}`;
                                 hls.destroy();
+                                toast.error(errorMessage);
+                                onBack();
                                 break;
                         }
                     }
@@ -138,7 +162,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBa
                 hlsInstance.current.destroy();
             }
         };
-    }, [streamUrl, rawStreamUrl, useProxy, itemId]);
+    }, [streamUrl, rawStreamUrl, useProxy, itemId, contentType, onBack]);
 
     useEffect(() => {
         const video = videoRef.current;
@@ -147,18 +171,24 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBa
         const handleTimeUpdate = () => {
             const video = videoRef.current;
             if (!video) return;
-
-            if (!seeking) {
+            if (contentType === 'tv') {
+                setProgress(0);
+                setCurrentTime(0);
+                setDuration(0);
+            }
+            else if (!seeking) {
                 if (video.duration && video.duration > 0) {
                     setProgress((video.currentTime / video.duration) * 100);
                 } else {
                     setProgress(0); // Force progress to 0 if duration is NaN or 0
                 }
             }
-            setCurrentTime(video.currentTime);
+            if (contentType !== 'tv') {
+                setCurrentTime(video.currentTime);
+            }
 
       
-           if (video.duration > 0 && mediaId && itemId) {
+           if (contentType !== 'tv' &&video.duration > 0 && mediaId && itemId) {
                 const progressPercentage = (video.currentTime / video.duration) * 100;
 
                 // This is the JSON object for MediaCard (Movies or Series)
@@ -211,10 +241,12 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBa
             }
 
             // This part is for resuming playback time, which is working correctly
-            const now = Date.now();
+            if(contentType!=="tv"){
+                const now = Date.now();
             if (now - lastSaveTime.current > 5000) {
                 localStorage.setItem(`video-progress-${itemId}`, String(video.currentTime));
                 lastSaveTime.current = now;
+            }
             }
         };
         const handleDurationChange = () => setDuration(video.duration);
@@ -233,35 +265,51 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBa
             const video = videoRef.current;
             if (video && video.error) {
                 console.error(`Video Error (code ${video.error.code}): ${video.error.message}`);
-
+                let errorMessage = `An error occurred (Code: ${video.error.code})`;
                 switch (video.error.code) {
                     case video.error.MEDIA_ERR_ABORTED:
-                        setError('Video playback aborted.');
+                        errorMessage = 'Video playback aborted.';
+                        toast.info(errorMessage); // This is usually user-initiated
+                        onBack();
                         break;
                     case video.error.MEDIA_ERR_NETWORK:
-                        setError('A network error caused the video download to fail. Retrying...');
+                        errorMessage = 'A network error caused the video download to fail. Retrying...';
+                        toast.warn(errorMessage);
                         if (hlsInstance.current) {
                             hlsInstance.current.startLoad();
                         }
                         break;
                     case video.error.MEDIA_ERR_DECODE:
-                        setError('The video playback was aborted due to a corruption problem. Attempting to recover by switching source...');
+                        errorMessage = 'The video playback was aborted due to a corruption problem.';
                         if (streamUrl && rawStreamUrl) {
+                            errorMessage += ' Attempting to recover by switching source...';
+                            toast.warn(errorMessage);
                             setUseProxy(prev => !prev);
                         } else if (hlsInstance.current) {
+                            errorMessage += ' Attempting to recover...';
+                            toast.warn(errorMessage);
                             hlsInstance.current.recoverMediaError();
+                        } else {
+                            toast.error(errorMessage);
+                            onBack();
                         }
                         break;
                     case video.error.MEDIA_ERR_SRC_NOT_SUPPORTED:
+                        errorMessage = 'The video format is not supported.';
                         if (streamUrl && rawStreamUrl) {
-                            setError('The video format is not supported. Trying the other stream source...');
+                            errorMessage += ' Trying the other stream source...';
+                            toast.warn(errorMessage);
                             setUseProxy(prev => !prev);
                         } else {
-                            setError('The video could not be loaded, either because the server or network failed or because the format is not supported.');
+                            errorMessage = 'The video could not be loaded because the format is not supported.';
+                            toast.error(errorMessage);
+                            onBack();
                         }
                         break;
                     default:
-                        setError(`An unknown error occurred. (Code: ${video.error.code})`);
+                        errorMessage = `An unknown error occurred. (Code: ${video.error.code})`;
+                        toast.error(errorMessage);
+                        onBack();
                         break;
                 }
             }
@@ -286,7 +334,9 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBa
             video.removeEventListener('playing', handlePlaying);
             video.removeEventListener('error', handleError);
         };
-    }, [seeking, itemId, streamUrl, rawStreamUrl, contentType, mediaId, item, seriesItem]);
+    }, [seeking, itemId, streamUrl, rawStreamUrl, contentType, mediaId, item, seriesItem, onBack]);
+
+    
 
     const handleBack = useCallback(() => {
         if (document.fullscreenElement) {
@@ -374,6 +424,12 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBa
 
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
+            // If channel list is open, stop propagation and let the list handle keys
+            if (showChannelList) {
+                e.stopPropagation();
+                return;
+            }
+
             showControlsAndCursor();
             e.stopPropagation();
             const focusable = Array.from(playerContainerRef.current?.querySelectorAll('[data-focusable="true"]') || []) as HTMLElement[];
@@ -383,83 +439,105 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBa
             const focusedElement = focusable[currentIndex];
 
             switch (e.keyCode) {
-                case 37: // LEFT
-                    e.preventDefault();
-                    if (focusedElement && focusedElement.getAttribute('data-control') === 'seekbar') {
-                        applySeekBuffer(-10);
-                    } else if (currentIndex > 0) {
-                        setFocusedIndex(currentIndex - 1);
-                    }
-                    break;
-                case 39: // RIGHT
-                    e.preventDefault();
-                    if (focusedElement && focusedElement.getAttribute('data-control') === 'seekbar') {
-                        applySeekBuffer(10);
-                    } else if (currentIndex < focusable.length - 1) {
-                        setFocusedIndex(currentIndex + 1);
-                    }
-                    break;
-                case 38: // UP
-                    e.preventDefault();
-                    if (currentIndex > 0) {
-                        setFocusedIndex(currentIndex - 1);
-                    }
-                    break;
-                case 40: // DOWN
-                    e.preventDefault();
-                    if (currentIndex < focusable.length - 1) {
-                        setFocusedIndex(currentIndex + 1);
-                    }
-                    break;
-                case 13: // ENTER
-                    e.preventDefault();
-                    if (focusedElement) {
-                        focusedElement.click();
-                    }
-                    break;
-                case 415: // PLAY
-                case 19: // PAUSE
-                    e.preventDefault();
-                    togglePlayPause();
-                    break;
-                case 412: // PREVIOUS
-                    e.preventDefault();
-                    handleSkipButtonClick(-30);
-                    break;
-                case 417: // NEXT
-                    e.preventDefault();
-                    handleSkipButtonClick(30);
-                    break;
-                case 0: // BACK on some devices
-                case 10009: // RETURN on Tizen
-                case 8: // BACK
-                    e.preventDefault();
-                    handleBack();
-                    break;
-                default:
-                    break;
+              case 37: // LEFT
+                e.preventDefault();
+                if (
+                  contentType === "tv" &&
+                  focusedElement &&
+                  focusedElement.getAttribute("data-control") !== "seekbar"
+                ) {
+                  onPrevChannel?.();
+                  showControlsAndCursor(); // Show controls on channel change
+                } else if (
+                  focusedElement &&
+                  focusedElement.getAttribute("data-control") === "seekbar"
+                ) {
+                  applySeekBuffer(-10);
+                } else if (currentIndex > 0) {
+                  setFocusedIndex(currentIndex - 1);
+                }
+                break;
+              case 39: // RIGHT
+                e.preventDefault();
+                if (
+                  contentType === "tv" &&
+                  focusedElement &&
+                  focusedElement.getAttribute("data-control") !== "seekbar"
+                ) {
+                  onNextChannel?.();
+                  showControlsAndCursor(); // Show controls on channel change
+                } else if (
+                  focusedElement &&
+                  focusedElement.getAttribute("data-control") === "seekbar"
+                ) {
+                  applySeekBuffer(10);
+                } else if (currentIndex < focusable.length - 1) {
+                  setFocusedIndex(currentIndex + 1);
+                }
+                break;
+              case 38: // UP
+                e.preventDefault();
+                if (currentIndex > 0) {
+                  setFocusedIndex(currentIndex - 1);
+                }
+                break;
+              case 40: // DOWN
+                e.preventDefault();
+                if (currentIndex < focusable.length - 1) {
+                  setFocusedIndex(currentIndex + 1);
+                }
+                break;
+              case 13: // ENTER
+                e.preventDefault();
+                if (focusedElement) {
+                  focusedElement.click();
+                }
+                break;
+              case 415: // PLAY
+              case 19: // PAUSE
+                e.preventDefault();
+                togglePlayPause();
+                break;
+              case 412: // PREVIOUS
+                e.preventDefault();
+                if (contentType === "tv") {
+                  onPrevChannel?.();
+                } else {
+                  handleSkipButtonClick(-30);
+                }
+                break;
+              case 417: // NEXT
+                e.preventDefault();
+                if (contentType === "tv") {
+                  onNextChannel?.();
+                } else {
+                  handleSkipButtonClick(30);
+                }
+                break;
+              case 0: // BACK on some devices
+              case 10009: // RETURN on Tizen
+              case 8: // BACK
+                e.preventDefault();
+                handleBack();
+                break;
+              default:
+                break;
             }
         };
 
-        const playerElement = playerContainerRef.current;
-        playerElement?.addEventListener('keydown', handleKeyDown);
-
+        // --- THIS IS THE FIX ---
+        // Attach to the document to capture all keys while the player is active
+        document.addEventListener('keydown', handleKeyDown);
         return () => {
-            playerElement?.removeEventListener('keydown', handleKeyDown);
+            document.removeEventListener('keydown', handleKeyDown);
         };
-    }, [focusedIndex, skip, togglePlayPause, showControlsAndCursor, applySeekBuffer, handleSkipButtonClick, handleBack]);
+        // --- END FIX ---
 
-    useEffect(() => {
-        if (error) {
-            const focusable = Array.from(playerContainerRef.current?.querySelectorAll('[data-focusable="true"]') || []) as HTMLElement[];
-            const closeButtonIndex = focusable.findIndex(el => el.textContent === 'Close');
-            if (closeButtonIndex !== -1) {
-                setFocusedIndex(closeButtonIndex);
-            }
-        }
-    }, [error]);
+    }, [focusedIndex, skip, togglePlayPause, showControlsAndCursor, applySeekBuffer, handleSkipButtonClick, handleBack, showChannelList, contentType, onPrevChannel, onNextChannel]);
 
+  
     useEffect(() => {
+        if (showChannelList) return;
         const focusable = Array.from(playerContainerRef.current?.querySelectorAll('[data-focusable="true"]') || []) as HTMLElement[];
         if (focusable.length === 0) return;
 
@@ -481,7 +559,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBa
                 el.classList.remove('focused');
             }
         });
-    }, [focusedIndex, error]);
+    }, [focusedIndex,showChannelList]);
 
     useEffect(() => {
         const handleFullscreenChange = () => {
@@ -557,11 +635,20 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBa
         }
     }, [selectedSubtitle, subtitlesEnabled, subtitles]);
 
+    useEffect(() => {
+        if (previewChannelInfo) {
+            showControlsAndCursor();
+        }
+    }, [previewChannelInfo, showControlsAndCursor]);
+
     const handleSeekMouseDown = () => {
+        if (contentType === 'tv') return;
         setSeeking(true);
+        
     };
 
     const handleSeekMouseUp = (e: React.MouseEvent<HTMLInputElement>) => {
+        if (contentType === 'tv') return;
         setSeeking(false);
         const video = videoRef.current;
         if (video && isFinite(video.duration)) {
@@ -571,10 +658,12 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBa
     };
 
     const handleSeekChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (contentType === 'tv') return;
         setProgress(Number(e.target.value));
     };
 
     const handleSeekBarHover = (e: React.MouseEvent<HTMLInputElement>) => {
+        if (contentType === 'tv') return;
         const video = videoRef.current;
         if (video && isFinite(video.duration)) {
             const rect = e.currentTarget.getBoundingClientRect();
@@ -677,18 +766,30 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBa
                     clearTimeout(cursorTimeoutRef.current);
                 }
             }} className={`relative aspect-video bg-black rounded-lg overflow-hidden shadow-2xl group ${!cursorVisible && !controlsVisible ? 'cursor-none' : ''}`}>
+                {/* Channel List Overlay */}
+                {showChannelList && contentType === 'tv' && channels && onChannelSelect && (
+                    <TvChannelList
+                        channels={channels}
+                        onChannelSelect={(item) => {
+                            if (onChannelSelect) onChannelSelect(item);
+                            setShowChannelList(false);
+                        }}
+                        onBack={() => setShowChannelList(false)}
+                        currentItemId={itemId}
+                    />
+                )}
                 <video ref={videoRef} crossOrigin='anonymous' autoPlay playsInline className="w-full h-full" onClick={togglePlayPause} onDoubleClick={toggleFullscreen} />
 
-                {error && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black bg-opacity-75 z-30">
-                        <p className="text-red-500 text-xl mb-4">Playback Error</p>
-                        <p className="text-white text-center max-w-md">{error}</p>
-                        <button
-                            onClick={() => setError(null)}
-                            className="mt-4 bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600" data-focusable="true"
-                        >
-                            Close
-                        </button>
+                {previewChannelInfo && (
+                    <div className="absolute inset-0 flex items-center justify-center z-30 pointer-events-none">
+                        <div className="bg-black bg-opacity-75 p-6 rounded-lg shadow-xl">
+                            <h2 className="text-5xl font-bold text-white text-center">
+                                {previewChannelInfo.number}
+                            </h2>
+                            <h3 className="text-2xl text-gray-200 text-center mt-2">
+                                {previewChannelInfo.name}
+                            </h3>
+                        </div>
                     </div>
                 )}
 
@@ -703,7 +804,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBa
 
                 <div className={`absolute inset-0 transition-opacity duration-300 pointer-events-none ${controlsVisible || isBuffering ? 'opacity-100' : 'opacity-0'} z-20`}>
                     <div className="absolute bottom-0 left-0 right-0 p-4 bg-linear-to-t from-black via-black/70 to-transparent">
-                        <div className="relative w-full pointer-events-auto">
+                        {contentType!=="tv"&&<div className="relative w-full pointer-events-auto">
                             {isTooltipVisible && (
                                 <div
                                     className="absolute bottom-full mb-2 px-2 py-1 bg-black bg-opacity-75 text-white text-xs rounded"
@@ -729,7 +830,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBa
                                 data-focusable="true"
                                 data-control="seekbar"
                             />
-                        </div>
+                        </div>}
 
                         <div className="flex items-center justify-between text-white mt-2 pointer-events-auto">
                             <div className="flex items-center space-x-4">
@@ -739,14 +840,30 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ streamUrl, rawStreamUrl, onBa
                                         <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd"></path></svg>}
                                 </button>
                                 <div className="flex items-center space-x-2">
-                                    <button data-focusable="true" onClick={() => handleSkipButtonClick(-30)} className="text-white hover:text-blue-400">
-                                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 19l-7-7 7-7"></path></svg>
-                                    </button>
-                                    <button data-focusable="true" onClick={() => handleSkipButtonClick(30)} className="text-white hover:text-blue-400">
-                                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 5l7 7-7 7"></path></svg>
-                                    </button>
+                                    {contentType==="tv"?<>
+                                            <button data-focusable="true" onClick={onPrevChannel} className="text-white hover:text-blue-400">
+                                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"></path></svg>
+                                            </button>
+                                            <button data-focusable="true" onClick={() => setShowChannelList(true)} className="text-white hover:text-blue-400">
+                                                <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20"><path d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" fillRule="evenodd"></path></svg>
+                                            </button>
+                                            <button data-focusable="true" onClick={onNextChannel} className="text-white hover:text-blue-400">
+                                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path></svg>
+                                            </button>
+                                        </>:<><button data-focusable="true" onClick={() => handleSkipButtonClick(-30)} className="text-white hover:text-blue-400">
+                                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 19l-7-7 7-7"></path></svg>
+                                        </button><button data-focusable="true" onClick={() => handleSkipButtonClick(30)} className="text-white hover:text-blue-400">
+                                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 5l7 7-7 7"></path></svg>
+                                            </button></>}
                                 </div>
-                                <span className="font-mono text-sm">{formatTime(currentTime)} / {formatTime(duration)}</span>
+                               {contentType === 'tv' && (previewChannelInfo || channelInfo) ? (
+                                    <span className="font-semibold text-sm truncate max-w-xs">
+                                        {/* Show preview name, or fall back to current channel name */}
+                                        {previewChannelInfo ? previewChannelInfo.name : channelInfo?.name}
+                                    </span>
+                                ) : (
+                    <span className="font-mono text-sm">{formatTime(currentTime)} / {formatTime(duration)}</span>
+                                )}
                             </div>
                             <div className="flex items-center space-x-4">
                                 {!isTizen && <button data-focusable="true" onClick={toggleMute} className="text-white hover:text-blue-400">

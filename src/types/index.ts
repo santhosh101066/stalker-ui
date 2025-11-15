@@ -9,6 +9,8 @@ export interface MediaItem {
     series_number?: number;
     is_playable_movie?: boolean;
     has_files?: number
+    cmd?: string; 
+    number?: number;
 }
 
 export interface ContextType {
@@ -20,4 +22,5 @@ export interface ContextType {
     seasonId: string | null;
     parentTitle: string;
     focusedIndex?: number | null;
+    contentType: "movie" | "series" | "tv";
 }

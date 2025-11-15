@@ -1,5 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { getMedia, getSeries, getUrl } from "./api/services";
+import {
+  getChannels,
+  getChannelUrl,
+  getMedia,
+  getSeries,
+  getMovieUrl,
+} from "./api/services";
 import LoadingSpinner from "./components/LoadingSpinner";
 import MediaCard from "./components/MediaCard";
 import EpisodeCard from "./components/EpisodeCard";
@@ -12,11 +18,8 @@ import type { PaginatedResponse } from "./api/services";
 import "react-toastify/dist/ReactToastify.css";
 import "./App.css";
 import Admin from "./components/Admin";
+import TvChannelListCard from "./components/TvChannelListCard";
 
-// --- Main Application Component ---
-export default function App() {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const isTizen = !!(window as any).tizen; // Detect Tizen environment
   const initialContext: ContextType = {
     page: 1,
     pageAtaTime: 1,
@@ -26,7 +29,14 @@ export default function App() {
     seasonId: null,
     parentTitle: "Movies",
     focusedIndex: null,
+    contentType: "movie",
   };
+
+// --- Main Application Component ---
+export default function App() {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const isTizen = !!(window as any).tizen; // Detect Tizen environment
+
   const [context, setContext] = useState<ContextType>(initialContext);
   const [items, setItems] = useState<MediaItem[]>([]);
   const [history, setHistory] = useState<ContextType[]>([]);
@@ -36,7 +46,9 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [paginationError, setPaginationError] = useState<string | null>(null);
   const [totalItemsCount, setTotalItemsCount] = useState<number>(0);
-  const [contentType, setContentType] = useState<"movie" | "series">("movie"); // 'movie' or 'series'
+  const [contentType, setContentType] = useState<"movie" | "series" | "tv">(
+    "movie"
+  ); // 'movie' or 'series'
   const [showAdmin, setShowAdmin] = useState(false);
   const [currentItemId, setCurrentItemId] = useState<string | null>(null);
   const [currentItem, setCurrentItem] = useState<MediaItem | null>(null);
@@ -46,11 +58,19 @@ export default function App() {
   const [playingMovieId, setPlayingMovieId] = useState<string | null>(null);
   const [isSearchActive, setIsSearchActive] = useState(false);
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
+  const [playLastTvChannel, setPlayLastTvChannel] = useState<string | null>(
+    null
+  );
+  const channelChangeTimer = useRef<ReturnType<typeof setTimeout> | null>(null); // <-- ADD THIS
+  const [previewChannel, setPreviewChannel] = useState<MediaItem | null>(null); // <-- ADD THIS
 
   const isFetchingMore = useRef(false);
 
   const fetchData = useCallback(
-    async (newContext: ContextType, typeOverride?: "movie" | "series") => {
+    async (
+      newContext: ContextType,
+      typeOverride?: "movie" | "series" | "tv"
+    ) => {
       const currentContentType = typeOverride || contentType;
       setLoading(true);
       setError(null);
@@ -73,7 +93,7 @@ export default function App() {
             seasonId: newContext.seasonId,
           };
           response = await getMedia(params);
-        } else {
+        } else if (currentContentType === "series") {
           // This is series mode
           if (newContext.movieId) {
             response = await getSeries({ movieId: newContext.movieId });
@@ -92,6 +112,8 @@ export default function App() {
             };
             response = await getSeries(params);
           }
+        } else {
+          response = await getChannels();
         }
         const data = response.data || [];
         setItems((prevItems) =>
@@ -117,143 +139,224 @@ export default function App() {
         isFetchingMore.current = false;
       }
     },
-    [contentType, totalItemsCount]
+    [contentType]
   );
 
   useEffect(() => {
     fetchData(initialContext);
-  }, []);
+  }, [fetchData]);
 
-  const handleItemClick = async (item: MediaItem) => {
-    setHistory((prev) => [
-      ...prev,
-      { ...context, focusedIndex: focusedIndex ?? 0 },
-    ]);
-    const displayTitle = item.title || item.name || "";
+  
 
-    const isInsideMovieCategory =
-      contentType === "movie" && context.category !== null;
-    console.log(item, isInsideMovieCategory);
+  const handleItemClick = useCallback(
+    async (item: MediaItem) => {
+      if (channelChangeTimer.current) {
+        clearTimeout(channelChangeTimer.current);
+        channelChangeTimer.current = null;
+      }
+      setPreviewChannel(null);
+      setHistory((prev) => [
+        ...prev,
+        { ...context, focusedIndex: focusedIndex ?? 0 },
+      ]);
+      const displayTitle = item.title || item.name || "";
 
-    if (item.is_series == 1) {
-      setCurrentSeriesItem(item);
-      console.log(item);
+      const isInsideMovieCategory =
+        contentType === "movie" && context.category !== null;
+      console.log(item, isInsideMovieCategory);
 
-      fetchData({
-        ...initialContext,
-        category: context.category || "*",
-        movieId: item.id,
-        parentTitle: displayTitle,
-      });
-    } else if (item.is_season) {
-      fetchData({
-        ...initialContext,
-        category: context.category,
-        movieId: context.movieId,
-        seasonId: item.id,
-        parentTitle: displayTitle,
-      });
-    } else if (item.is_episode) {
-      setLoading(true);
-      setCurrentItem(item);
-      try {
-        let episodeFiles: MediaItem[] = [];
-        if (contentType === "series") {
-          // --- FIX: Destructure the 'data' property from the response ---
-          const response = await getSeries({
-            movieId: context.movieId,
-            seasonId: context.seasonId,
-            episodeId: item.id,
-          });
-          episodeFiles = response.data;
-        } else {
+      if (item.is_series == 1) {
+        setCurrentSeriesItem(item);
+        console.log(item);
+
+        fetchData({
+          ...initialContext,
+          category: context.category || "*",
+          movieId: item.id,
+          parentTitle: displayTitle,
+        });
+      } else if (item.is_season) {
+        fetchData({
+          ...initialContext,
+          category: context.category,
+          movieId: context.movieId,
+          seasonId: item.id,
+          parentTitle: displayTitle,
+        });
+      } else if (item.is_episode) {
+        setLoading(true);
+        setCurrentItem(item);
+        try {
+          let episodeFiles: MediaItem[] = [];
+          if (contentType === "series") {
+            // --- FIX: Destructure the 'data' property from the response ---
+            const response = await getSeries({
+              movieId: context.movieId,
+              seasonId: context.seasonId,
+              episodeId: item.id,
+            });
+            episodeFiles = response.data;
+          } else {
+            // --- FIX: Destructure the 'data' property from the response ---
+            const response = await getMedia({
+              movieId: context.movieId,
+              seasonId: context.seasonId,
+              episodeId: item.id,
+              category: "*",
+            });
+            episodeFiles = response.data;
+          }
+
+          if (episodeFiles && episodeFiles.length > 0) {
+            const episodeFile = episodeFiles[0];
+            if (episodeFile.id !== undefined) {
+              const urlParams: Record<string, string | number | undefined> = {
+                id: episodeFile.id,
+              };
+              if (item.series_number !== undefined) {
+                urlParams.series = item.series_number;
+              }
+
+              const linkData = await getMovieUrl(urlParams);
+              const cmd =
+                (linkData && linkData.js && linkData.js.cmd) ||
+                (linkData && linkData.cmd);
+
+              if (typeof cmd === "string") {
+                setRawStreamUrl(cmd);
+                setStreamUrl(`${BASE_URL}/proxy?url=${btoa(cmd)}`);
+                setCurrentItemId(item.id);
+              } else {
+                throw new Error("Episode stream URL (cmd) not found.");
+              }
+            } else {
+              throw new Error("Episode details (id) missing.");
+            }
+          } else {
+            throw new Error("Could not fetch episode details.");
+          }
+        } catch (err: unknown) {
+          console.error(err);
+          setError("Could not fetch stream URL.");
+          setHistory((prev) => prev.slice(0, -1));
+        } finally {
+          setLoading(false);
+        }
+      } else if (isInsideMovieCategory || item.is_playable_movie) {
+        setLoading(true);
+        try {
           // --- FIX: Destructure the 'data' property from the response ---
           const response = await getMedia({
-            movieId: context.movieId,
-            seasonId: context.seasonId,
-            episodeId: item.id,
-            category: "*",
+            movieId: item.id,
+            category: context.category || "*",
           });
-          episodeFiles = response.data;
-        }
+          const files = response.data; // Get the array from the response object
 
-        if (episodeFiles && episodeFiles.length > 0) {
-          const episodeFile = episodeFiles[0];
-          if (episodeFile.id !== undefined) {
-            const urlParams: Record<string, string | number | undefined> = {
-              id: episodeFile.id,
-            };
-            if (item.series_number !== undefined) {
-              urlParams.series = item.series_number;
-            }
+          if (files && files.length > 0) {
+            const movieFile = files[0];
+            setPlayingMovieId(item.id);
+            setCurrentItem(item);
+            const linkData = await getMovieUrl({ id: movieFile.id });
 
-            const linkData = await getUrl(urlParams);
-            const cmd =
-              (linkData && linkData.js && linkData.js.cmd) ||
-              (linkData && linkData.cmd);
-
-            if (typeof cmd === "string") {
-              setRawStreamUrl(cmd);
-              setStreamUrl(`${BASE_URL}/proxy?url=${btoa(cmd)}`);
-              setCurrentItemId(item.id);
+            if (
+              linkData &&
+              linkData.js &&
+              typeof linkData.js.cmd === "string"
+            ) {
+              const rawUrl = linkData.js.cmd;
+              setRawStreamUrl(rawUrl);
+              setStreamUrl(`${BASE_URL}/proxy?url=${btoa(rawUrl)}`);
+              setCurrentItemId(movieFile.id);
             } else {
-              throw new Error("Episode stream URL (cmd) not found.");
+              throw new Error("Movie stream URL not found.");
             }
           } else {
-            throw new Error("Episode details (id) missing.");
+            throw new Error("Movie file could not be found.");
           }
-        } else {
-          throw new Error("Could not fetch episode details.");
+        } catch (err: unknown) {
+          console.error(err);
+          setError("Could not fetch stream URL.");
+          setHistory((prev) => prev.slice(0, -1));
+        } finally {
+          setLoading(false);
         }
-      } catch (err: unknown) {
-        console.error(err);
-        setError("Could not fetch stream URL.");
-        setHistory((prev) => prev.slice(0, -1));
-      } finally {
-        setLoading(false);
-      }
-    } else if (isInsideMovieCategory || item.is_playable_movie) {
-      setLoading(true);
-      try {
-        // --- FIX: Destructure the 'data' property from the response ---
-        const response = await getMedia({
-          movieId: item.id,
-          category: context.category || "*",
-        });
-        const files = response.data; // Get the array from the response object
+      } else if (contentType === "tv") {
+        // Handle TV Channel Click
+        setLoading(true);
+        setCurrentItem(item);
+        try {
+          if (!item.cmd) {
+            throw new Error("Channel has no command to play.");
+          }
+          const linkData = await getChannelUrl(item.cmd); // Use new getChannelUrl
+          const cmd =
+            (linkData && linkData.js && linkData.js.cmd) ||
+            (linkData && linkData.cmd);
 
-        if (files && files.length > 0) {
-          const movieFile = files[0];
-          setPlayingMovieId(item.id);
-          setCurrentItem(item);
-          const linkData = await getUrl({ id: movieFile.id });
-
-          if (linkData && linkData.js && typeof linkData.js.cmd === "string") {
-            const rawUrl = linkData.js.cmd;
-            setRawStreamUrl(rawUrl);
-            setStreamUrl(`${BASE_URL}/proxy?url=${btoa(rawUrl)}`);
-            setCurrentItemId(movieFile.id);
+          if (typeof cmd === "string") {
+            localStorage.setItem("lastPlayedTvChannelId", item.id);
+            setRawStreamUrl(cmd);
+            setStreamUrl(`${BASE_URL}/proxy?url=${btoa(cmd)}`);
+            setCurrentItemId(item.id);
           } else {
-            throw new Error("Movie stream URL not found.");
+            throw new Error("TV stream URL (cmd) not found.");
           }
-        } else {
-          throw new Error("Movie file could not be found.");
+        } catch (err: unknown) {
+          console.error(err);
+          setError("Could not fetch stream URL.");
+          setHistory((prev) => prev.slice(0, -1)); // Revert history
+        } finally {
+          setLoading(false);
         }
-      } catch (err: unknown) {
-        console.error(err);
-        setError("Could not fetch stream URL.");
-        setHistory((prev) => prev.slice(0, -1));
-      } finally {
-        setLoading(false);
+      } else {
+        fetchData({
+          ...initialContext,
+          category: item.id,
+          parentTitle: displayTitle,
+        });
       }
-    } else {
-      fetchData({
-        ...initialContext,
-        category: item.id,
-        parentTitle: displayTitle,
-      });
+    },
+    [contentType, context, fetchData, focusedIndex]
+  );
+
+  const debounceChannelChange = useCallback((direction: "next" | "prev") => {
+    // 1. Clear any existing timer
+    if (channelChangeTimer.current) {
+      clearTimeout(channelChangeTimer.current);
     }
-  };
+
+    // 2. Find the channel to preview (base it on the last preview, or the current playing item)
+    const currentSelectedChannel = previewChannel || currentItem;
+    if (!currentSelectedChannel) return;
+
+    const currentIndex = items.findIndex(
+      (item) => item.id === currentSelectedChannel.id
+    );
+    if (currentIndex === -1) return;
+
+    let newIndex = currentIndex;
+    if (direction === "next" && currentIndex < items.length - 1) {
+      newIndex = currentIndex + 1;
+    } else if (direction === "prev" && currentIndex > 0) {
+      newIndex = currentIndex - 1;
+    }
+
+    // Don't do anything if we're at the start/end of the list
+    if (newIndex === currentIndex) return;
+
+    const newPreviewChannel = items[newIndex];
+
+    // 3. Set the preview state (this will update the UI)
+    setPreviewChannel(newPreviewChannel);
+
+    // 4. Set a new 2-second timer
+    channelChangeTimer.current = setTimeout(() => {
+      // Timer finished! Fetch the channel.
+      handleItemClick(newPreviewChannel);
+      setPreviewChannel(null); // Clear the preview
+      channelChangeTimer.current = null;
+    }, 2000); // 2000ms = 2 seconds
+  },[currentItem, handleItemClick, items, previewChannel]);
 
   const handleBack = useCallback(() => {
     if (streamUrl) {
@@ -269,6 +372,7 @@ export default function App() {
         setCurrentSeriesItem(null);
       }
       setHistory((prev) => prev.slice(0, -1));
+      setContentType(lastContext.contentType); // Restore contentType
       fetchData(lastContext); // Fetch data with old context
 
       // --- FOCUS FIX: Restore old focused index ---
@@ -276,11 +380,10 @@ export default function App() {
     }
   }, [streamUrl, history, fetchData]);
 
-
-
   const handlePageChange = useCallback(
     (direction: number) => {
       if (direction <= 0) return;
+      if (contentType === "tv") return;
 
       // This block is unchanged and still has our ref lock
       if (
@@ -300,22 +403,47 @@ export default function App() {
 
       fetchData({ ...context, page: newPage });
     },
-    [loading, totalItemsCount, items.length, context, fetchData]
+    [loading, totalItemsCount, items.length, context, fetchData, contentType]
   );
+  const handleChannelSelect = useCallback(
+    (item: MediaItem) => {
+      handleItemClick(item);
+    },
+    [handleItemClick]
+  ); // handleItemClick is already memoized
+
+  const handleNextChannel = useCallback(() => {
+    if (!currentItem || contentType !== "tv") return;
+    debounceChannelChange("next");
+  }, [currentItem, contentType, debounceChannelChange]); // <-- Note new dependencies
+
+  const handlePrevChannel = useCallback(() => {
+    if (!currentItem || contentType !== "tv") return;
+    debounceChannelChange("prev");
+  }, [currentItem, contentType, debounceChannelChange]); // <-- Note new dependencies
+
   const handleClearWatched = useCallback(() => {
-    if (window.confirm("Are you sure you want to clear all watched and in-progress statuses?")) {
+    if (
+      window.confirm(
+        "Are you sure you want to clear all watched and in-progress statuses?"
+      )
+    ) {
       Object.keys(localStorage).forEach((key) => {
         // Clear completed, in-progress, AND resume time keys
-        if (key.startsWith("video-completed-") || key.startsWith("video-in-progress-") || key.startsWith("video-progress-")) {
+        if (
+          key.startsWith("video-completed-") ||
+          key.startsWith("video-in-progress-") ||
+          key.startsWith("video-progress-")
+        ) {
           localStorage.removeItem(key);
         }
       });
       toast.success("All watched and in-progress statuses have been cleared.");
-      
+
       // Re-fetch data to clear the "Continue Watching" list
       fetchData(initialContext, contentType);
     }
-  }, [fetchData, initialContext, contentType]); // Add dependencies
+  }, [fetchData, contentType]); // Add dependencies
 
   useEffect(() => {
     // Reset focus when the view changes (e.g., new category, new search)
@@ -351,27 +479,33 @@ export default function App() {
         el.classList.remove("focused");
       }
     });
-  }, [focusedIndex, items, showAdmin, streamUrl]);
+  }, [focusedIndex, isSearchActive, isTizen, items, showAdmin, streamUrl]);
 
-  const checkAndFetchNextPage = useCallback((newIndex: number, totalItems: number) => {
-    // How many items from the end should trigger the fetch?
-    // Your "last 2" idea is good. Let's make it the last row.
-    const grid = document.querySelector('.grid');
-    let triggerThreshold = 2; // Default for non-grid
+  const checkAndFetchNextPage = useCallback(
+    (newIndex: number, totalItems: number) => {
+      if (contentType === "tv") return;
+      // How many items from the end should trigger the fetch?
+      // Your "last 2" idea is good. Let's make it the last row.
+      const grid = document.querySelector(".grid");
+      let triggerThreshold = 2; // Default for non-grid
 
-    if (grid) {
-      const gridComputedStyle = window.getComputedStyle(grid);
-      const gridColumnCount = gridComputedStyle.getPropertyValue('grid-template-columns').split(' ').length;
-      triggerThreshold = gridColumnCount; // Trigger on the last row
-    }
+      if (grid) {
+        const gridComputedStyle = window.getComputedStyle(grid);
+        const gridColumnCount = gridComputedStyle
+          .getPropertyValue("grid-template-columns")
+          .split(" ").length;
+        triggerThreshold = gridColumnCount; // Trigger on the last row
+      }
 
-    if (newIndex >= totalItems - triggerThreshold) {
-      // We are focusing on one of the last items.
-      // It's safe to call this multiple times because
-      // handlePageChange has the 'isFetchingMore' lock.
-      handlePageChange(1);
-    }
-  }, [handlePageChange]);
+      if (newIndex >= totalItems - triggerThreshold) {
+        // We are focusing on one of the last items.
+        // It's safe to call this multiple times because
+        // handlePageChange has the 'isFetchingMore' lock.
+        handlePageChange(1);
+      }
+    },
+    [handlePageChange, contentType]
+  );
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -379,22 +513,29 @@ export default function App() {
 
       // --- START: TIZEN SEARCH LOGIC ---
       if (isTizen && isSearchActive) {
-        if (e.keyCode === 13) { return; }
+        if (e.keyCode === 13) {
+          return;
+        }
         if (e.keyCode === 0 || e.keyCode === 10009 || e.keyCode === 8) {
           e.preventDefault();
           setIsSearchActive(false);
-          const focusable = Array.from(document.querySelectorAll('[data-focusable="true"]')) as HTMLElement[];
-          const searchIndex = focusable.findIndex(el => el.matches('input[type="search"]'));
+          const focusable = Array.from(
+            document.querySelectorAll('[data-focusable="true"]')
+          ) as HTMLElement[];
+          const searchIndex = focusable.findIndex((el) =>
+            el.matches('input[type="search"]')
+          );
           if (searchIndex !== -1) {
             setFocusedIndex(searchIndex);
           }
         }
-        return; 
+        return;
       }
       // --- END: TIZEN SEARCH LOGIC ---
 
-
-      const focusable = Array.from(document.querySelectorAll('[data-focusable="true"]')) as HTMLElement[];
+      const focusable = Array.from(
+        document.querySelectorAll('[data-focusable="true"]')
+      ) as HTMLElement[];
       if (focusable.length === 0) return;
 
       let currentIndex = focusedIndex === null ? 0 : focusedIndex;
@@ -412,57 +553,61 @@ export default function App() {
           if (currentIndex < focusable.length - 1) {
             const newIndex = currentIndex + 1; // Calculate new index
             setFocusedIndex(newIndex);
-            
+
             // --- NEW: Check if this new index is near the end ---
             checkAndFetchNextPage(newIndex, focusable.length);
           }
           break;
-        case 38: // UP
-          {
-            e.preventDefault();
-            const grid = document.querySelector('.grid');
-            if (grid) {
-              const gridComputedStyle = window.getComputedStyle(grid);
-              const gridColumnCount = gridComputedStyle.getPropertyValue('grid-template-columns').split(' ').length;
-              const newIndex = currentIndex - gridColumnCount;
-              if (newIndex >= 0) {
-                setFocusedIndex(newIndex);
-              }
-            } else if (currentIndex > 0) {
-              setFocusedIndex(currentIndex - 1);
+        case 38: {
+          // UP
+          e.preventDefault();
+          const grid = document.querySelector(".grid, .channel-list");
+          if (grid) {
+            const gridComputedStyle = window.getComputedStyle(grid);
+            const gridColumnCount = gridComputedStyle
+              .getPropertyValue("grid-template-columns")
+              .split(" ").length;
+            const newIndex = currentIndex - gridColumnCount;
+            if (newIndex >= 0) {
+              setFocusedIndex(newIndex);
             }
-            break;
+          } else if (currentIndex > 0) {
+            setFocusedIndex(currentIndex - 1);
           }
-        case 40: // DOWN
-          {
-            e.preventDefault();
-            const gridDown = document.querySelector('.grid');
-            let newIndex = -1; // Flag for new index
+          break;
+        }
+        case 40: {
+          // DOWN
+          e.preventDefault();
+          const gridDown = document.querySelector(".grid, .channel-list");
+          let newIndex = -1; // Flag for new index
 
-            if (gridDown) {
-              const gridComputedStyle = window.getComputedStyle(gridDown);
-              const gridColumnCount = gridComputedStyle.getPropertyValue('grid-template-columns').split(' ').length;
-              const potentialNewIndex = currentIndex + gridColumnCount;
-              
-              if (potentialNewIndex < focusable.length) {
-                newIndex = potentialNewIndex;
-              } else {
-                // --- MODIFIED: At the bottom, load more ---
-                handlePageChange(1); 
-                setFocusedIndex(currentIndex); // Keep focus on current item
-              }
-            } else if (currentIndex < focusable.length - 1) {
-              // Not a grid, just move down one
-              newIndex = currentIndex + 1;
-            }
+          if (gridDown) {
+            const gridComputedStyle = window.getComputedStyle(gridDown);
+            const gridColumnCount = gridComputedStyle
+              .getPropertyValue("grid-template-columns")
+              .split(" ").length;
+            const potentialNewIndex = currentIndex + gridColumnCount;
 
-            if (newIndex !== -1) {
-                setFocusedIndex(newIndex);
-                // --- NEW: Check if this new index is near the end ---
-                checkAndFetchNextPage(newIndex, focusable.length);
+            if (potentialNewIndex < focusable.length) {
+              newIndex = potentialNewIndex;
+            } else {
+              // --- MODIFIED: At the bottom, load more ---
+              handlePageChange(1);
+              setFocusedIndex(currentIndex); // Keep focus on current item
             }
-            break;
+          } else if (currentIndex < focusable.length - 1) {
+            // Not a grid, just move down one
+            newIndex = currentIndex + 1;
           }
+
+          if (newIndex !== -1) {
+            setFocusedIndex(newIndex);
+            // --- NEW: Check if this new index is near the end ---
+            checkAndFetchNextPage(newIndex, focusable.length);
+          }
+          break;
+        }
         case 13: // OK
           e.preventDefault();
           if (focusedIndex !== null && focusable[focusedIndex]) {
@@ -486,19 +631,19 @@ export default function App() {
       }
     };
 
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
   }, [
-      focusedIndex, 
-      items, 
-      handleBack, 
-      showAdmin, 
-      streamUrl, 
-      isTizen, 
-      isSearchActive, 
-      context, 
-      handlePageChange, 
-      checkAndFetchNextPage // <-- ADD THIS
+    focusedIndex,
+    items,
+    handleBack,
+    showAdmin,
+    streamUrl,
+    isTizen,
+    isSearchActive,
+    context,
+    handlePageChange,
+    checkAndFetchNextPage, // <-- ADD THIS
   ]);
 
   const handleSearch = (e: React.FormEvent<HTMLFormElement>) => {
@@ -514,38 +659,69 @@ export default function App() {
       ? `Results for "${search}"`
       : contentType === "movie"
       ? "Movies"
-      : "Series";
+      : contentType === "series"
+      ? "Series"
+      : "TV";
     fetchData({
       ...initialContext,
       search,
-      category: search ? "*" : "*", // always search all
+      category: search ? "*" : contentType === "tv" ? null : "*",
       parentTitle: newTitle,
     });
   };
 
-  const handleContentTypeChange = (type: "movie" | "series") => {
+  const handleContentTypeChange = (type: "movie" | "series" | "tv") => {
     if (type === contentType) return;
-
-    const newTitle = type === "movie" ? "Movies" : "Series";
+    const newTitle =
+      type === "movie" ? "Movies" : type === "series" ? "Series" : "TV";
     const newContext = {
       ...initialContext,
       parentTitle: newTitle,
       category: null,
+      contentType: type,
     };
-
     setContentType(type);
     setHistory([]);
     setStreamUrl(null);
     setRawStreamUrl(null);
     fetchData(newContext, type);
+    if (type === "tv") {
+      const lastPlayedId = localStorage.getItem("lastPlayedTvChannelId");
+      if (lastPlayedId) {
+        setPlayLastTvChannel(lastPlayedId); // Set trigger to play last channel
+      } else {
+        setPlayLastTvChannel("__play_first__"); // Set trigger to play first channel
+      }
+    }
   };
+  useEffect(() => {
+    if (
+      playLastTvChannel &&
+      items.length > 0 &&
+      contentType === "tv" &&
+      !loading
+    ) {
+      const channelToPlay =
+        playLastTvChannel === "__play_first__"
+          ? items[0] // Get the first channel
+          : items.find((item) => item.id === playLastTvChannel); // Get the last played one
+
+      if (channelToPlay) {
+        handleItemClick(channelToPlay);
+      } else if (items[0]) {
+        // Fallback to first channel if last-played ID isn't found
+        handleItemClick(items[0]);
+      }
+      setPlayLastTvChannel(null); // Clear the trigger
+    }
+  }, [items, playLastTvChannel, contentType, loading, handleItemClick]);
 
   useEffect(() => {
     const handleScroll = () => {
       // Don't run this logic on Tizen
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const isTizen = !!(window as any).tizen;
-      if (isTizen) return;
+      if (isTizen || contentType === "tv") return;
 
       // Check if user is scrolled 200px from the bottom
       const buffer = 200;
@@ -567,7 +743,7 @@ export default function App() {
     return () => {
       window.removeEventListener("scroll", handleScroll);
     };
-  }, [handlePageChange]);
+  }, [contentType, handlePageChange]);
 
   const isEpisodeList = items && items.length > 0 && items[0].is_episode;
   const currentTitle = streamUrl
@@ -576,160 +752,196 @@ export default function App() {
 
   return (
     <>
-      <div className="text-gray-200 min-h-screen font-sans">
-        <div className="container mx-auto p-4 sm:p-6">
-          <header className="bg-gray-800/50 backdrop-blur-lg rounded-xl p-4 mb-6 sticky top-4 z-10 border border-gray-700/80">
-            <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-              <div className="flex items-center self-start">
-                {(history.length > 0 || streamUrl) && !streamUrl && (
-                  <button
-                    onClick={handleBack}
-                    className="mr-2 text-2xl text-white hover:text-blue-400 transition-colors"
-                    data-focusable="true"
-                    tabIndex={-1}
-                  >
-                    &larr;
-                  </button>
-                )}
-                <img src="stalker-logo.svg" width={180} />
-                <h1 className="text-xl sm:text-l md:text-l font-bold text-white tracking-wider">
-                  {currentTitle}
-                </h1>
-              </div>
-
-              {!streamUrl && (
-                <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
-                  <div className="flex justify-center space-x-2 bg-gray-900/60 p-1 rounded-full w-full sm:w-auto">
+      {streamUrl ? (
+        <VideoPlayer
+          streamUrl={streamUrl}
+          rawStreamUrl={rawStreamUrl}
+          onBack={handleBack}
+          itemId={currentItemId}
+          subtitles={undefined} // Pass subtitles here if you fetch them
+          context={context}
+          contentType={contentType}
+          mediaId={
+            contentType === "movie"
+              ? currentSeriesItem?.id || playingMovieId
+              : context.movieId
+          }
+          item={currentSeriesItem || currentItem}
+          seriesItem={currentSeriesItem}
+          // --- ADD THESE NEW PROPS for TV ---
+          channels={contentType === "tv" ? items : undefined}
+          channelInfo={contentType === "tv" ? currentItem : null}
+          previewChannelInfo={contentType === 'tv' ? previewChannel : null}
+          onNextChannel={handleNextChannel}
+          onPrevChannel={handlePrevChannel}
+          onChannelSelect={handleChannelSelect}
+        />
+      ) : (
+        <div className="text-gray-200 min-h-screen font-sans">
+          <div className="container mx-auto p-4 sm:p-6">
+            <header className="bg-gray-800/50 backdrop-blur-lg rounded-xl p-4 mb-6 sticky top-4 z-10 border border-gray-700/80">
+              <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+                <div className="flex items-center self-start">
+                  {(history.length > 0 || streamUrl) && !streamUrl && (
                     <button
-                      onClick={() => handleContentTypeChange("movie")}
-                      className={`py-2 px-4 sm:px-6 rounded-full font-semibold text-sm transition-colors duration-300 w-full ${
-                        contentType === "movie"
-                          ? "bg-blue-600 text-white"
-                          : "text-gray-300 hover:bg-gray-700/50"
-                      }`}
+                      onClick={handleBack}
+                      className="mr-2 text-2xl text-white hover:text-blue-400 transition-colors"
                       data-focusable="true"
                       tabIndex={-1}
                     >
-                      Movies
-                    </button>
-                    <button
-                      onClick={() => handleContentTypeChange("series")}
-                      className={`py-2 px-4 sm:px-6 rounded-full font-semibold text-sm transition-colors duration-300 w-full ${
-                        contentType === "series"
-                          ? "bg-blue-600 text-white"
-                          : "text-gray-300 hover:bg-gray-700/50"
-                      }`}
-                      data-focusable="true"
-                      tabIndex={-1}
-                    >
-                      Series
-                    </button>
-                  </div>
-                  <form onSubmit={handleSearch} className="w-full sm:w-auto">
-                    <input
-                      type="search"
-                      name="search"
-                      key={context.search}
-                      defaultValue={context.search}
-                      placeholder="Search titles..."
-                      className="bg-gray-900/50 text-white rounded-full py-2 px-4 w-full sm:w-64 focus:outline-none focus:ring-2 focus:ring-blue-500 border border-gray-700/80"
-                      data-focusable="true"
-                      readOnly={isTizen && !isSearchActive}
-                      onClick={() => {
-                        if (isTizen) setIsSearchActive(true);
-                      }}
-                      onBlur={() => {
-                        if (isTizen) setIsSearchActive(false);
-                      }}
-                    />
-                  </form>
-                  {!isTizen && (
-                    <button
-                      onClick={() => setShowAdmin(!showAdmin)}
-                      className="ml-4 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors"
-                      data-focusable="true"
-                      tabIndex={-1}
-                    >
-                      {showAdmin ? "Back to Content" : "Admin"}
+                      &larr;
                     </button>
                   )}
-                  {isTizen && !streamUrl && (
-                    <button
-                      onClick={handleClearWatched}
-                      className="ml-4 bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors"
-                      data-focusable="true"
-                      tabIndex={-1}
-                    >
-                      Clear History
-                    </button>
-                  )}
+                  <img src="stalker-logo.svg" width={180} />
+                  <h1 className="text-xl sm:text-l md:text-l font-bold text-white tracking-wider">
+                    {currentTitle}
+                  </h1>
                 </div>
-              )}
-            </div>
-          </header>
 
-          <main>
-            {showAdmin ? (
-              <Admin />
-            ) : (
-              <>
-                {/* --- CHANGE 1: Spinner now ONLY shows on *initial* load (no items) --- */}
-                {loading && items.length === 0 && <LoadingSpinner />}
-
-                {/* --- This error block is unchanged --- */}
-                {error && (
-                  <div className="text-center">
-                    <p className="text-red-500">{error}</p>
-                    <button
-                      onClick={() => fetchData(context)}
-                      className="mt-4 bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 transition-colors"
-                      data-focusable="true"
-                      tabIndex={-1}
-                    >
-                      Reload
-                    </button>
+                {!streamUrl && (
+                  <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
+                    <div className="flex justify-center space-x-2 bg-gray-900/60 p-1 rounded-full w-full sm:w-auto">
+                      <button
+                        onClick={() => handleContentTypeChange("movie")}
+                        className={`py-2 px-4 sm:px-6 rounded-full font-semibold text-sm transition-colors duration-300 w-full ${
+                          contentType === "movie"
+                            ? "bg-blue-600 text-white"
+                            : "text-gray-300 hover:bg-gray-700/50"
+                        }`}
+                        data-focusable="true"
+                        tabIndex={-1}
+                      >
+                        Movies
+                      </button>
+                      <button
+                        onClick={() => handleContentTypeChange("series")}
+                        className={`py-2 px-4 sm:px-6 rounded-full font-semibold text-sm transition-colors duration-300 w-full ${
+                          contentType === "series"
+                            ? "bg-blue-600 text-white"
+                            : "text-gray-300 hover:bg-gray-700/50"
+                        }`}
+                        data-focusable="true"
+                        tabIndex={-1}
+                      >
+                        Series
+                      </button>
+                      <button
+                        onClick={() => handleContentTypeChange("tv")}
+                        className={`py-2 px-4 sm:px-6 rounded-full font-semibold text-sm transition-colors duration-300 w-full ${
+                          contentType === "tv"
+                            ? "bg-blue-600 text-white"
+                            : "text-gray-300 hover:bg-gray-700/50"
+                        }`}
+                        data-focusable="true"
+                        tabIndex={-1}
+                      >
+                        TV
+                      </button>
+                    </div>
+                    <form onSubmit={handleSearch} className="w-full sm:w-auto">
+                      <input
+                        type="search"
+                        name="search"
+                        key={context.search}
+                        defaultValue={context.search}
+                        placeholder="Search titles..."
+                        className="bg-gray-900/50 text-white rounded-full py-2 px-4 w-full sm:w-64 focus:outline-none focus:ring-2 focus:ring-blue-500 border border-gray-700/80"
+                        data-focusable="true"
+                        readOnly={isTizen && !isSearchActive}
+                        onClick={() => {
+                          if (isTizen) setIsSearchActive(true);
+                        }}
+                        onBlur={() => {
+                          if (isTizen) setIsSearchActive(false);
+                        }}
+                      />
+                    </form>
+                    {!isTizen && (
+                      <button
+                        onClick={() => setShowAdmin(!showAdmin)}
+                        className="ml-4 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors"
+                        data-focusable="true"
+                        tabIndex={-1}
+                      >
+                        {showAdmin ? "Back to Content" : "Admin"}
+                      </button>
+                    )}
+                    {isTizen && !streamUrl && (
+                      <button
+                        onClick={handleClearWatched}
+                        className="ml-4 bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors"
+                        data-focusable="true"
+                        tabIndex={-1}
+                      >
+                        Clear History
+                      </button>
+                    )}
                   </div>
                 )}
+              </div>
+            </header>
 
-                {/* --- CHANGE 2: Content (Player or Grid) now renders *even if loading* --- */}
-                {/* This prevents the flicker, as the grid no longer disappears. */}
+            <main>
+              {showAdmin ? (
+                <Admin />
+              ) : (
+                <>
+                  {/* --- CHANGE 1: Spinner now ONLY shows on *initial* load (no items) --- */}
+                  {loading && items.length === 0 && <LoadingSpinner />}
 
-                {/* --- Video Player (unchanged logic) --- */}
-                {!error && streamUrl ? (
-                  <VideoPlayer
-                    streamUrl={streamUrl}
-                    rawStreamUrl={rawStreamUrl}
-                    onBack={handleBack}
-                    itemId={currentItemId}
-                    context={context}
-                    contentType={contentType}
-                    mediaId={
-                      contentType === "movie"
-                        ? currentSeriesItem?.id || playingMovieId
-                        : context.movieId
-                    }
-                    item={currentSeriesItem || currentItem}
-                    seriesItem={currentSeriesItem}
-                  />
-                ) : (
-                  // --- Content Grid (now visible during load, if !error) ---
-                  !error && (
-                    <>
-                      {context.category === null && !context.search && (
-                        <ContinueWatching onClick={handleItemClick} />
-                      )}
+                  {/* --- This error block is unchanged --- */}
+                  {error && (
+                    <div className="text-center">
+                      <p className="text-red-500">{error}</p>
+                      <button
+                        onClick={() => fetchData(context)}
+                        className="mt-4 bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 transition-colors"
+                        data-focusable="true"
+                        tabIndex={-1}
+                      >
+                        Reload
+                      </button>
+                    </div>
+                  )}
 
-                      <div
-                        className={`
+                  {/* --- CHANGE 2: Content (Player or Grid) now renders *even if loading* --- */}
+                  {/* This prevents the flicker, as the grid no longer disappears. */}
+
+                  {/* --- Video Player (unchanged logic) --- */}
+                  {!error && streamUrl ? (
+                    <VideoPlayer
+                      streamUrl={streamUrl}
+                      rawStreamUrl={rawStreamUrl}
+                      onBack={handleBack}
+                      itemId={currentItemId}
+                      context={context}
+                      contentType={contentType}
+                      mediaId={
+                        contentType === "movie"
+                          ? currentSeriesItem?.id || playingMovieId
+                          : context.movieId
+                      }
+                      item={currentSeriesItem || currentItem}
+                      seriesItem={currentSeriesItem}
+                    />
+                  ) : (
+                    // --- Content Grid (now visible during load, if !error) ---
+                    !error && (
+                      <>
+                        {context.category === null && !context.search && (
+                          <ContinueWatching onClick={handleItemClick} />
+                        )}
+
+                        <div
+                          className={`
                           ${
-                            isEpisodeList && !isTizen // <-- Check for episode list AND not Tizen
-                              ? "flex flex-col gap-4" // Web: Vertical list
-                              : isEpisodeList // Tizen: Grid
-                              ? "grid grid-cols-1 md:grid-cols-2 gap-4" 
-                              : "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6"
-                          }
-                          ${
-                            /* --- CHANGE 3: Dim grid if loading a *new* category (page 1) --- */ ""
+                            contentType === "tv" // TV List
+                              ? "channel-list flex flex-col gap-1"
+                              : isEpisodeList && !isTizen // Episode List (Web)
+                              ? "flex flex-col gap-4"
+                              : isEpisodeList // Episode List (Tizen)
+                              ? "grid grid-cols-1 md:grid-cols-2 gap-4"
+                              : "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6" // Movie/Series Grid
                           }
                           ${
                             loading && items.length > 0 && context.page === 1
@@ -737,66 +949,79 @@ export default function App() {
                               : "opacity-100"
                           }
                         `}
-                      >
-                        {items?.map((item) =>
-                          isEpisodeList ? (
-                            <EpisodeCard
-                              key={item.id}
-                              item={item}
-                              onClick={handleItemClick}
-                            />
-                          ) : (
-                            <MediaCard
-                              key={item.id}
-                              item={item}
-                              onClick={handleItemClick}
-                            />
-                          )
-                        )}
-                      </div>
-
-                      {/* --- No content messages (now must check !loading) --- */}
-                      {!items?.length && !loading && !context.search && (
-                        <p className="text-center text-gray-400 mt-10">
-                          No content found.
-                        </p>
-                      )}
-                      {!items?.length && !loading && context.search && (
-                        <p className="text-center text-gray-400 mt-10">
-                          No results found for "{context.search}".
-                        </p>
-                      )}
-
-                      {/* --- Pagination & Retry Logic (from previous answers) --- */}
-                      {/* This block correctly handles the spinner for *infinite scrolling* */}
-                      {(totalItemsCount === 0 ||
-                        items.length < totalItemsCount) && (
-                        <div className="col-span-full">
-                          {loading && items.length > 0 && <LoadingSpinner />}
-
-                          {!loading && paginationError && (
-                            <div className="text-center py-8">
-                              <p className="text-red-500">{paginationError}</p>
-                              <button
-                                onClick={() => handlePageChange(1)}
-                                className="mt-4 bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 transition-colors"
-                                data-focusable="true"
-                                tabIndex={-1}
-                              >
-                                Retry
-                              </button>
-                            </div>
+                        >
+                          {items?.map((item) =>
+                            contentType === "tv" ? (
+                              <TvChannelListCard
+                                key={item.id}
+                                item={item}
+                                onClick={handleItemClick}
+                                isFocused={false} // Focus is handled by App.tsx's useEffect
+                              />
+                            ) : isEpisodeList ? (
+                              <EpisodeCard
+                                key={item.id}
+                                item={item}
+                                onClick={handleItemClick}
+                              />
+                            ) : (
+                              <MediaCard
+                                key={item.id}
+                                item={item}
+                                onClick={handleItemClick}
+                              />
+                            )
                           )}
                         </div>
-                      )}
-                    </>
-                  )
-                )}
-              </>
-            )}
-          </main>
+
+                        {/* --- No content messages (now must check !loading) --- */}
+                        {!items?.length && !loading && !context.search && (
+                          <p className="text-center text-gray-400 mt-10">
+                            No content found.
+                          </p>
+                        )}
+                        {!items?.length && !loading && context.search && (
+                          <p className="text-center text-gray-400 mt-10">
+                            No results found for "{context.search}".
+                          </p>
+                        )}
+
+                        {/* --- Pagination & Retry Logic (from previous answers) --- */}
+                        {/* This block correctly handles the spinner for *infinite scrolling* */}
+                        {(totalItemsCount === 0 ||
+                          items.length < totalItemsCount) &&
+                          contentType !== "tv" && (
+                            <div className="col-span-full">
+                              {loading && items.length > 0 && (
+                                <LoadingSpinner />
+                              )}
+
+                              {!loading && paginationError && (
+                                <div className="text-center py-8">
+                                  <p className="text-red-500">
+                                    {paginationError}
+                                  </p>
+                                  <button
+                                    onClick={() => handlePageChange(1)}
+                                    className="mt-4 bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 transition-colors"
+                                    data-focusable="true"
+                                    tabIndex={-1}
+                                  >
+                                    Retry
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                      </>
+                    )
+                  )}
+                </>
+              )}
+            </main>
+          </div>
         </div>
-      </div>
+      )}
       <ToastContainer />
     </>
   );
