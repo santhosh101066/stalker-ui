@@ -173,7 +173,16 @@ export default function App() {
 
   useEffect(() => {
     fetchData(initialContext);
-  }, [fetchData]);
+    if (initialContext.contentType === 'tv') {
+      loadEpgData();
+      const lastPlayedId = localStorage.getItem('lastPlayedTvChannelId');
+      if (lastPlayedId) {
+        setPlayLastTvChannel(lastPlayedId); // Set trigger
+      } else {
+        setPlayLastTvChannel('__play_first__'); // Set trigger for first channel
+      }
+    }
+  }, [fetchData, loadEpgData]);
 
   const handleItemClick = useCallback(
     async (item: MediaItem) => {
@@ -721,6 +730,8 @@ export default function App() {
       } else {
         setPlayLastTvChannel('__play_first__'); // Set trigger to play first channel
       }
+    }else {
+      setPlayLastTvChannel(null); // <-- ADD THIS ELSE BLOCK
     }
   };
   useEffect(() => {

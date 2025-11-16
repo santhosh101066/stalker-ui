@@ -6,7 +6,7 @@ export const URL_PATHS = {
 
 export const BASE_URL = `${URL_PATHS.HOST}/api`;
 
-interface ApiResponse<T = any> {
+export interface ApiResponse<T = any> {
   data: T;
 }
 
@@ -90,4 +90,5 @@ export const api: Api = {
       throw error;
     }
   },
+  
 };
