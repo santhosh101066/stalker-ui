@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import type { EPG_List, MediaItem } from '../types';
+import type { EPG_List, MediaItem, ChannelGroup } from '../types';
 import { api, type ApiResponse } from './api';
 
 export const API_PATHS = {
@@ -8,8 +8,10 @@ export const API_PATHS = {
   MOVIE_LINK: '/v2/movie-link',
   CHANNELS: '/v2/channels', // Added
   CHANNEL_LINK: '/v2/channel-link', // Added
-  EPG: '/v2/epg'
+  EPG: '/v2/epg',
+  CHANNEL_GROUPS: '/v2/groups',
 };
+
 export interface PaginatedResponse<T> {
   data: T[];
   page: number;
@@ -36,7 +38,6 @@ export const getSeries = async (
 
   return response;
 };
-
 // Added getChannels function
 export const getChannels = async (): Promise<PaginatedResponse<MediaItem>> => {
   const response = (await api.get(API_PATHS.CHANNELS)).data;
@@ -51,13 +52,29 @@ export const getChannels = async (): Promise<PaginatedResponse<MediaItem>> => {
   };
 };
 
+export const getChannelGroups = async (all: boolean = false): Promise<PaginatedResponse<ChannelGroup>> => {
+  const params: Record<string, any> = {};
+  if (all) {
+    params.all = 'true';
+  }
+  
+  const response = (await api.get(API_PATHS.CHANNEL_GROUPS, { params })).data;
+  if (!response || !Array.isArray(response)) {
+    throw new Error('No response data received from channel groups API.');
+  }
+  // Wrap the array in a PaginatedResponse for consistency
+  return {
+    data: response,
+    page: 1,
+    total_items: response.length,
+  };
+};
+
 // Renamed getUrl to getMovieUrl and added getChannelUrl
 export const getMovieUrl = async (params: Record<string, any> = {}) =>
   (await api.get(API_PATHS.MOVIE_LINK, { params })).data;
-
 export const getChannelUrl = async (cmd: string) =>
   (await api.get(API_PATHS.CHANNEL_LINK, { params: { cmd } })).data;
-
 export const getEPG = async (): Promise<ApiResponse<{
   timestamp: number;
   data: Record<string, EPG_List[]>;

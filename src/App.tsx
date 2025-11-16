@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   getChannels,
@@ -5,13 +6,14 @@ import {
   getSeries,
   getMovieUrl,
   getEPG,
+  getChannelGroups,
 } from './api/services';
 import LoadingSpinner from './components/LoadingSpinner';
 import MediaCard from './components/MediaCard';
 import EpisodeCard from './components/EpisodeCard';
 import VideoPlayer from './components/VideoPlayer';
 import ContinueWatching from './components/ContinueWatching';
-import type { MediaItem, ContextType, EPG_List } from './types';
+import type { MediaItem, ContextType, EPG_List, ChannelGroup } from './types';
 import { BASE_URL, URL_PATHS } from './api/api';
 import { toast, ToastContainer } from 'react-toastify';
 import type { PaginatedResponse } from './api/services';
@@ -20,12 +22,17 @@ import './App.css';
 import Admin from './components/Admin';
 import TvChannelListCard from './components/TvChannelListCard';
 
-
-
 const PREFERRED_CONTENT_TYPE_KEY = 'preferredContentType';
 
-const getInitialState = (): { initialType: 'movie' | 'series' | 'tv', initialTitle: string } => {
-  const savedType = localStorage.getItem(PREFERRED_CONTENT_TYPE_KEY) as 'movie' | 'series' | 'tv' | null;
+const getInitialState = (): {
+  initialType: 'movie' | 'series' | 'tv';
+  initialTitle: string;
+} => {
+  const savedType = localStorage.getItem(PREFERRED_CONTENT_TYPE_KEY) as
+    | 'movie'
+    | 'series'
+    | 'tv'
+    | null;
   if (savedType === 'series') {
     return { initialType: 'series', initialTitle: 'Series' };
   }
@@ -50,7 +57,6 @@ const initialContext: ContextType = {
 };
 // --- Main Application Component ---
 export default function App() {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const isTizen = !!(window as any).tizen; // Detect Tizen environment
 
   const [context, setContext] = useState<ContextType>(initialContext);
@@ -66,12 +72,10 @@ export default function App() {
     initialType
   ); // 'movie' or 'series'
   const [showAdmin, setShowAdmin] = useState(false);
-  const [currentItemId, setCurrentItemId] = useState<string | null>(null);
   const [currentItem, setCurrentItem] = useState<MediaItem | null>(null);
   const [currentSeriesItem, setCurrentSeriesItem] = useState<MediaItem | null>(
     null
   );
-  const [playingMovieId, setPlayingMovieId] = useState<string | null>(null);
   const [isSearchActive, setIsSearchActive] = useState(false);
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
   const [playLastTvChannel, setPlayLastTvChannel] = useState<string | null>(
@@ -80,6 +84,16 @@ export default function App() {
   const channelChangeTimer = useRef<ReturnType<typeof setTimeout> | null>(null); // <-- ADD THIS
   const [previewChannel, setPreviewChannel] = useState<MediaItem | null>(null); // <-- ADD THIS
   const [epgData, setEpgData] = useState<Record<string, EPG_List[]>>({});
+  const [channelGroups, setChannelGroups] = useState<ChannelGroup[]>([]);
+  const [favorites, setFavorites] = useState<string[]>(() => {
+    try {
+      const storedFavorites = localStorage.getItem('favorite_channels');
+      return storedFavorites ? JSON.parse(storedFavorites) : [];
+    } catch (e) {
+      console.error('Failed to parse favorites from localStorage', e);
+      return [];
+    }
+  });
 
   const isFetchingMore = useRef(false);
 
@@ -104,9 +118,10 @@ export default function App() {
       setLoading(true);
       setError(null);
       setPaginationError(null);
+
       if (newContext.page === 1) {
         setItems([]);
-        setTotalItemsCount(0); // Reset total on a new search or page 1
+        setTotalItemsCount(0);
       }
 
       try {
@@ -122,8 +137,15 @@ export default function App() {
             seasonId: newContext.seasonId,
           };
           response = await getMedia(params);
+          setItems((prevItems) =>
+            newContext.page === 1
+              ? response.data
+              : [...prevItems, ...response.data]
+          );
+          if (response.total_items) {
+            setTotalItemsCount(response.total_items);
+          }
         } else if (currentContentType === 'series') {
-          // This is series mode
           if (newContext.movieId) {
             response = await getSeries({ movieId: newContext.movieId });
           } else if (newContext.seasonId) {
@@ -141,26 +163,40 @@ export default function App() {
             };
             response = await getSeries(params);
           }
+          setItems((prevItems) =>
+            newContext.page === 1
+              ? response.data
+              : [...prevItems, ...response.data]
+          );
+          if (response.total_items) {
+            setTotalItemsCount(response.total_items);
+          }
         } else {
-          response = await getChannels();
+          // --- NEW 'tv' LOGIC ---
+          // Fetch ALL channels and ALL groups simultaneously
+          const [channelResponse, groupResponse] = await Promise.all([
+            getChannels(),
+            getChannelGroups(), // Pass true to get all groups for the player
+          ]);
+
+          const allChannels = channelResponse.data || [];
+          const allGroups = groupResponse.data || [];
+
+          setItems(allChannels); // Set items to all channels
+          setTotalItemsCount(allChannels.length);
+          setChannelGroups([
+            { id: 'fav', title: 'Favorites' },
+            { id: 'all', title: 'All Channels' },
+            ...allGroups,
+          ]);
         }
-        const data = response.data || [];
-        setItems((prevItems) =>
-          newContext.page === 1 ? data : [...prevItems, ...data]
-        );
+
         setContext(newContext);
-        if (response.total_items) {
-          setTotalItemsCount(response.total_items);
-        }
       } catch (err: unknown) {
         console.error('Failed to fetch data:', err);
-
-        // --- START: RETRY LOGIC ---
         if (newContext.page > 1) {
-          // Failure was on a *subsequent* page
           setPaginationError('Could not load more content. Please try again.');
         } else {
-          // Failure was on the *first* page
           setError('Could not load content. Please try again later.');
         }
       } finally {
@@ -168,8 +204,27 @@ export default function App() {
         isFetchingMore.current = false;
       }
     },
-    [contentType]
+    [contentType] // Remove getGroups from dependency array
   );
+
+  const toggleFavorite = useCallback((item: MediaItem) => {
+    if (!item || !item.id) return;
+
+    setFavorites((prevFavorites) => {
+      const newFavorites = new Set(prevFavorites);
+      if (newFavorites.has(item.id)) {
+        newFavorites.delete(item.id);
+        toast.info(`Removed ${item.name || 'Channel'} from favorites`);
+      } else {
+        newFavorites.add(item.id);
+        toast.success(`Added ${item.name || 'Channel'} to favorites`);
+      }
+
+      const favoritesArray = Array.from(newFavorites);
+      localStorage.setItem('favorite_channels', JSON.stringify(favoritesArray));
+      return favoritesArray;
+    });
+  }, []);
 
   useEffect(() => {
     fetchData(initialContext);
@@ -186,6 +241,9 @@ export default function App() {
 
   const handleItemClick = useCallback(
     async (item: MediaItem) => {
+      if (contentType === 'tv' && currentItem?.id === item.id) {
+        return;
+      }
       if (channelChangeTimer.current) {
         clearTimeout(channelChangeTimer.current);
         channelChangeTimer.current = null;
@@ -199,11 +257,9 @@ export default function App() {
 
       const isInsideMovieCategory =
         contentType === 'movie' && context.category !== null;
-      console.log(item, isInsideMovieCategory);
 
       if (item.is_series == 1) {
         setCurrentSeriesItem(item);
-        console.log(item);
 
         fetchData({
           ...initialContext,
@@ -261,7 +317,6 @@ export default function App() {
               if (typeof cmd === 'string') {
                 setRawStreamUrl(cmd);
                 setStreamUrl(`${BASE_URL}/proxy?url=${btoa(cmd)}`);
-                setCurrentItemId(item.id);
               } else {
                 throw new Error('Episode stream URL (cmd) not found.');
               }
@@ -274,12 +329,14 @@ export default function App() {
         } catch (err: unknown) {
           console.error(err);
           setError('Could not fetch stream URL.');
+          setCurrentItem(null);
           setHistory((prev) => prev.slice(0, -1));
         } finally {
           setLoading(false);
         }
       } else if (isInsideMovieCategory || item.is_playable_movie) {
         setLoading(true);
+        setCurrentItem(item);
         try {
           // --- FIX: Destructure the 'data' property from the response ---
           const response = await getMedia({
@@ -290,8 +347,6 @@ export default function App() {
 
           if (files && files.length > 0) {
             const movieFile = files[0];
-            setPlayingMovieId(item.id);
-            setCurrentItem(item);
             const linkData = await getMovieUrl({ id: movieFile.id });
 
             if (
@@ -302,7 +357,6 @@ export default function App() {
               const rawUrl = linkData.js.cmd;
               setRawStreamUrl(rawUrl);
               setStreamUrl(`${BASE_URL}/proxy?url=${btoa(rawUrl)}`);
-              setCurrentItemId(movieFile.id);
             } else {
               throw new Error('Movie stream URL not found.');
             }
@@ -312,6 +366,7 @@ export default function App() {
         } catch (err: unknown) {
           console.error(err);
           setError('Could not fetch stream URL.');
+          setCurrentItem(null);
           setHistory((prev) => prev.slice(0, -1));
         } finally {
           setLoading(false);
@@ -334,7 +389,6 @@ export default function App() {
 
         localStorage.setItem('lastPlayedTvChannelId', item.id);
         setCurrentItem(item);
-        setCurrentItemId(item.id);
 
         // Set both URLs. The player will pick one.
         // We don't need to btoa() or use /proxy because /live.m3u8 IS the proxy.
@@ -349,7 +403,7 @@ export default function App() {
         });
       }
     },
-    [contentType, context, fetchData, focusedIndex]
+    [contentType, context, currentItem, fetchData, focusedIndex]
   );
 
   const debounceChannelChange = useCallback(
@@ -395,10 +449,16 @@ export default function App() {
   );
 
   const handleBack = useCallback(() => {
+    if (channelChangeTimer.current) {
+      clearTimeout(channelChangeTimer.current);
+      channelChangeTimer.current = null;
+      setPreviewChannel(null);
+      return; // Just cancel the timer, don't go back
+    }
     if (streamUrl) {
       setStreamUrl(null);
       setRawStreamUrl(null);
-      setCurrentItemId(null);
+      setCurrentItem(null);
       return;
     }
 
@@ -415,6 +475,21 @@ export default function App() {
       setFocusedIndex(lastContext.focusedIndex ?? 0);
     }
   }, [streamUrl, history, fetchData]);
+
+  const closePlayer = useCallback(() => {
+    if (channelChangeTimer.current) {
+      clearTimeout(channelChangeTimer.current);
+      channelChangeTimer.current = null;
+      setPreviewChannel(null);
+      return; // Just cancel the timer, don't go back
+    }
+    if (streamUrl) {
+      setStreamUrl(null);
+      setRawStreamUrl(null);
+      setCurrentItem(null);
+      return;
+    }
+  }, [streamUrl]);
 
   const handlePageChange = useCallback(
     (direction: number) => {
@@ -439,7 +514,7 @@ export default function App() {
 
       fetchData({ ...context, page: newPage });
     },
-    [loading, totalItemsCount, items.length, context, fetchData, contentType]
+    [loading, totalItemsCount, items?.length, context, fetchData, contentType]
   );
   const handleChannelSelect = useCallback(
     (item: MediaItem) => {
@@ -541,6 +616,87 @@ export default function App() {
       }
     },
     [handlePageChange, contentType]
+  );
+
+  useEffect(() => {
+    if (isTizen) {
+      const keysToRegister = [
+        'MediaPlay',
+        'MediaPause',
+        'MediaPlayPause', // Catches the combined Play/Pause button
+        'MediaStop',
+        'MediaFastForward',
+        'MediaRewind',
+        'ChannelUp',
+        'ChannelDown',
+        'ColorF0Red',
+        'ColorF1Green',
+        'ColorF2Yellow',
+        'ColorF3Blue',
+      ];
+
+      try {
+        // Tizen API recommends registering one by one in a loop
+        // in case one of them fails
+        keysToRegister.forEach((key) => {
+          try {
+            (window as any).tizen.tvinputdevice.registerKey(key);
+            console.log(`Key registered: ${key}`);
+          } catch (e: any) {
+            console.error(`Failed to register key "${key}": ${e.message}`);
+          }
+        });
+      } catch (e: any) {
+        console.error('Error registering keys: ' + e.message);
+      }
+
+      // Return a cleanup function to unregister keys
+      return () => {
+        try {
+          keysToRegister.forEach((key) => {
+            (window as any).tizen.tvinputdevice.unregisterKey(key);
+          });
+          console.log('Media and Color keys unregistered.');
+        } catch (e: any) {
+          console.error('Error unregistering keys: ' + e.message);
+        }
+      };
+    }
+  }, [isTizen]);
+
+  const handleContentTypeChange = useCallback(
+    (type: 'movie' | 'series' | 'tv') => {
+      if (type === contentType) return;
+      const newTitle =
+        type === 'movie' ? 'Movies' : type === 'series' ? 'Series' : 'TV';
+      const newContext = {
+        ...initialContext,
+        parentTitle: newTitle,
+        category: null,
+        contentType: type,
+      };
+      if (type === 'tv') {
+        setChannelGroups([]); // Clear groups *before* fetching
+      }
+      setContentType(type);
+      localStorage.setItem(PREFERRED_CONTENT_TYPE_KEY, type);
+      setHistory([]);
+      setStreamUrl(null);
+      setRawStreamUrl(null);
+      fetchData(newContext, type);
+      if (type === 'tv') {
+        loadEpgData();
+        const lastPlayedId = localStorage.getItem('lastPlayedTvChannelId');
+        if (lastPlayedId) {
+          setPlayLastTvChannel(lastPlayedId); // Set trigger to play last channel
+        } else {
+          setPlayLastTvChannel('__play_first__'); // Set trigger to play first channel
+        }
+      } else {
+        setPlayLastTvChannel(null); // <-- ADD THIS ELSE BLOCK
+      }
+    },
+    [contentType, fetchData, loadEpgData]
   );
 
   useEffect(() => {
@@ -662,6 +818,23 @@ export default function App() {
           e.preventDefault();
           handleBack();
           break;
+
+        // --- ADDED TIZEN COLOR KEY STUBS ---
+        case 403:
+          handleClearWatched();
+          break;
+        case 404: // ColorF1Green
+          handleContentTypeChange('movie');
+          break;
+        case 405: // ColorF2Yellow
+          console.log('Yellow button pressed');
+          break;
+        case 406: // ColorF3Blue
+          console.log('Blue button pressed');
+          handleContentTypeChange('tv');
+          break;
+        // --- END OF ADDED CASES ---
+
         default:
           break;
       }
@@ -679,7 +852,9 @@ export default function App() {
     isSearchActive,
     context,
     handlePageChange,
-    checkAndFetchNextPage, // <-- ADD THIS
+    checkAndFetchNextPage,
+    handleClearWatched,
+    handleContentTypeChange,
   ]);
 
   const handleSearch = (e: React.FormEvent<HTMLFormElement>) => {
@@ -706,34 +881,6 @@ export default function App() {
     });
   };
 
-  const handleContentTypeChange = (type: 'movie' | 'series' | 'tv') => {
-    if (type === contentType) return;
-    const newTitle =
-      type === 'movie' ? 'Movies' : type === 'series' ? 'Series' : 'TV';
-    const newContext = {
-      ...initialContext,
-      parentTitle: newTitle,
-      category: null,
-      contentType: type,
-    };
-    setContentType(type);
-    localStorage.setItem(PREFERRED_CONTENT_TYPE_KEY, type);
-    setHistory([]);
-    setStreamUrl(null);
-    setRawStreamUrl(null);
-    fetchData(newContext, type);
-    if (type === 'tv') {
-      loadEpgData(); 
-      const lastPlayedId = localStorage.getItem('lastPlayedTvChannelId');
-      if (lastPlayedId) {
-        setPlayLastTvChannel(lastPlayedId); // Set trigger to play last channel
-      } else {
-        setPlayLastTvChannel('__play_first__'); // Set trigger to play first channel
-      }
-    }else {
-      setPlayLastTvChannel(null); // <-- ADD THIS ELSE BLOCK
-    }
-  };
   useEffect(() => {
     if (
       playLastTvChannel &&
@@ -759,7 +906,6 @@ export default function App() {
   useEffect(() => {
     const handleScroll = () => {
       // Don't run this logic on Tizen
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const isTizen = !!(window as any).tizen;
       if (isTizen || contentType === 'tv') return;
 
@@ -796,14 +942,16 @@ export default function App() {
         <VideoPlayer
           streamUrl={streamUrl}
           rawStreamUrl={rawStreamUrl}
-          onBack={handleBack}
-          itemId={currentItemId}
+          onBack={closePlayer}
+          itemId={currentItem?.id || null}
           context={context}
           contentType={contentType}
           mediaId={
-            contentType === 'movie'
-              ? currentSeriesItem?.id || playingMovieId
-              : context.movieId
+            contentType === 'series'
+              ? context.movieId // This is the Series ID
+              : contentType === 'movie' && currentItem
+                ? currentItem.id // This is the Movie ID
+                : null
           }
           item={currentSeriesItem || currentItem}
           seriesItem={currentSeriesItem}
@@ -815,6 +963,9 @@ export default function App() {
           onPrevChannel={handlePrevChannel}
           onChannelSelect={handleChannelSelect}
           epgData={epgData}
+          channelGroups={channelGroups}
+          favorites={favorites} // <-- ADD THIS
+          toggleFavorite={toggleFavorite}
         />
       ) : (
         <div className="min-h-screen font-sans text-gray-200">
@@ -953,17 +1104,22 @@ export default function App() {
                       streamUrl={streamUrl}
                       rawStreamUrl={rawStreamUrl}
                       onBack={handleBack}
-                      itemId={currentItemId}
+                      itemId={currentItem?.id || null}
                       context={context}
                       contentType={contentType}
                       mediaId={
-                        contentType === 'movie'
-                          ? currentSeriesItem?.id || playingMovieId
-                          : context.movieId
+                        contentType === 'series'
+                          ? context.movieId // This is the Series ID
+                          : contentType === 'movie' && currentItem
+                            ? currentItem.id // This is the Movie ID
+                            : null
                       }
                       item={currentSeriesItem || currentItem}
                       seriesItem={currentSeriesItem}
                       epgData={epgData}
+                      channelGroups={channelGroups}
+                      favorites={favorites}
+                      toggleFavorite={toggleFavorite}
                     />
                   ) : (
                     // --- Content Grid (now visible during load, if !error) ---

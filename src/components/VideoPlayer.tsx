@@ -5,7 +5,7 @@ import Hls, { Level, type MediaPlaylist } from 'hls.js';
 import { toast } from 'react-toastify';
 import { URL_PATHS } from '../api/api'; // Import URL_PATHS
 
-import type { ContextType, EPG_List, MediaItem } from '../types';
+import type { ChannelGroup, ContextType, EPG_List, MediaItem } from '../types';
 import TvChannelList from './TvChannelList';
 
 type VideoFitMode = 'contain' | 'cover' | 'fill';
@@ -28,6 +28,9 @@ interface VideoPlayerProps {
   onChannelSelect?: (item: MediaItem) => void;
   previewChannelInfo?: MediaItem | null;
   epgData: Record<string, EPG_List[]>;
+  channelGroups?: ChannelGroup[];
+  favorites: string[]; // <-- ADD THIS
+  toggleFavorite: (item: MediaItem) => void;
 }
 
 const useLiveClock = () => {
@@ -74,6 +77,9 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   onPrevChannel,
   onChannelSelect,
   epgData,
+  channelGroups,
+  favorites, // <-- ADD THIS
+  toggleFavorite,
 }) => {
   const isTizen = !!(window as any).tizen;
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -124,13 +130,12 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [nextProgram, setNextProgram] = useState<EPG_List | null>(null);
   const [programProgress, setProgramProgress] = useState(0);
 
-  console.log(currentProgram, nextProgram, epgData);
-
   const [fitMode, setFitMode] = useState<VideoFitMode>(() => {
     return (localStorage.getItem('videoFitMode') as VideoFitMode) || 'contain';
   });
 
   const liveTime = useLiveClock();
+  const isFavorite = channelInfo ? favorites.includes(channelInfo.id) : false;
 
   const showSettingsButton =
     videoLevels.length > 1 ||
@@ -675,6 +680,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
           break;
         case 415: // PLAY
         case 19: // PAUSE
+        case 10252: // PLAY/PAUSE (Tizen)
           e.preventDefault();
           togglePlayPause();
           break;
@@ -694,6 +700,28 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
             handleSkipButtonClick(30);
           }
           break;
+        // --- ADD THESE NEW CASES ---
+        case 427: // ChannelUp (Tizen)
+          e.preventDefault();
+          if (contentType === 'tv') {
+            onPrevChannel?.();
+          }
+          break;
+        case 428: // ChannelDown (Tizen)
+          e.preventDefault();
+          if (contentType === 'tv') {
+            onNextChannel?.();
+          }
+          break;
+        // --- END NEW CASES ---
+        case 405: // ColorF2Yellow
+          e.preventDefault();
+
+          if (contentType === 'tv' && channelInfo) {
+            toggleFavorite(channelInfo);
+          }
+          break;
+
         case 0: // BACK on some devices
         case 10009: // RETURN on Tizen
         case 8: // BACK
@@ -739,12 +767,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         case 10009: // RETURN on Tizen
         case 8: // BACK
           e.preventDefault();
-          if (activeSettingsMenu !== 'main') {
-            setActiveSettingsMenu('main');
-            setFocusedIndex(0); // Reset focus to first item in main menu
-          } else {
-            setIsSettingsMenuOpen(false);
-          }
+          handleBack();
           break;
         default:
           break;
@@ -758,10 +781,12 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         e.stopPropagation();
         return;
       }
-
+      const wereControlsHidden = !controlsVisible;
       showControlsAndCursor();
       e.stopPropagation();
-
+      if (wereControlsHidden && e.keyCode !== 405) {
+        return;
+      }
       if (isSettingsMenuOpen) {
         handleSettingsMenuKeyDown(e);
       } else {
@@ -787,7 +812,13 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     contentType,
     onPrevChannel,
     onNextChannel,
+    controlsVisible,
+    channelInfo,
+    toggleFavorite,
   ]);
+
+  console.log(currentProgram, nextProgram);
+
   useEffect(() => {
     if (showChannelList || isSettingsMenuOpen) return;
     const focusable = Array.from(
@@ -967,6 +998,32 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     });
   };
 
+  const handleVideoClick = useCallback(() => {
+    // 1. Check if controls were hidden
+    const wereControlsHidden = !controlsVisible;
+
+    // 2. Always show controls (or reset timer)
+    showControlsAndCursor();
+
+    // 3. If controls were visible, then toggle play/pause
+    if (!wereControlsHidden) {
+      togglePlayPause();
+    }
+  }, [controlsVisible, showControlsAndCursor, togglePlayPause]);
+
+  const toggleChannelList = useCallback(() => {
+    // Check if controls were hidden *before* showControlsAndCursor was called
+    const wereControlsHidden = !controlsVisible;
+
+    // Always show controls
+    showControlsAndCursor();
+
+    // Only open the list if controls were already visible
+    if (!wereControlsHidden) {
+      setShowChannelList(true);
+    }
+  }, [controlsVisible, showControlsAndCursor]);
+
   const toggleSettingsMenu = () => {
     if (isSettingsMenuOpen) {
       setIsSettingsMenuOpen(false);
@@ -1041,6 +1098,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
           onChannelSelect && (
             <TvChannelList
               channels={channels}
+              channelGroups={channelGroups || []}
               onChannelSelect={(item) => {
                 if (onChannelSelect) onChannelSelect(item);
                 setShowChannelList(false);
@@ -1056,7 +1114,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
           autoPlay
           playsInline
           className="h-full w-full"
-          onClick={togglePlayPause}
+          onClick={handleVideoClick}
           onDoubleClick={toggleFullscreen}
         />
 
@@ -1196,10 +1254,10 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
                   {/* Current Program */}
                   <div className="flex items-center justify-between rounded-sm bg-red-700 bg-opacity-80 p-1.5 px-3">
                     <span className="truncate font-semibold">
-                      {previewChannelInfo
-                        ? previewChannelInfo.name
-                        : currentProgram
-                          ? currentProgram.name
+                      {currentProgram
+                        ? currentProgram.name
+                        : previewChannelInfo
+                          ? previewChannelInfo.name
                           : channelInfo?.name || 'Current Program'}
                     </span>
                     <span className="ml-2 flex-shrink-0 text-sm">
@@ -1278,7 +1336,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
                     </button>
                     <button
                       data-focusable="true"
-                      onClick={() => setShowChannelList(true)}
+                      onClick={toggleChannelList}
                       className="text-white hover:text-blue-400"
                     >
                       <svg
@@ -1435,6 +1493,35 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
                         </div>
                       )}
                     </div>
+                    <button
+                      data-focusable="true"
+                      onClick={() => channelInfo && toggleFavorite(channelInfo)}
+                      className="text-white hover:text-yellow-400"
+                    >
+                      {isFavorite ? (
+                        <svg
+                          className="h-6 w-6 text-yellow-400"
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                        >
+                          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                        </svg>
+                      ) : (
+                        <svg
+                          className="h-6 w-6"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth="2"
+                            d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.539 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.539-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"
+                          ></path>
+                        </svg>
+                      )}
+                    </button>
 
                     {!isTizen && (
                       <>

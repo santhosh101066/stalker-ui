@@ -11,6 +11,7 @@ export interface MediaItem {
   has_files?: number;
   cmd?: string;
   number?: number;
+  tv_genre_id?: string;
 }
 
 export interface ContextType {
@@ -29,4 +30,9 @@ export interface EPG_List {
   start_timestamp: string;
   stop_timestamp: string;
   name: string;
+}
+
+export interface ChannelGroup {
+  id: string;
+  title: string;
 }

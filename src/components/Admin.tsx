@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { toast } from 'react-toastify';
-import { api } from '../api/api'; // Assuming api.ts is in ../api
+import { api } from '../api/api';
+import { getChannelGroups } from '../api/services';
 
 type Config = {
   hostname: string;
@@ -58,7 +59,6 @@ const Admin = () => {
   const handleParseAndApply = () => {
     const lines = importText.split('\n');
     const newConfig: Partial<Config> = {};
-
     lines.forEach((line) => {
       if (line.includes('http')) {
         try {
@@ -96,7 +96,7 @@ const Admin = () => {
 
   const loadGroups = async () => {
     try {
-      const response = await api.get('/v2/groups');
+      const response = await getChannelGroups(true);
       const data = response.data;
       setGroups(data);
     } catch {
@@ -184,6 +184,7 @@ const Admin = () => {
       toast.error('Error refreshing movie groups');
     }
   };
+
   const handleRefreshSeriesGroups = async () => {
     try {
       await api.get('/v2/refresh-series-groups');
