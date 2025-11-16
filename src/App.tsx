@@ -4,13 +4,14 @@ import {
   getMedia,
   getSeries,
   getMovieUrl,
+  getEPG,
 } from './api/services';
 import LoadingSpinner from './components/LoadingSpinner';
 import MediaCard from './components/MediaCard';
 import EpisodeCard from './components/EpisodeCard';
 import VideoPlayer from './components/VideoPlayer';
 import ContinueWatching from './components/ContinueWatching';
-import type { MediaItem, ContextType } from './types';
+import type { MediaItem, ContextType, EPG_List } from './types';
 import { BASE_URL, URL_PATHS } from './api/api';
 import { toast, ToastContainer } from 'react-toastify';
 import type { PaginatedResponse } from './api/services';
@@ -19,6 +20,23 @@ import './App.css';
 import Admin from './components/Admin';
 import TvChannelListCard from './components/TvChannelListCard';
 
+
+
+const PREFERRED_CONTENT_TYPE_KEY = 'preferredContentType';
+
+const getInitialState = (): { initialType: 'movie' | 'series' | 'tv', initialTitle: string } => {
+  const savedType = localStorage.getItem(PREFERRED_CONTENT_TYPE_KEY) as 'movie' | 'series' | 'tv' | null;
+  if (savedType === 'series') {
+    return { initialType: 'series', initialTitle: 'Series' };
+  }
+  if (savedType === 'tv') {
+    return { initialType: 'tv', initialTitle: 'TV' };
+  }
+  return { initialType: 'movie', initialTitle: 'Movies' }; // Default
+};
+
+const { initialType, initialTitle } = getInitialState();
+
 const initialContext: ContextType = {
   page: 1,
   pageAtaTime: 1,
@@ -26,11 +44,10 @@ const initialContext: ContextType = {
   category: null,
   movieId: null,
   seasonId: null,
-  parentTitle: 'Movies',
+  parentTitle: initialTitle,
   focusedIndex: null,
-  contentType: 'movie',
+  contentType: initialType,
 };
-
 // --- Main Application Component ---
 export default function App() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -46,7 +63,7 @@ export default function App() {
   const [paginationError, setPaginationError] = useState<string | null>(null);
   const [totalItemsCount, setTotalItemsCount] = useState<number>(0);
   const [contentType, setContentType] = useState<'movie' | 'series' | 'tv'>(
-    'movie'
+    initialType
   ); // 'movie' or 'series'
   const [showAdmin, setShowAdmin] = useState(false);
   const [currentItemId, setCurrentItemId] = useState<string | null>(null);
@@ -62,8 +79,21 @@ export default function App() {
   );
   const channelChangeTimer = useRef<ReturnType<typeof setTimeout> | null>(null); // <-- ADD THIS
   const [previewChannel, setPreviewChannel] = useState<MediaItem | null>(null); // <-- ADD THIS
+  const [epgData, setEpgData] = useState<Record<string, EPG_List[]>>({});
 
   const isFetchingMore = useRef(false);
+
+  const loadEpgData = useCallback(async () => {
+    try {
+      const response = await getEPG();
+      if (response.data?.data) {
+        setEpgData(response.data.data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch EPG data:', err);
+      toast.warn('Could not load program guide.');
+    }
+  }, []);
 
   const fetchData = useCallback(
     async (
@@ -678,11 +708,13 @@ export default function App() {
       contentType: type,
     };
     setContentType(type);
+    localStorage.setItem(PREFERRED_CONTENT_TYPE_KEY, type);
     setHistory([]);
     setStreamUrl(null);
     setRawStreamUrl(null);
     fetchData(newContext, type);
     if (type === 'tv') {
+      loadEpgData(); 
       const lastPlayedId = localStorage.getItem('lastPlayedTvChannelId');
       if (lastPlayedId) {
         setPlayLastTvChannel(lastPlayedId); // Set trigger to play last channel
@@ -771,6 +803,7 @@ export default function App() {
           onNextChannel={handleNextChannel}
           onPrevChannel={handlePrevChannel}
           onChannelSelect={handleChannelSelect}
+          epgData={epgData}
         />
       ) : (
         <div className="min-h-screen font-sans text-gray-200">
@@ -919,6 +952,7 @@ export default function App() {
                       }
                       item={currentSeriesItem || currentItem}
                       seriesItem={currentSeriesItem}
+                      epgData={epgData}
                     />
                   ) : (
                     // --- Content Grid (now visible during load, if !error) ---

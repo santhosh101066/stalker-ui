@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import type { MediaItem } from '../types';
-import { api } from './api';
+import type { EPG_List, MediaItem } from '../types';
+import { api, type ApiResponse } from './api';
 
 export const API_PATHS = {
   MOVIES: '/v2/movies',
@@ -8,6 +8,7 @@ export const API_PATHS = {
   MOVIE_LINK: '/v2/movie-link',
   CHANNELS: '/v2/channels', // Added
   CHANNEL_LINK: '/v2/channel-link', // Added
+  EPG: '/v2/epg'
 };
 export interface PaginatedResponse<T> {
   data: T[];
@@ -56,3 +57,8 @@ export const getMovieUrl = async (params: Record<string, any> = {}) =>
 
 export const getChannelUrl = async (cmd: string) =>
   (await api.get(API_PATHS.CHANNEL_LINK, { params: { cmd } })).data;
+
+export const getEPG = async (): Promise<ApiResponse<{
+  timestamp: number;
+  data: Record<string, EPG_List[]>;
+}>> => await api.get(API_PATHS.EPG);

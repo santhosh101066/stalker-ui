@@ -5,7 +5,7 @@ import Hls, { Level, type MediaPlaylist } from 'hls.js';
 import { toast } from 'react-toastify';
 import { URL_PATHS } from '../api/api'; // Import URL_PATHS
 
-import type { ContextType, MediaItem } from '../types';
+import type { ContextType, EPG_List, MediaItem } from '../types';
 import TvChannelList from './TvChannelList';
 
 type VideoFitMode = 'contain' | 'cover' | 'fill';
@@ -27,6 +27,7 @@ interface VideoPlayerProps {
   onPrevChannel?: () => void;
   onChannelSelect?: (item: MediaItem) => void;
   previewChannelInfo?: MediaItem | null;
+  epgData: Record<string, EPG_List[]>;
 }
 
 const useLiveClock = () => {
@@ -48,6 +49,15 @@ const useLiveClock = () => {
   }).format(time);
 };
 
+const formatTimestamp = (timestamp: number): string => {
+  if (isNaN(timestamp)) return '...';
+  return new Date(timestamp * 1000).toLocaleTimeString('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  });
+};
+
 const VideoPlayer: React.FC<VideoPlayerProps> = ({
   streamUrl,
   rawStreamUrl,
@@ -63,6 +73,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   onNextChannel,
   onPrevChannel,
   onChannelSelect,
+  epgData,
 }) => {
   const isTizen = !!(window as any).tizen;
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -96,6 +107,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const seekBuffer = useRef(0);
   const seekApplyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const playButtonRef = useRef<HTMLButtonElement>(null);
+  const retryCount = useRef(0);
   const [showChannelList, setShowChannelList] = useState(false);
 
   const [videoLevels, setVideoLevels] = useState<Level[]>([]);
@@ -108,6 +120,11 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [activeSettingsMenu, setActiveSettingsMenu] = useState<
     'main' | 'quality' | 'audio' | 'subtitles'
   >('main');
+  const [currentProgram, setCurrentProgram] = useState<EPG_List | null>(null);
+  const [nextProgram, setNextProgram] = useState<EPG_List | null>(null);
+  const [programProgress, setProgramProgress] = useState(0);
+
+  console.log(currentProgram, nextProgram, epgData);
 
   const [fitMode, setFitMode] = useState<VideoFitMode>(() => {
     return (localStorage.getItem('videoFitMode') as VideoFitMode) || 'contain';
@@ -132,6 +149,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     const urlToPlay = useProxy ? streamUrl : rawStreamUrl;
 
     if (!videoElement || !urlToPlay) return;
+    retryCount.current = 0;
 
     const initializePlayer = () => {
       if (contentType !== 'tv') {
@@ -187,8 +205,16 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         hls.on(Hls.Events.ERROR, (_: any, data: any) => {
           if (data.fatal) {
             let errorMessage = `An error occurred: ${data.details}`;
+            if (retryCount.current >= 5) {
+              toast.error(
+                `Failed to play after 5 attempts. Returning to list.`
+              );
+              // onBack();
+              return;
+            }
             switch (data.type) {
               case Hls.ErrorTypes.NETWORK_ERROR:
+                retryCount.current++;
                 errorMessage = `A network error occurred: ${data.details}. Retrying...`;
                 toast.warn(errorMessage);
                 hls.startLoad();
@@ -205,6 +231,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
                   toast.warn(errorMessage);
                   setUseProxy((prev) => !prev);
                 } else {
+                  retryCount.current++;
                   toast.error(errorMessage);
                   hls.recoverMediaError();
                 }
@@ -250,7 +277,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       if (!video) return;
       if (contentType === 'tv') {
         setProgress(0);
-        setCurrentTime(0);
+        // setCurrentTime(0);
         setDuration(0);
       } else if (!seeking) {
         if (video.duration && video.duration > 0) {
@@ -335,6 +362,10 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         console.error(
           `Video Error (code ${video.error.code}): ${video.error.message}`
         );
+        if (retryCount.current >= 5) {
+          toast.error(`Failed to play after 5 attempts. Returning to list.`);
+          return;
+        }
         let errorMessage = `An error occurred (Code: ${video.error.code})`;
         switch (video.error.code) {
           case video.error.MEDIA_ERR_ABORTED:
@@ -356,9 +387,11 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
             if (streamUrl && rawStreamUrl) {
               errorMessage += ' Attempting to recover by switching source...';
               toast.warn(errorMessage);
+
               setUseProxy((prev) => !prev);
             } else if (hlsInstance.current) {
               errorMessage += ' Attempting to recover...';
+              retryCount.current++;
               toast.warn(errorMessage);
               hlsInstance.current.recoverMediaError();
             } else {
@@ -418,6 +451,63 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     seriesItem,
     onBack,
   ]);
+
+  useEffect(() => {
+    const updateProgramInfo = () => {
+      const channel = previewChannelInfo || channelInfo;
+      if (!channel || !epgData) {
+        setCurrentProgram(null);
+        setNextProgram(null);
+        setProgramProgress(0);
+        return;
+      }
+
+      const epgList = epgData[channel.id];
+      if (!epgList || epgList.length === 0) {
+        setCurrentProgram(null);
+        setNextProgram(null);
+        setProgramProgress(0);
+        return;
+      }
+
+      const nowInSeconds = Date.now() / 1000;
+      const currentIdx = epgList.findIndex(
+        (p) =>
+          nowInSeconds >= parseInt(p.start_timestamp) &&
+          nowInSeconds < parseInt(p.stop_timestamp)
+      );
+
+      if (currentIdx !== -1) {
+        const current = epgList[currentIdx];
+        setCurrentProgram(current);
+        setNextProgram(epgList[currentIdx + 1] || null);
+
+        // Calculate progress
+        const start = parseInt(current.start_timestamp);
+        const end = parseInt(current.stop_timestamp);
+        const duration = end - start;
+        if (duration > 0) {
+          const elapsed = nowInSeconds - start;
+          setProgramProgress(Math.min(100, (elapsed / duration) * 100));
+        } else {
+          setProgramProgress(0);
+        }
+      } else {
+        // No current program, find next one
+        setCurrentProgram(null);
+        const nextIdx = epgList.findIndex(
+          (p) => parseInt(p.start_timestamp) > nowInSeconds
+        );
+        setNextProgram(epgList[nextIdx] || null);
+        setProgramProgress(0);
+      }
+    };
+
+    updateProgramInfo();
+    // Update every 30 seconds
+    const interval = setInterval(updateProgramInfo, 30000);
+    return () => clearInterval(interval);
+  }, [channelInfo, previewChannelInfo, epgData]);
 
   const handleBack = useCallback(() => {
     if (document.fullscreenElement) {
@@ -867,8 +957,6 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         playerContainerRef.current?.focus();
       }
     }, 100);
-
-    toggleFullscreen();
   }, [showControlsAndCursor, toggleFullscreen]);
 
   const cycleFitMode = () => {
@@ -1110,18 +1198,36 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
                     <span className="truncate font-semibold">
                       {previewChannelInfo
                         ? previewChannelInfo.name
-                        : 'Current Program'}
+                        : currentProgram
+                          ? currentProgram.name
+                          : channelInfo?.name || 'Current Program'}
                     </span>
                     <span className="ml-2 flex-shrink-0 text-sm">
-                      {previewChannelInfo ? '...' : 'Now'}
+                      {currentProgram
+                        ? `${formatTimestamp(
+                            parseInt(currentProgram.start_timestamp)
+                          )} - ${formatTimestamp(
+                            parseInt(currentProgram.stop_timestamp)
+                          )}`
+                        : previewChannelInfo
+                          ? '...'
+                          : 'Now'}
                     </span>
                   </div>
                   {/* Next Program */}
                   <div className="flex items-center justify-between p-1.5 px-3">
                     <span className="text-gray-200">
-                      {previewChannelInfo ? '...' : 'Next Program'}
+                      {nextProgram
+                        ? nextProgram.name
+                        : previewChannelInfo
+                          ? '...'
+                          : 'Next Program'}
                     </span>
-                    <span className="text-sm text-gray-300">...</span>
+                    <span className="text-sm text-gray-300">
+                      {nextProgram
+                        ? formatTimestamp(parseInt(nextProgram.start_timestamp))
+                        : '...'}
+                    </span>
                   </div>
                 </div>
 
@@ -1129,7 +1235,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
                 <div className="mt-2 h-1.5 w-full rounded-full bg-gray-600">
                   <div
                     className="h-1.5 rounded-full bg-green-500"
-                    style={{ width: '30%' }}
+                    style={{ width: `${programProgress}%` }}
                   ></div>
                 </div>
 
@@ -1331,74 +1437,75 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
                     </div>
 
                     {!isTizen && (
-                      <button
-                        data-focusable="true"
-                        onClick={toggleMute}
-                        className="text-white hover:text-blue-400"
-                      >
-                        {isMuted || volume === 0 ? (
-                          <svg
-                            className="h-6 w-6"
-                            fill="currentColor"
-                            viewBox="0 0 20 20"
-                          >
-                            <path
-                              fillRule="evenodd"
-                              d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM12.293 7.293a1 1 0 011.414 0L15 8.586l1.293-1.293a1 1 0 111.414 1.414L16.414 10l1.293 1.293a1 1 0 01-1.414 1.414L15 11.414l-1.293 1.293a1 1 0 01-1.414-1.414L13.586 10l-1.293-1.293a1 1 0 010-1.414z"
-                              clipRule="evenodd"
-                            ></path>
-                          </svg>
-                        ) : (
-                          <svg
-                            className="h-6 w-6"
-                            fill="currentColor"
-                            viewBox="0 0 20 20"
-                          >
-                            <path
-                              fillRule="evenodd"
-                              d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM14.657 2.929a1 1 0 011.414 0A9.972 9.972 0 0119 10a9.972 9.972 0 01-2.929 7.071 1 1 0 01-1.414-1.414A7.971 7.971 0 0017 10c0-2.21-.894-4.208-2.343-5.657a1 1 0 010-1.414zm-2.829 2.828a1 1 0 011.415 0A5.983 5.983 0 0115 10a5.984 5.984 0 01-1.757 4.243 1 1 0 01-1.415-1.415A3.984 3.984 0 0013 10a3.983 3.983 0 00-1.172-2.828 1 1 0 010-1.415z"
-                              clipRule="evenodd"
-                            ></path>
-                          </svg>
-                        )}
-                      </button>
+                      <>
+                        <button
+                          data-focusable="true"
+                          onClick={toggleMute}
+                          className="text-white hover:text-blue-400"
+                        >
+                          {isMuted || volume === 0 ? (
+                            <svg
+                              className="h-6 w-6"
+                              fill="currentColor"
+                              viewBox="0 0 20 20"
+                            >
+                              <path
+                                fillRule="evenodd"
+                                d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM12.293 7.293a1 1 0 011.414 0L15 8.586l1.293-1.293a1 1 0 111.414 1.414L16.414 10l1.293 1.293a1 1 0 01-1.414 1.414L15 11.414l-1.293 1.293a1 1 0 01-1.414-1.414L13.586 10l-1.293-1.293a1 1 0 010-1.414z"
+                                clipRule="evenodd"
+                              ></path>
+                            </svg>
+                          ) : (
+                            <svg
+                              className="h-6 w-6"
+                              fill="currentColor"
+                              viewBox="0 0 20 20"
+                            >
+                              <path
+                                fillRule="evenodd"
+                                d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM14.657 2.929a1 1 0 011.414 0A9.972 9.972 0 0119 10a9.972 9.972 0 01-2.929 7.071 1 1 0 01-1.414-1.414A7.971 7.971 0 0017 10c0-2.21-.894-4.208-2.343-5.657a1 1 0 010-1.414zm-2.829 2.828a1 1 0 011.415 0A5.983 5.983 0 0115 10a5.984 5.984 0 01-1.757 4.243 1 1 0 01-1.415-1.415A3.984 3.984 0 0013 10a3.983 3.983 0 00-1.172-2.828 1 1 0 010-1.415z"
+                                clipRule="evenodd"
+                              ></path>
+                            </svg>
+                          )}
+                        </button>
+                        <button
+                          data-focusable="true"
+                          onClick={toggleFullscreen}
+                          className="text-white hover:text-blue-400"
+                        >
+                          {isFullscreen ? (
+                            <svg
+                              className="h-6 w-6"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth="2"
+                                d="M10 4H4v6m10 10h6v-6M4 20l6-6m4-4l6-6"
+                              ></path>
+                            </svg>
+                          ) : (
+                            <svg
+                              className="h-6 w-6"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth="2"
+                                d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 1v4m0 0h-4m4 0l-5-5"
+                              ></path>
+                            </svg>
+                          )}
+                        </button>
+                      </>
                     )}
-
-                    <button
-                      data-focusable="true"
-                      onClick={toggleFullscreen}
-                      className="text-white hover:text-blue-400"
-                    >
-                      {isFullscreen ? (
-                        <svg
-                          className="h-6 w-6"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth="2"
-                            d="M10 4H4v6m10 10h6v-6M4 20l6-6m4-4l6-6"
-                          ></path>
-                        </svg>
-                      ) : (
-                        <svg
-                          className="h-6 w-6"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth="2"
-                            d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 1v4m0 0h-4m4 0l-5-5"
-                          ></path>
-                        </svg>
-                      )}
-                    </button>
                   </div>
                 </div>
               </div>
@@ -1711,55 +1818,56 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
                   </button>
 
                   {!isTizen && (
-                    <input
-                      data-focusable="true"
-                      data-control="volume"
-                      type="range"
-                      min="0"
-                      max="1"
-                      step="0.01"
-                      value={volume}
-                      onChange={handleVolumeChange}
-                      className="range-sm h-1 w-24 cursor-pointer appearance-none rounded-lg bg-gray-600"
-                      style={{ accentColor: '#3b82f6' }}
-                    />
+                    <>
+                      <input
+                        data-focusable="true"
+                        data-control="volume"
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.01"
+                        value={volume}
+                        onChange={handleVolumeChange}
+                        className="range-sm h-1 w-24 cursor-pointer appearance-none rounded-lg bg-gray-600"
+                        style={{ accentColor: '#3b82f6' }}
+                      />
+                      <button
+                        data-focusable="true"
+                        onClick={toggleFullscreen}
+                        className="text-white hover:text-blue-400"
+                      >
+                        {isFullscreen ? (
+                          <svg
+                            className="h-6 w-6"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth="2"
+                              d="M10 4H4v6m10 10h6v-6M4 20l6-6m4-4l6-6"
+                            ></path>
+                          </svg>
+                        ) : (
+                          <svg
+                            className="h-6 w-6"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth="2"
+                              d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 1v4m0 0h-4m4 0l-5-5"
+                            ></path>
+                          </svg>
+                        )}
+                      </button>
+                    </>
                   )}
-
-                  <button
-                    data-focusable="true"
-                    onClick={toggleFullscreen}
-                    className="text-white hover:text-blue-400"
-                  >
-                    {isFullscreen ? (
-                      <svg
-                        className="h-6 w-6"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth="2"
-                          d="M10 4H4v6m10 10h6v-6M4 20l6-6m4-4l6-6"
-                        ></path>
-                      </svg>
-                    ) : (
-                      <svg
-                        className="h-6 w-6"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth="2"
-                          d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 1v4m0 0h-4m4 0l-5-5"
-                        ></path>
-                      </svg>
-                    )}
-                  </button>
                 </div>
               </div>
             </div>

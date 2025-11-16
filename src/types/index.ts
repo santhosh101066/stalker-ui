@@ -24,3 +24,9 @@ export interface ContextType {
   focusedIndex?: number | null;
   contentType: 'movie' | 'series' | 'tv';
 }
+
+export interface EPG_List {
+  start_timestamp: string;
+  stop_timestamp: string;
+  name: string;
+}
