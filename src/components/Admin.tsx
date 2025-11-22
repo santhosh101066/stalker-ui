@@ -15,6 +15,7 @@ type Config = {
   groups: string[];
   proxy: boolean;
   tokens: string[];
+  playCensored: boolean;
 };
 
 type Group = {
@@ -34,6 +35,7 @@ const Admin = () => {
     groups: [],
     proxy: false,
     tokens: [],
+    playCensored: false,
   });
   const [groups, setGroups] = useState<Group[]>([]);
   const [showImportModal, setShowImportModal] = useState(false);
@@ -113,6 +115,7 @@ const Admin = () => {
         ...data,
         groups: Array.isArray(data.groups) ? data.groups : [],
         proxy: !!data.proxy,
+        playCensored: !!data.playCensored,
         tokens: Array.isArray(data.tokens) ? data.tokens : [],
       }));
     } catch {
@@ -458,6 +461,19 @@ const Admin = () => {
               Use Proxy
             </label>
           </div>
+          <div className="flex items-center space-x-2">
+              <input
+                className="h-5 w-auto"
+                type="checkbox"
+                id="playCensored"
+                name="playCensored"
+                checked={config.playCensored}
+                onChange={handleInputChange}
+              />
+              <label htmlFor="playCensored" className="text-white">
+                Show Hidden Content
+              </label>
+            </div>
         </div>
 
         {/* Token Keys Section */}

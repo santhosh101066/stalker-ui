@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export const URL_PATHS = {
   // HOST: import.meta.env.DEV ? 'http://localhost:3000' : ''
-  HOST: 'http://192.168.0.102:3000',
+  HOST: 'http://localhost:3000',
 };
 
 export const BASE_URL = `${URL_PATHS.HOST}/api`;

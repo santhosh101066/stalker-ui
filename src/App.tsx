@@ -385,7 +385,7 @@ export default function App() {
         }
 
         // This is the correct, proxied URL your backend provides
-        const channelUrl = `${URL_PATHS.HOST}/live.m3u8?cmd=${item.cmd}`;
+        const channelUrl = `${URL_PATHS.HOST}/live.m3u8?cmd=${item.cmd}&id=${item.id}`;
 
         localStorage.setItem('lastPlayedTvChannelId', item.id);
         setCurrentItem(item);

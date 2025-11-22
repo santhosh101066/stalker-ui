@@ -88,6 +88,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const seekBarRef = useRef<HTMLInputElement>(null);
   const hlsInstance = useRef<Hls | null>(null);
   const controlsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSaveTime = useRef<number>(0);
 
   const [isPlaying, setIsPlaying] = useState(true);
@@ -156,6 +157,11 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     if (!videoElement || !urlToPlay) return;
     retryCount.current = 0;
 
+    if (retryTimeoutRef.current) {
+      clearTimeout(retryTimeoutRef.current);
+      retryTimeoutRef.current = null;
+    }
+
     const initializePlayer = () => {
       if (contentType !== 'tv') {
         const savedTime = localStorage.getItem(`video-progress-${itemId}`);
@@ -174,6 +180,8 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
           maxBufferLength: 15,
           maxMaxBufferLength: 30,
           abrEwmaDefaultEstimate: 500000,
+          manifestLoadingMaxRetry: 3, 
+          manifestLoadingRetryDelay: 1000,
           ...(contentType === 'tv' && {
             liveSyncDuration: 10,
             liveMaxLatencyDuration: 20,
@@ -208,21 +216,33 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
           setCurrentSubtitleTrack(data.id);
         });
         hls.on(Hls.Events.ERROR, (_: any, data: any) => {
+          console.error(data);
+
           if (data.fatal) {
             let errorMessage = `An error occurred: ${data.details}`;
             if (retryCount.current >= 5) {
               toast.error(
                 `Failed to play after 5 attempts. Returning to list.`
               );
-              // onBack();
+              // onBack(); // Keep this commented or uncommented based on desired final behavior
               return;
             }
             switch (data.type) {
               case Hls.ErrorTypes.NETWORK_ERROR:
+                if (retryTimeoutRef.current) {
+                    return; // Ignore error if retry is already pending
+                }
                 retryCount.current++;
-                errorMessage = `A network error occurred: ${data.details}. Retrying...`;
+                errorMessage = `A network error occurred: ${data.details}. Retrying in 3 seconds (Attempt ${retryCount.current}/5)...`;
                 toast.warn(errorMessage);
-                hls.startLoad();
+                // --- MODIFICATION HERE: Introduce a 3-second delay for retry ---
+               retryTimeoutRef.current =  setTimeout(() => {
+                 retryTimeoutRef.current = null; // Release lock when executing
+                    if (hlsInstance.current) {
+                        hlsInstance.current.startLoad();
+                    }
+                }, 3000); // Wait for 3 seconds before calling startLoad()
+                // --- END MODIFICATION ---
                 break;
               case Hls.ErrorTypes.MEDIA_ERROR:
                 errorMessage = `A media error occurred: ${data.details}`;
@@ -269,6 +289,10 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     return () => {
       if (hlsInstance.current) {
         hlsInstance.current.destroy();
+      }
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+        retryTimeoutRef.current = null;
       }
     };
   }, [streamUrl, rawStreamUrl, useProxy, itemId, contentType, onBack]);
@@ -817,7 +841,6 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     toggleFavorite,
   ]);
 
-  console.log(currentProgram, nextProgram);
 
   useEffect(() => {
     if (showChannelList || isSettingsMenuOpen) return;
