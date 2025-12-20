@@ -9,3 +9,9 @@ body {
 .cursor-none {
   cursor: none;
 }
+
+/* Video.js Error Styling */
+/* Video.js Error Styling */
+.video-js .vjs-error-display {
+  display: none !important;
+}

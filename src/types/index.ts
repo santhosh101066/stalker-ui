@@ -12,6 +12,11 @@ export interface MediaItem {
   cmd?: string;
   number?: number;
   tv_genre_id?: string;
+  stream_icon?: string;
+  num?: string | number;
+  stream_id?: string | number;
+  runtime?: number;
+  duration?: number;
 }
 
 export interface ContextType {
@@ -24,12 +29,14 @@ export interface ContextType {
   parentTitle: string;
   focusedIndex?: number | null;
   contentType: 'movie' | 'series' | 'tv';
+  sort?: string;
 }
 
 export interface EPG_List {
   start_timestamp: string;
   stop_timestamp: string;
   name: string;
+  description?: string;
 }
 
 export interface ChannelGroup {

@@ -11,6 +11,9 @@ const MediaCard: React.FC<MediaCardProps> = ({ item, onClick }) => {
   const [imageError, setImageError] = useState(false);
   const [isCompleted, setIsCompleted] = useState(false);
   const [isInProgress, setIsInProgress] = useState(false);
+  const [isVisible, setIsVisible] = useState(false); // Lazy loading state
+  const cardRef = React.useRef<HTMLDivElement>(null); // Ref for intersection observer
+
   const displayTitle = item.title || item.name;
   const initials = displayTitle
     ? displayTitle.substring(0, 2).toUpperCase()
@@ -24,6 +27,34 @@ const MediaCard: React.FC<MediaCardProps> = ({ item, onClick }) => {
   useEffect(() => {
     setImageError(false);
   }, [item.screenshot_uri]);
+
+  // Intersection Observer for Lazy Loading
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            setIsVisible(true);
+            observer.disconnect(); // Stop observing once visible
+          }
+        });
+      },
+      {
+        rootMargin: '100px', // Load images slightly before they appear
+        threshold: 0.1,
+      }
+    );
+
+    if (cardRef.current) {
+      observer.observe(cardRef.current);
+    }
+
+    return () => {
+      if (cardRef.current) {
+        observer.unobserve(cardRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const completed = localStorage.getItem(`video-completed-${item.id}`);
@@ -67,8 +98,10 @@ const MediaCard: React.FC<MediaCardProps> = ({ item, onClick }) => {
 
   return (
     <div
+      ref={cardRef}
       className="group relative transform cursor-pointer overflow-hidden rounded-lg border-2 border-transparent bg-gray-800 transition-all duration-300 hover:scale-105 hover:border-blue-500 hover:shadow-2xl"
       onClick={() => onClick(item)}
+      title={displayTitle}
       data-focusable="true"
       tabIndex={-1}
     >
@@ -79,7 +112,7 @@ const MediaCard: React.FC<MediaCardProps> = ({ item, onClick }) => {
         <div className="absolute right-2 top-2 z-10 h-3 w-3 rounded-full bg-yellow-500"></div>
       )}
       <div className="relative flex h-48 w-full items-center justify-center overflow-hidden bg-gray-700 md:h-64">
-        {imageUrl && !imageError ? (
+        {isVisible && imageUrl && !imageError ? (
           <img
             src={imageUrl}
             alt={displayTitle}

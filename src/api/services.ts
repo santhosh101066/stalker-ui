@@ -10,18 +10,21 @@ export const API_PATHS = {
   CHANNEL_LINK: '/v2/channel-link', // Added
   EPG: '/v2/epg',
   CHANNEL_GROUPS: '/v2/groups',
+  EXPIRY: '/v2/expiry',
 };
 
 export interface PaginatedResponse<T> {
   data: T[];
   page: number;
   total_items: number;
+  isPortal?: boolean;
 }
 
 export const getMedia = async (
-  params: Record<string, any>
+  params: Record<string, any>,
+  signal?: AbortSignal
 ): Promise<PaginatedResponse<MediaItem>> => {
-  const response = (await api.get(API_PATHS.MOVIES, { params })).data;
+  const response = (await api.get(API_PATHS.MOVIES, { params, signal })).data;
   if (!response) {
     throw new Error('No response data received from media API.');
   }
@@ -29,9 +32,10 @@ export const getMedia = async (
   return response;
 };
 export const getSeries = async (
-  params: Record<string, any>
+  params: Record<string, any>,
+  signal?: AbortSignal
 ): Promise<PaginatedResponse<MediaItem>> => {
-  const response = (await api.get(API_PATHS.SERIES, { params })).data;
+  const response = (await api.get(API_PATHS.SERIES, { params, signal })).data;
   if (!response) {
     throw new Error('No response data received from series API.');
   }
@@ -39,8 +43,8 @@ export const getSeries = async (
   return response;
 };
 // Added getChannels function
-export const getChannels = async (): Promise<PaginatedResponse<MediaItem>> => {
-  const response = (await api.get(API_PATHS.CHANNELS)).data;
+export const getChannels = async (signal?: AbortSignal): Promise<PaginatedResponse<MediaItem>> => {
+  const response = (await api.get(API_PATHS.CHANNELS, { signal })).data;
   if (!response || !Array.isArray(response)) {
     throw new Error('No response data received from channels API.');
   }
@@ -52,13 +56,13 @@ export const getChannels = async (): Promise<PaginatedResponse<MediaItem>> => {
   };
 };
 
-export const getChannelGroups = async (all: boolean = false): Promise<PaginatedResponse<ChannelGroup>> => {
+export const getChannelGroups = async (all: boolean = false, signal?: AbortSignal): Promise<PaginatedResponse<ChannelGroup>> => {
   const params: Record<string, any> = {};
   if (all) {
     params.all = 'true';
   }
-  
-  const response = (await api.get(API_PATHS.CHANNEL_GROUPS, { params })).data;
+
+  const response = (await api.get(API_PATHS.CHANNEL_GROUPS, { params, signal })).data;
   if (!response || !Array.isArray(response)) {
     throw new Error('No response data received from channel groups API.');
   }
@@ -79,3 +83,6 @@ export const getEPG = async (): Promise<ApiResponse<{
   timestamp: number;
   data: Record<string, EPG_List[]>;
 }>> => await api.get(API_PATHS.EPG);
+
+export const getExpiry = async (): Promise<{ success: boolean; expiry: string | null }> =>
+  (await api.get(API_PATHS.EXPIRY)).data;

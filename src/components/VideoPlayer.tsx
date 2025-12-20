@@ -1,7 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { formatTime } from '../utils/helpers';
-import Hls, { Level, type MediaPlaylist } from 'hls.js';
+import videojs from 'video.js';
+import 'video.js/dist/video-js.css';
 import { toast } from 'react-toastify';
 import { URL_PATHS } from '../api/api'; // Import URL_PATHS
 
@@ -10,6 +11,12 @@ import TvChannelList from './TvChannelList';
 
 type VideoFitMode = 'contain' | 'cover' | 'fill';
 const FIT_MODES: VideoFitMode[] = ['contain', 'cover', 'fill'];
+
+interface MediaPlaylist {
+  id: number;
+  name: string;
+  lang?: string;
+}
 
 interface VideoPlayerProps {
   streamUrl: string | null;
@@ -82,11 +89,12 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   toggleFavorite,
 }) => {
   const isTizen = !!(window as any).tizen;
-  const videoRef = useRef<HTMLVideoElement>(null);
   const playerContainerRef = useRef<HTMLDivElement>(null);
+  const videoWrapperRef = useRef<HTMLDivElement>(null);
   const settingsMenuRef = useRef<HTMLDivElement>(null);
   const seekBarRef = useRef<HTMLInputElement>(null);
-  const hlsInstance = useRef<Hls | null>(null);
+  const [player, setPlayer] = useState<any>(null);
+  const playerRef = useRef<any | null>(null); // Ref to hold player instance for cleanup
   const controlsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSaveTime = useRef<number>(0);
@@ -98,7 +106,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [controlsVisible, setControlsVisible] = useState(true);
-  const [copied, setCopied] = useState(false); // This state is no longer used but safe to keep
+  const [copied, setCopied] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isBuffering, setIsBuffering] = useState(false);
   const [seeking, setSeeking] = useState(false);
@@ -117,7 +125,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const retryCount = useRef(0);
   const [showChannelList, setShowChannelList] = useState(false);
 
-  const [videoLevels, setVideoLevels] = useState<Level[]>([]);
+  const [videoLevels] = useState<any[]>([]);
   const [audioTracks, setAudioTracks] = useState<MediaPlaylist[]>([]);
   const [subtitleTracks, setSubtitleTracks] = useState<MediaPlaylist[]>([]);
   const [currentVideoLevel, setCurrentVideoLevel] = useState(-1); // -1 is 'auto'
@@ -130,6 +138,11 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [currentProgram, setCurrentProgram] = useState<EPG_List | null>(null);
   const [nextProgram, setNextProgram] = useState<EPG_List | null>(null);
   const [programProgress, setProgramProgress] = useState(0);
+
+  // VOD Proxy State
+
+  const [seekOffset, setSeekOffset] = useState(0);
+
 
   const [fitMode, setFitMode] = useState<VideoFitMode>(() => {
     return (localStorage.getItem('videoFitMode') as VideoFitMode) || 'contain';
@@ -145,182 +158,243 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
   useEffect(() => {
     localStorage.setItem('videoFitMode', fitMode);
-    if (videoRef.current) {
-      videoRef.current.style.objectFit = fitMode;
+    if (playerRef.current) {
+      playerRef.current.removeClass('vjs-fit-contain');
+      playerRef.current.removeClass('vjs-fit-cover');
+      playerRef.current.removeClass('vjs-fit-fill');
+      playerRef.current.addClass(`vjs-fit-${fitMode}`);
     }
-  }, [fitMode]);
+    // Fallback/Direct update
+    if (playerRef.current) {
+      const el = playerRef.current.el();
+      if (el) {
+        const video = el.querySelector('video');
+        if (video) video.style.objectFit = fitMode;
+      }
+    }
+  }, [fitMode, player]);
 
+  // 1. Initialize Player (Run once on mount)
   useEffect(() => {
-    const videoElement = videoRef.current;
-    const urlToPlay = useProxy ? streamUrl : rawStreamUrl;
+    if (!videoWrapperRef.current) return;
 
-    if (!videoElement || !urlToPlay) return;
-    retryCount.current = 0;
+    // Clear any existing content
+    videoWrapperRef.current.innerHTML = '';
 
+    // Create video element dynamically
+    const videoElement = document.createElement('video');
+    videoElement.className = 'video-js vjs-default-skin h-full w-full';
+    videoElement.style.objectFit = fitMode;
+
+    // Append to wrapper
+    videoWrapperRef.current.appendChild(videoElement);
+
+    const newPlayer = videojs(videoElement, {
+      autoplay: true,
+      controls: false,
+      preload: 'auto',
+      fluid: false,
+      html5: {
+        vhs: {
+          overrideNative: !videojs.browser.IS_SAFARI,
+        },
+        nativeAudioTracks: false,
+        nativeVideoTracks: false,
+        nativeTextTracks: false
+      }
+    });
+
+    setPlayer(newPlayer);
+    playerRef.current = newPlayer;
+
+    // Attach generic listeners that persist with the player instance
+    newPlayer.on('loadedmetadata', () => {
+      // This listener will be triggered every time a new source is loaded.
+      // Specific logic for VOD progress or track updates should be here.
+
+      // Audio Tracks
+      const updateAudio = () => {
+        const audio = newPlayer.audioTracks();
+        const tracks: MediaPlaylist[] = [];
+        const audioList = audio as any;
+        for (let i = 0; i < audioList.length; i++) {
+          tracks.push({
+            id: i,
+            name: audioList[i].label || `Audio ${i + 1}`,
+            lang: audioList[i].language
+          });
+          if (audioList[i].enabled) setCurrentAudioTrack(i);
+        }
+        setAudioTracks(tracks);
+      };
+      newPlayer.audioTracks().on('change', updateAudio);
+      updateAudio();
+
+      // Subtitles
+      const updateSubtitles = () => {
+        const text = newPlayer.textTracks();
+        const tracks: MediaPlaylist[] = [];
+        const textList = text as any;
+        for (let i = 0; i < textList.length; i++) {
+          if (textList[i].kind === 'subtitles' || textList[i].kind === 'captions') {
+            tracks.push({
+              id: i,
+              name: textList[i].label || `Subtitle ${i + 1}`,
+              lang: textList[i].language
+            });
+            if (textList[i].mode === 'showing') setCurrentSubtitleTrack(i);
+          }
+        }
+        setSubtitleTracks(tracks);
+      };
+      newPlayer.textTracks().on('change', updateSubtitles);
+      updateSubtitles();
+    });
+
+    newPlayer.on('error', () => {
+      const error = newPlayer.error();
+      console.error('VideoJS Error:', error);
+      // Retry logic will be handled in the source update effect,
+      // but this listener ensures we catch errors regardless.
+    });
+
+    return () => {
+      if (playerRef.current) {
+        playerRef.current.dispose();
+        playerRef.current = null;
+        setPlayer(null);
+      }
+    };
+  }, []); // Empty dependency array -> Run once
+
+  // 2. Update Source (Run when URL changes)
+  useEffect(() => {
+    if (!player || !playerRef.current) return;
+
+    let urlToPlay: string | null | undefined = null;
+
+    // Simplified logic: Always respect the passed streamUrl (which is already proxied if needed)
+    urlToPlay = useProxy ? streamUrl : rawStreamUrl;
+
+    if (useProxy && contentType !== 'tv' && rawStreamUrl) {
+      // We still need to handle seekOffset for VODs if we are resuming
+      const savedTime = localStorage.getItem(`video-progress-${itemId}`);
+      const startTime = savedTime ? Math.floor(parseFloat(savedTime)) : 0;
+      if (startTime > 0 && seekOffset === 0) {
+        setSeekOffset(startTime);
+      }
+    }
+
+    if (!urlToPlay) return;
+
+    const currentSrc = player.currentSrc();
+    if (currentSrc === urlToPlay) return; // Don't reload if same URL
+
+    console.log('Changing source to:', urlToPlay);
+
+    // Clear any pending retries from previous source
     if (retryTimeoutRef.current) {
       clearTimeout(retryTimeoutRef.current);
       retryTimeoutRef.current = null;
     }
+    retryCount.current = 0; // Reset retry count for new source
 
-    const initializePlayer = () => {
+    player.ready(() => {
+      player.src({
+        src: urlToPlay!,
+        type: (urlToPlay!.includes('.m3u8') || contentType === 'tv') ? 'application/x-mpegURL' : 'video/mp4'
+      });
+      player.load();
+      player.play().catch((e: any) => console.error("Play failed:", e));
+
+      // Logic to restore time for VOD content after source change
       if (contentType !== 'tv') {
         const savedTime = localStorage.getItem(`video-progress-${itemId}`);
         if (savedTime) {
-          videoElement.currentTime = parseFloat(savedTime);
+          player.currentTime(parseFloat(savedTime));
         }
       }
+    });
 
-      if (Hls.isSupported()) {
-        if (hlsInstance.current) {
-          hlsInstance.current.destroy();
+    // Re-implement error retry logic here, specific to the current source
+    const handleSourceError = async () => {
+      const error = player.error();
+      if (error) {
+        console.error('VideoJS Source Error:', error);
+
+        // Check if the stream is actually available
+        if (urlToPlay) {
+          try {
+            const response = await fetch(urlToPlay, { method: 'HEAD' });
+            if (response.status === 404 || response.status === 403) {
+              toast.error(`Stream not found (${response.status}).`);
+              return; // Do not retry
+            }
+          } catch (e) {
+            // Network error, likely safe to retry
+          }
         }
-        const hls = new Hls({
-          enableWorker: true,
-          lowLatencyMode: true,
-          maxBufferLength: 15,
-          maxMaxBufferLength: 30,
-          abrEwmaDefaultEstimate: 500000,
-          manifestLoadingMaxRetry: 3, 
-          manifestLoadingRetryDelay: 1000,
-          ...(contentType === 'tv' && {
-            liveSyncDuration: 10,
-            liveMaxLatencyDuration: 20,
-            maxBufferLength: 10,
-            maxMaxBufferLength: 20,
-          }),
-        });
-        hlsInstance.current = hls;
-        hls.loadSource(urlToPlay);
-        hls.attachMedia(videoElement);
-        hls.on(Hls.Events.MANIFEST_PARSED, (_, data) => {
-          videoElement.play();
-          setVideoLevels(data.levels);
-          setCurrentVideoLevel(hls.currentLevel); // Set initial level
-        });
-        hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, (_, data) => {
-          setAudioTracks(data.audioTracks);
-          setCurrentAudioTrack(hls.audioTrack);
-        });
-        hls.on(Hls.Events.SUBTITLE_TRACKS_UPDATED, (_, data) => {
-          setSubtitleTracks(data.subtitleTracks);
-          setCurrentSubtitleTrack(hls.subtitleTrack);
-        });
-        // Listen for changes (e.g., ABR)
-        hls.on(Hls.Events.LEVEL_SWITCHED, (_, data) => {
-          setCurrentVideoLevel(data.level);
-        });
-        hls.on(Hls.Events.AUDIO_TRACK_SWITCHED, (_, data) => {
-          setCurrentAudioTrack(data.id);
-        });
-        hls.on(Hls.Events.SUBTITLE_TRACK_SWITCH, (_, data) => {
-          setCurrentSubtitleTrack(data.id);
-        });
-        hls.on(Hls.Events.ERROR, (_: any, data: any) => {
-          console.error(data);
 
-          if (data.fatal) {
-            let errorMessage = `An error occurred: ${data.details}`;
-            if (retryCount.current >= 5) {
-              toast.error(
-                `Failed to play after 5 attempts. Returning to list.`
-              );
-              // onBack(); // Keep this commented or uncommented based on desired final behavior
-              return;
-            }
-            switch (data.type) {
-              case Hls.ErrorTypes.NETWORK_ERROR:
-                if (retryTimeoutRef.current) {
-                    return; // Ignore error if retry is already pending
-                }
-                retryCount.current++;
-                errorMessage = `A network error occurred: ${data.details}. Retrying in 3 seconds (Attempt ${retryCount.current}/5)...`;
-                toast.warn(errorMessage);
-                // --- MODIFICATION HERE: Introduce a 3-second delay for retry ---
-               retryTimeoutRef.current =  setTimeout(() => {
-                 retryTimeoutRef.current = null; // Release lock when executing
-                    if (hlsInstance.current) {
-                        hlsInstance.current.startLoad();
-                    }
-                }, 3000); // Wait for 3 seconds before calling startLoad()
-                // --- END MODIFICATION ---
-                break;
-              case Hls.ErrorTypes.MEDIA_ERROR:
-                errorMessage = `A media error occurred: ${data.details}`;
-                if (
-                  data.details === 'bufferAppendError' &&
-                  streamUrl &&
-                  rawStreamUrl
-                ) {
-                  errorMessage =
-                    'Buffer append error. Trying the other stream source...';
-                  toast.warn(errorMessage);
-                  setUseProxy((prev) => !prev);
-                } else {
-                  retryCount.current++;
-                  toast.error(errorMessage);
-                  hls.recoverMediaError();
-                }
-                break;
-              default:
-                errorMessage = `An unrecoverable error occurred: ${data.details}`;
-                hls.destroy();
-                toast.error(errorMessage);
-                onBack();
-                break;
-            }
-          }
-        });
-      } else if (videoElement.canPlayType('application/vnd.apple.mpegurl')) {
-        videoElement.src = urlToPlay;
-        videoElement.addEventListener('loadedmetadata', () => {
-          if (contentType !== 'tv') {
-            const savedTime = localStorage.getItem(`video-progress-${itemId}`);
-            if (savedTime) {
-              videoElement.currentTime = parseFloat(savedTime);
-            }
-          }
-          videoElement.play();
-        });
+        if (retryCount.current < 5) {
+          retryCount.current++;
+          toast.warn(`Playback error. Retrying (${retryCount.current}/5)...`);
+          retryTimeoutRef.current = setTimeout(() => {
+            player.src({
+              src: urlToPlay!,
+              type: (urlToPlay!.includes('.m3u8') || contentType === 'tv') ? 'application/x-mpegURL' : 'video/mp4'
+            });
+            player.load();
+            player.play();
+          }, 3000);
+        } else {
+          toast.error("Playback failed.");
+        }
       }
     };
 
-    initializePlayer();
+    player.on('error', handleSourceError);
 
     return () => {
-      if (hlsInstance.current) {
-        hlsInstance.current.destroy();
-      }
+      // Clean up source-specific error listener when source changes or component unmounts
+      player.off('error', handleSourceError);
       if (retryTimeoutRef.current) {
         clearTimeout(retryTimeoutRef.current);
         retryTimeoutRef.current = null;
       }
     };
-  }, [streamUrl, rawStreamUrl, useProxy, itemId, contentType, onBack]);
+
+  }, [streamUrl, rawStreamUrl, useProxy, itemId, contentType, player, seekOffset]); // Run when URL or player changes
 
   useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
+    if (!player) return;
 
     const handleTimeUpdate = () => {
-      const video = videoRef.current;
-      if (!video) return;
       if (contentType === 'tv') {
         setProgress(0);
         // setCurrentTime(0);
         setDuration(0);
       } else if (!seeking) {
-        if (video.duration && video.duration > 0) {
-          setProgress((video.currentTime / video.duration) * 100);
+        const duration = player.duration();
+        const currentTime = player.currentTime();
+        if (duration && duration > 0) {
+          const totalDuration = duration + seekOffset;
+          const currentPos = currentTime + seekOffset;
+          setProgress((currentPos / totalDuration) * 100);
+          setDuration(totalDuration); // Update state duration to be total
         } else {
           setProgress(0);
         }
       }
       if (contentType !== 'tv') {
-        setCurrentTime(video.currentTime);
+        // Adjust current time display by adding the seek offset
+        setCurrentTime(player.currentTime() + seekOffset);
       }
 
-      if (contentType !== 'tv' && video.duration > 0 && mediaId && itemId) {
-        const progressPercentage = (video.currentTime / video.duration) * 100;
+      const duration = player.duration();
+      const currentTime = player.currentTime();
+
+      if (contentType !== 'tv' && duration > 0 && mediaId && itemId) {
+        const progressPercentage = (currentTime / duration) * 100;
         const itemToSave = seriesItem || item;
         const mediaProgressData = JSON.stringify({
           mediaId: mediaId,
@@ -330,6 +404,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
           name: itemToSave?.name || itemToSave?.title,
           screenshot_uri: itemToSave?.screenshot_uri,
           is_series: itemToSave?.is_series,
+          cmd: rawStreamUrl, // Save the raw stream URL (cmd) for Xtream Codes
         });
 
         if (progressPercentage > 95) {
@@ -367,18 +442,40 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         if (now - lastSaveTime.current > 5000) {
           localStorage.setItem(
             `video-progress-${itemId}`,
-            String(video.currentTime)
+            String(player.currentTime() + seekOffset)
           );
           lastSaveTime.current = now;
         }
       }
     };
-    const handleDurationChange = () => setDuration(video.duration);
+    const handleDurationChange = () => {
+      const duration = player.duration();
+      if (contentType !== 'tv') {
+        // Piped streams might report Infinity. Use item metadata if available.
+        if (!isFinite(duration) && (item?.runtime || item?.duration)) {
+          console.log('[VideoPlayer] Handling duration change. Video duration:', duration, 'Item runtime:', item?.runtime, 'Item duration:', item?.duration);
+          let metaDuration = 0;
+          if (item?.runtime) {
+            metaDuration = parseInt(String(item.runtime)) * 60; // Assume minutes
+          }
+
+          if (metaDuration > 0) {
+            setDuration(metaDuration);
+          } else {
+            setDuration(duration + seekOffset);
+          }
+        } else {
+          setDuration(duration + seekOffset);
+        }
+      } else {
+        setDuration(duration);
+      }
+    };
     const handlePlay = () => setIsPlaying(true);
     const handlePause = () => setIsPlaying(false);
     const handleVolumeChange = () => {
-      setIsMuted(video.muted);
-      setVolume(video.volume);
+      setIsMuted(player.muted());
+      setVolume(player.volume());
     };
     const handleWaiting = () => setIsBuffering(true);
     const handlePlaying = () => {
@@ -386,90 +483,36 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       setIsPlaying(true);
     };
     const handleError = () => {
-      const video = videoRef.current;
-      if (video && video.error) {
+      const error = player.error();
+      if (error) {
         console.error(
-          `Video Error (code ${video.error.code}): ${video.error.message}`
+          `Video Error(code ${error.code}): ${error.message} `
         );
-        if (retryCount.current >= 5) {
-          toast.error(`Failed to play after 5 attempts. Returning to list.`);
-          return;
-        }
-        let errorMessage = `An error occurred (Code: ${video.error.code})`;
-        switch (video.error.code) {
-          case video.error.MEDIA_ERR_ABORTED:
-            errorMessage = 'Video playback aborted.';
-            toast.info(errorMessage);
-            onBack();
-            break;
-          case video.error.MEDIA_ERR_NETWORK:
-            errorMessage =
-              'A network error caused the video download to fail. Retrying...';
-            toast.warn(errorMessage);
-            if (hlsInstance.current) {
-              hlsInstance.current.startLoad();
-            }
-            break;
-          case video.error.MEDIA_ERR_DECODE:
-            errorMessage =
-              'The video playback was aborted due to a corruption problem.';
-            if (streamUrl && rawStreamUrl) {
-              errorMessage += ' Attempting to recover by switching source...';
-              toast.warn(errorMessage);
-
-              setUseProxy((prev) => !prev);
-            } else if (hlsInstance.current) {
-              errorMessage += ' Attempting to recover...';
-              retryCount.current++;
-              toast.warn(errorMessage);
-              hlsInstance.current.recoverMediaError();
-            } else {
-              toast.error(errorMessage);
-              onBack();
-            }
-            break;
-          case video.error.MEDIA_ERR_SRC_NOT_SUPPORTED:
-            errorMessage = 'The video format is not supported.';
-            if (streamUrl && rawStreamUrl) {
-              errorMessage += ' Trying the other stream source...';
-              toast.warn(errorMessage);
-              setUseProxy((prev) => !prev);
-            } else {
-              errorMessage =
-                'The video could not be loaded because the format is not supported.';
-              toast.error(errorMessage);
-              onBack();
-            }
-            break;
-          default:
-            errorMessage = `An unknown error occurred. (Code: ${video.error.code})`;
-            toast.error(errorMessage);
-            onBack();
-            break;
-        }
+        // Error handling is mostly done in initialization, but we can add more here if needed
       }
     };
 
-    video.addEventListener('timeupdate', handleTimeUpdate);
-    video.addEventListener('durationchange', handleDurationChange);
-    video.addEventListener('play', handlePlay);
-    video.addEventListener('pause', handlePause);
-    video.addEventListener('volumechange', handleVolumeChange);
-    video.addEventListener('waiting', handleWaiting);
-    video.addEventListener('playing', handlePlaying);
-    video.addEventListener('error', handleError);
+    player.on('timeupdate', handleTimeUpdate);
+    player.on('durationchange', handleDurationChange);
+    player.on('play', handlePlay);
+    player.on('pause', handlePause);
+    player.on('volumechange', handleVolumeChange);
+    player.on('waiting', handleWaiting);
+    player.on('playing', handlePlaying);
+    player.on('error', handleError);
 
     return () => {
-      video.removeEventListener('timeupdate', handleTimeUpdate);
-      video.removeEventListener('durationchange', handleDurationChange);
-      video.removeEventListener('play', handlePlay);
-      video.removeEventListener('pause', handlePause);
-      video.removeEventListener('volumechange', handleVolumeChange);
-      video.removeEventListener('waiting', handleWaiting);
-      video.removeEventListener('playing', handlePlaying);
-      video.removeEventListener('error', handleError);
+      player.off('timeupdate', handleTimeUpdate);
+      player.off('durationchange', handleDurationChange);
+      player.off('play', handlePlay);
+      player.off('pause', handlePause);
+      player.off('volumechange', handleVolumeChange);
+      player.off('waiting', handleWaiting);
+      player.off('playing', handlePlaying);
+      player.off('error', handleError);
     };
   }, [
+    player,
     seeking,
     itemId,
     streamUrl,
@@ -479,7 +522,10 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     item,
     seriesItem,
     onBack,
+    seekOffset
   ]);
+
+
 
   useEffect(() => {
     const updateProgramInfo = () => {
@@ -547,17 +593,17 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   }, [onBack]);
 
   const togglePlayPause = useCallback(() => {
-    const video = videoRef.current;
-    if (video) {
-      if (video.paused) video.play();
-      else video.pause();
+    const player = playerRef.current;
+    if (player) {
+      if (player.paused()) player.play();
+      else player.pause();
     }
   }, []);
 
   const skip = useCallback((seconds: number) => {
-    const video = videoRef.current;
-    if (video) {
-      video.currentTime += seconds;
+    const player = playerRef.current;
+    if (player) {
+      player.currentTime(player.currentTime() + seconds);
     }
   }, []);
 
@@ -585,14 +631,17 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       if (seekApplyTimer.current) clearTimeout(seekApplyTimer.current);
       seekBuffer.current += amount;
 
-      const video = videoRef.current;
+      const player = playerRef.current;
       const seekBar = seekBarRef.current;
-      if (video && isFinite(video.duration) && seekBar) {
+      // Use state duration if player.duration() is infinite
+      const currentDuration = (player && isFinite(player.duration())) ? player.duration() : duration;
+
+      if (player && currentDuration > 0 && seekBar) {
         const newTime = Math.max(
           0,
-          Math.min(video.duration, video.currentTime + seekBuffer.current)
+          Math.min(currentDuration, player.currentTime() + seekBuffer.current)
         );
-        const newProgress = (newTime / video.duration) * 100;
+        const newProgress = (newTime / currentDuration) * 100;
         const newPosition = (newProgress / 100) * seekBar.offsetWidth;
         setHoverTime(newTime);
         setHoverPosition(newPosition);
@@ -605,19 +654,22 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         setTimeout(() => setIsTooltipVisible(false), 500);
       }, 500);
     },
-    [skip]
+    [skip, duration] // Added duration dependency
   );
 
   const handleSkipButtonClick = useCallback(
     (seconds: number) => {
-      const video = videoRef.current;
+      const player = playerRef.current;
       const seekBar = seekBarRef.current;
-      if (video && isFinite(video.duration) && seekBar) {
+      // Use state duration if player.duration() is infinite
+      const currentDuration = (player && isFinite(player.duration())) ? player.duration() : duration;
+
+      if (player && currentDuration > 0 && seekBar) {
         const newTime = Math.max(
           0,
-          Math.min(video.duration, video.currentTime + seconds)
+          Math.min(currentDuration, player.currentTime() + seconds)
         );
-        const newProgress = (newTime / video.duration) * 100;
+        const newProgress = (newTime / currentDuration) * 100;
         const newPosition = (newProgress / 100) * seekBar.offsetWidth;
 
         setHoverTime(newTime);
@@ -631,7 +683,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         }, 500);
       }
     },
-    [skip]
+    [skip, duration] // Added duration dependency
   );
 
   useEffect(() => {
@@ -761,7 +813,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     const handleSettingsMenuKeyDown = (e: KeyboardEvent) => {
       const focusable = Array.from(
         settingsMenuRef.current?.querySelectorAll('[data-focusable="true"]') ||
-          []
+        []
       ) as HTMLElement[];
       if (focusable.length === 0) return;
 
@@ -846,7 +898,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     if (showChannelList || isSettingsMenuOpen) return;
     const focusable = Array.from(
       playerContainerRef.current?.querySelectorAll('[data-focusable="true"]') ||
-        []
+      []
     ) as HTMLElement[];
     if (focusable.length === 0) return;
 
@@ -932,11 +984,16 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const handleSeekMouseUp = (e: React.MouseEvent<HTMLInputElement>) => {
     if (contentType === 'tv') return;
     setSeeking(false);
-    const video = videoRef.current;
-    if (video && isFinite(video.duration)) {
+    const player = playerRef.current;
+
+    // Use state duration if player.duration() is infinite
+    const currentDuration = (player && isFinite(player.duration())) ? player.duration() : duration;
+
+    if (player && currentDuration > 0) {
       const seekTime =
-        (Number((e.target as HTMLInputElement).value) / 100) * video.duration;
-      video.currentTime = seekTime;
+        (Number((e.target as HTMLInputElement).value) / 100) * (currentDuration + seekOffset);
+
+      player.currentTime(seekTime);
     }
   };
 
@@ -947,30 +1004,33 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
   const handleSeekBarHover = (e: React.MouseEvent<HTMLInputElement>) => {
     if (contentType === 'tv') return;
-    const video = videoRef.current;
-    if (video && isFinite(video.duration)) {
+    const player = playerRef.current;
+    // Use state duration if player.duration() is infinite
+    const currentDuration = (player && isFinite(player.duration())) ? player.duration() : duration;
+
+    if (player && currentDuration > 0) {
       const rect = e.currentTarget.getBoundingClientRect();
       const x = e.clientX - rect.left;
       const percentage = x / rect.width;
-      const time = percentage * video.duration;
+      const time = percentage * currentDuration;
       setHoverTime(time);
       setHoverPosition(x);
     }
   };
 
   const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const video = videoRef.current;
-    if (video) {
+    const player = playerRef.current;
+    if (player) {
       const newVolume = parseFloat(e.target.value);
-      video.volume = newVolume;
-      video.muted = newVolume === 0;
+      player.volume(newVolume);
+      player.muted(newVolume === 0);
     }
   };
 
   const toggleMute = () => {
-    const video = videoRef.current;
-    if (video) {
-      video.muted = !video.muted;
+    const player = playerRef.current;
+    if (player) {
+      player.muted(!player.muted());
     }
   };
 
@@ -984,7 +1044,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       if (!document.fullscreenElement) {
         elem.requestFullscreen().catch((err) => {
           console.error(
-            `Error attempting to enable full-screen mode: ${err.message}`
+            `Error attempting to enable full-screen mode: ${err.message} `
           );
         });
       } else {
@@ -1057,39 +1117,87 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   };
 
   const handleVideoLevelChange = (levelIndex: number) => {
-    if (hlsInstance.current) {
-      hlsInstance.current.nextLevel = levelIndex;
+    setCurrentVideoLevel(levelIndex);
+    if (player) {
+      // Basic implementation for videojs-contrib-quality-levels if available
+      const qualityLevels = (player as any).qualityLevels ? (player as any).qualityLevels() : null;
+      if (qualityLevels) {
+        if (levelIndex === -1) {
+          for (let i = 0; i < qualityLevels.length; i++) {
+            qualityLevels[i].enabled = true;
+          }
+        } else {
+          for (let i = 0; i < qualityLevels.length; i++) {
+            qualityLevels[i].enabled = (i === levelIndex);
+          }
+        }
+      }
     }
     setActiveSettingsMenu('main');
     setIsSettingsMenuOpen(false); // Close menu on selection
   };
 
   const handleAudioTrackChange = (trackId: number) => {
-    if (hlsInstance.current) {
-      hlsInstance.current.audioTrack = trackId;
+    if (player) {
+      const audioTracks = player.audioTracks();
+      for (let i = 0; i < audioTracks.length; i++) {
+        const track = audioTracks[i];
+        if (i === trackId) {
+          track.enabled = true;
+        } else {
+          track.enabled = false;
+        }
+      }
+      setCurrentAudioTrack(trackId);
     }
     setActiveSettingsMenu('main');
     setIsSettingsMenuOpen(false);
   };
 
   const handleSubtitleTrackChange = (trackId: number) => {
-    if (hlsInstance.current) {
-      hlsInstance.current.subtitleTrack = trackId;
+    if (player) {
+      const textTracks = player.textTracks();
+      if (trackId === -1) {
+        for (let i = 0; i < textTracks.length; i++) {
+          const track = textTracks[i];
+          if (track.kind === 'subtitles' || track.kind === 'captions') {
+            track.mode = 'disabled';
+          }
+        }
+      } else {
+        for (let i = 0; i < textTracks.length; i++) {
+          const track = textTracks[i];
+          if (i === trackId) {
+            track.mode = 'showing';
+          } else if (track.kind === 'subtitles' || track.kind === 'captions') {
+            track.mode = 'disabled';
+          }
+        }
+      }
+      setCurrentSubtitleTrack(trackId);
     }
     setActiveSettingsMenu('main');
     setIsSettingsMenuOpen(false);
   };
 
-  const handleCopyLink = () => {
+  const handleCopyLink = async () => {
     if (rawStreamUrl) {
-      const tempInput = document.createElement('textarea');
-      tempInput.value = rawStreamUrl;
-      document.body.appendChild(tempInput);
-      tempInput.select();
-      document.execCommand('copy');
-      document.body.removeChild(tempInput);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      try {
+        await navigator.clipboard.writeText(rawStreamUrl);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      } catch (err) {
+        console.error('Failed to copy: ', err);
+        // Fallback for older browsers or non-secure contexts
+        const tempInput = document.createElement('textarea');
+        tempInput.value = rawStreamUrl;
+        document.body.appendChild(tempInput);
+        tempInput.select();
+        document.execCommand('copy');
+        document.body.removeChild(tempInput);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      }
     }
   };
 
@@ -1099,6 +1207,13 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       data-focusable="true"
       tabIndex={-1}
     >
+      <style>{`
+        .video-js { width: 100%; height: 100%; }
+        .video-js .vjs-tech { width: 100%; height: 100%; position: absolute; top: 0; left: 0; }
+        .vjs-fit-contain .vjs-tech { object-fit: contain !important; }
+        .vjs-fit-cover .vjs-tech { object-fit: cover !important; }
+        .vjs-fit-fill .vjs-tech { object-fit: fill !important; }
+      `}</style>
       <div
         ref={playerContainerRef}
         onMouseMove={handleMouseMove}
@@ -1110,9 +1225,8 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
             clearTimeout(cursorTimeoutRef.current);
           }
         }}
-        className={`group relative h-full w-full overflow-hidden ${
-          !cursorVisible && !controlsVisible ? 'cursor-none' : ''
-        }`}
+        className={`group relative h-full w-full overflow-hidden ${!cursorVisible && !controlsVisible ? 'cursor-none' : ''
+          }`}
       >
         {/* Channel List Overlay */}
         {showChannelList &&
@@ -1130,12 +1244,8 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
               currentItemId={itemId}
             />
           )}
-        <video
-          ref={videoRef}
-          style={{ objectFit: fitMode }}
-          crossOrigin="anonymous"
-          autoPlay
-          playsInline
+        <div
+          ref={videoWrapperRef}
           className="h-full w-full"
           onClick={handleVideoClick}
           onDoubleClick={toggleFullscreen}
@@ -1164,9 +1274,8 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         )}
 
         <div
-          className={`pointer-events-none absolute inset-0 z-20 transition-opacity duration-300 ${
-            controlsVisible || isBuffering ? 'opacity-100' : 'opacity-0'
-          }`}
+          className={`pointer-events-none absolute inset-0 z-20 transition-opacity duration-300 ${controlsVisible || isBuffering ? 'opacity-100' : 'opacity-0'
+            }`}
         >
           <div className="pointer-events-auto absolute left-0 right-0 top-0 p-4">
             <div className="flex items-center space-x-4">
@@ -1249,8 +1358,8 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
                           (previewChannelInfo ||
                             channelInfo)!.screenshot_uri?.startsWith('http')
                             ? (previewChannelInfo || channelInfo)!
-                                .screenshot_uri
-                            : `${URL_PATHS.HOST}/api/images${(previewChannelInfo || channelInfo)!.screenshot_uri}`
+                              .screenshot_uri
+                            : `${URL_PATHS.HOST} /api/images${(previewChannelInfo || channelInfo)!.screenshot_uri} `
                         }
                         alt={(previewChannelInfo || channelInfo)!.name}
                         className="mr-3 h-10 w-12 flex-shrink-0 rounded-sm bg-black object-contain p-0.5"
@@ -1286,10 +1395,12 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
                     <span className="ml-2 flex-shrink-0 text-sm">
                       {currentProgram
                         ? `${formatTimestamp(
-                            parseInt(currentProgram.start_timestamp)
-                          )} - ${formatTimestamp(
-                            parseInt(currentProgram.stop_timestamp)
-                          )}`
+                          parseInt(currentProgram.start_timestamp)
+                        )
+                        } - ${formatTimestamp(
+                          parseInt(currentProgram.stop_timestamp)
+                        )
+                        } `
                         : previewChannelInfo
                           ? '...'
                           : 'Now'}
@@ -1316,7 +1427,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
                 <div className="mt-2 h-1.5 w-full rounded-full bg-gray-600">
                   <div
                     className="h-1.5 rounded-full bg-green-500"
-                    style={{ width: `${programProgress}%` }}
+                    style={{ width: `${programProgress}% ` }}
                   ></div>
                 </div>
 
@@ -1453,7 +1564,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
                             <>
                               <button
                                 onClick={() => handleVideoLevelChange(-1)}
-                                className={`block w-full px-4 py-2 text-left hover:bg-gray-700 ${currentVideoLevel === -1 ? 'bg-blue-500' : ''}`}
+                                className={`block w-full px-4 py-2 text-left hover:bg-gray-700 ${currentVideoLevel === -1 ? 'bg-blue-500' : ''} `}
                                 data-focusable="true"
                               >
                                 Auto
@@ -1463,7 +1574,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
                                   key={String(level.url) + index}
                                   onClick={() => handleVideoLevelChange(index)}
                                   data-focusable="true"
-                                  className={`block w-full px-4 py-2 text-left hover:bg-gray-700 ${currentVideoLevel === index ? 'bg-blue-500' : ''}`}
+                                  className={`block w-full px-4 py-2 text-left hover:bg-gray-700 ${currentVideoLevel === index ? 'bg-blue-500' : ''} `}
                                 >
                                   {level.height}p{' '}
                                   {level.bitrate > 0 &&
@@ -1482,7 +1593,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
                                   onClick={() =>
                                     handleAudioTrackChange(track.id)
                                   }
-                                  className={`block w-full px-4 py-2 text-left hover:bg-gray-700 ${currentAudioTrack === track.id ? 'bg-blue-500' : ''}`}
+                                  className={`block w-full px-4 py-2 text-left hover:bg-gray-700 ${currentAudioTrack === track.id ? 'bg-blue-500' : ''} `}
                                 >
                                   {track.name} {track.lang && `(${track.lang})`}
                                 </button>
@@ -1495,7 +1606,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
                               <button
                                 onClick={() => handleSubtitleTrackChange(-1)}
                                 data-focusable="true"
-                                className={`block w-full px-4 py-2 text-left hover:bg-gray-700 ${currentSubtitleTrack === -1 ? 'bg-blue-500' : ''}`}
+                                className={`block w-full px-4 py-2 text-left hover:bg-gray-700 ${currentSubtitleTrack === -1 ? 'bg-blue-500' : ''} `}
                               >
                                 Off
                               </button>
@@ -1506,7 +1617,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
                                   onClick={() =>
                                     handleSubtitleTrackChange(track.id)
                                   }
-                                  className={`block w-full px-4 py-2 text-left hover:bg-gray-700 ${currentSubtitleTrack === track.id ? 'bg-blue-500' : ''}`}
+                                  className={`block w-full px-4 py-2 text-left hover:bg-gray-700 ${currentSubtitleTrack === track.id ? 'bg-blue-500' : ''} `}
                                 >
                                   {track.name} {track.lang && `(${track.lang})`}
                                 </button>
@@ -1635,7 +1746,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
                   <div
                     className="absolute bottom-full mb-2 rounded bg-black bg-opacity-75 px-2 py-1 text-xs text-white"
                     style={{
-                      left: `${hoverPosition}px`,
+                      left: `${hoverPosition} px`,
                       transform: 'translateX(-50%)',
                     }}
                   >
@@ -1855,7 +1966,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
                           <>
                             <button
                               onClick={() => handleVideoLevelChange(-1)}
-                              className={`block w-full px-4 py-2 text-left hover:bg-gray-700 ${currentVideoLevel === -1 ? 'bg-blue-500' : ''}`}
+                              className={`block w-full px-4 py-2 text-left hover:bg-gray-700 ${currentVideoLevel === -1 ? 'bg-blue-500' : ''} `}
                               data-focusable="true"
                             >
                               Auto
@@ -1865,7 +1976,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
                                 key={String(level.url) + index}
                                 onClick={() => handleVideoLevelChange(index)}
                                 data-focusable="true"
-                                className={`block w-full px-4 py-2 text-left hover:bg-gray-700 ${currentVideoLevel === index ? 'bg-blue-500' : ''}`}
+                                className={`block w-full px-4 py-2 text-left hover:bg-gray-700 ${currentVideoLevel === index ? 'bg-blue-500' : ''} `}
                               >
                                 {level.height}p{' '}
                                 {level.bitrate > 0 &&
@@ -1882,7 +1993,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
                                 key={track.id}
                                 data-focusable="true"
                                 onClick={() => handleAudioTrackChange(track.id)}
-                                className={`block w-full px-4 py-2 text-left hover:bg-gray-700 ${currentAudioTrack === track.id ? 'bg-blue-500' : ''}`}
+                                className={`block w-full px-4 py-2 text-left hover:bg-gray-700 ${currentAudioTrack === track.id ? 'bg-blue-500' : ''} `}
                               >
                                 {track.name} {track.lang && `(${track.lang})`}
                               </button>
@@ -1895,7 +2006,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
                             <button
                               onClick={() => handleSubtitleTrackChange(-1)}
                               data-focusable="true"
-                              className={`block w-full px-4 py-2 text-left hover:bg-gray-700 ${currentSubtitleTrack === -1 ? 'bg-blue-500' : ''}`}
+                              className={`block w-full px-4 py-2 text-left hover:bg-gray-700 ${currentSubtitleTrack === -1 ? 'bg-blue-500' : ''} `}
                             >
                               Off
                             </button>
@@ -1906,7 +2017,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
                                 onClick={() =>
                                   handleSubtitleTrackChange(track.id)
                                 }
-                                className={`block w-full px-4 py-2 text-left hover:bg-gray-700 ${currentSubtitleTrack === track.id ? 'bg-blue-500' : ''}`}
+                                className={`block w-full px-4 py-2 text-left hover:bg-gray-700 ${currentSubtitleTrack === track.id ? 'bg-blue-500' : ''} `}
                               >
                                 {track.name} {track.lang && `(${track.lang})`}
                               </button>

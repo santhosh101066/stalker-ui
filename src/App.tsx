@@ -54,10 +54,12 @@ const initialContext: ContextType = {
   parentTitle: initialTitle,
   focusedIndex: null,
   contentType: initialType,
+  sort: 'latest',
 };
 // --- Main Application Component ---
 export default function App() {
   const isTizen = !!(window as any).tizen; // Detect Tizen environment
+  const [isPortal, setIsPortal] = useState(false);
 
   const [context, setContext] = useState<ContextType>(initialContext);
   const [items, setItems] = useState<MediaItem[]>([]);
@@ -72,11 +74,14 @@ export default function App() {
     initialType
   ); // 'movie' or 'series'
   const [showAdmin, setShowAdmin] = useState(false);
+
   const [currentItem, setCurrentItem] = useState<MediaItem | null>(null);
   const [currentSeriesItem, setCurrentSeriesItem] = useState<MediaItem | null>(
     null
   );
   const [isSearchActive, setIsSearchActive] = useState(false);
+  const [isSearchTyping, setIsSearchTyping] = useState(false); // <-- ADD THIS
+  const [searchTerm, setSearchTerm] = useState(''); // <-- ADD THIS
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
   const [playLastTvChannel, setPlayLastTvChannel] = useState<string | null>(
     null
@@ -135,6 +140,7 @@ export default function App() {
             category: newContext.category,
             movieId: newContext.movieId,
             seasonId: newContext.seasonId,
+            sort: newContext.sort,
           };
           response = await getMedia(params);
           setItems((prevItems) =>
@@ -144,6 +150,9 @@ export default function App() {
           );
           if (response.total_items) {
             setTotalItemsCount(response.total_items);
+          }
+          if (response.isPortal !== undefined) {
+            setIsPortal(response.isPortal);
           }
         } else if (currentContentType === 'series') {
           if (newContext.movieId) {
@@ -160,6 +169,7 @@ export default function App() {
               search: newContext.search,
               pageAtaTime: 1,
               category: newContext.category,
+              sort: newContext.sort,
             };
             response = await getSeries(params);
           }
@@ -182,8 +192,14 @@ export default function App() {
           const allChannels = channelResponse.data || [];
           const allGroups = groupResponse.data || [];
 
-          setItems(allChannels); // Set items to all channels
-          setTotalItemsCount(allChannels.length);
+          const filteredChannels = newContext.search
+            ? allChannels.filter((c) =>
+              c.name?.toLowerCase().includes(newContext.search.toLowerCase())
+            )
+            : allChannels;
+
+          setItems(filteredChannels); // Set items to filtered channels
+          setTotalItemsCount(filteredChannels.length);
           setChannelGroups([
             { id: 'fav', title: 'Favorites' },
             { id: 'all', title: 'All Channels' },
@@ -228,6 +244,9 @@ export default function App() {
 
   useEffect(() => {
     fetchData(initialContext);
+  }, [fetchData]);
+
+  useEffect(() => {
     if (initialContext.contentType === 'tv') {
       loadEpgData();
       const lastPlayedId = localStorage.getItem('lastPlayedTvChannelId');
@@ -237,7 +256,12 @@ export default function App() {
         setPlayLastTvChannel('__play_first__'); // Set trigger for first channel
       }
     }
-  }, [fetchData, loadEpgData]);
+  }, [loadEpgData]);
+
+  // Sync searchTerm with context.search
+  useEffect(() => {
+    setSearchTerm(context.search || '');
+  }, [context.search]);
 
   const handleItemClick = useCallback(
     async (item: MediaItem) => {
@@ -263,9 +287,10 @@ export default function App() {
 
         fetchData({
           ...initialContext,
-          category: context.category || '*',
+          category: '*',
           movieId: item.id,
           parentTitle: displayTitle,
+          contentType,
         });
       } else if (item.is_season) {
         fetchData({
@@ -274,6 +299,7 @@ export default function App() {
           movieId: context.movieId,
           seasonId: item.id,
           parentTitle: displayTitle,
+          contentType,
         });
       } else if (item.is_episode) {
         setLoading(true);
@@ -302,23 +328,32 @@ export default function App() {
           if (episodeFiles && episodeFiles.length > 0) {
             const episodeFile = episodeFiles[0];
             if (episodeFile.id !== undefined) {
-              const urlParams: Record<string, string | number | undefined> = {
-                id: episodeFile.id,
-              };
-              if (item.series_number !== undefined) {
-                urlParams.series = item.series_number;
-              }
-
-              const linkData = await getMovieUrl(urlParams);
-              const cmd =
-                (linkData && linkData.js && linkData.js.cmd) ||
-                (linkData && linkData.cmd);
-
-              if (typeof cmd === 'string') {
-                setRawStreamUrl(cmd);
-                setStreamUrl(`${BASE_URL}/proxy?url=${btoa(cmd)}`);
+              // SIMPLIFIED LOGIC:
+              // If Xtream (!isPortal), use the direct URL (cmd) via proxy.
+              // If Stalker (isPortal), fetch the secure link via API.
+              if (!isPortal && episodeFile.cmd) {
+                setRawStreamUrl(episodeFile.cmd);
+                setStreamUrl(`${BASE_URL}/proxy?url=${btoa(episodeFile.cmd)}`);
               } else {
-                throw new Error('Episode stream URL (cmd) not found.');
+                const urlParams: Record<string, string | number | undefined> = {
+                  id: episodeFile.id,
+                };
+                if (item.series_number !== undefined) {
+                  urlParams.series = item.series_number;
+                }
+
+                const linkData = await getMovieUrl(urlParams);
+                const cmd =
+                  (linkData && linkData.js && linkData.js.cmd) ||
+                  (linkData && linkData.cmd);
+
+                if (typeof cmd === 'string') {
+                  setRawStreamUrl(cmd);
+                  // User requested to use /api/proxy for VOD Stalker portal
+                  setStreamUrl(`${BASE_URL}/proxy?url=${btoa(cmd)}`);
+                } else {
+                  throw new Error('Episode stream URL (cmd) not found.');
+                }
               }
             } else {
               throw new Error('Episode details (id) missing.');
@@ -335,6 +370,19 @@ export default function App() {
           setLoading(false);
         }
       } else if (isInsideMovieCategory || item.is_playable_movie) {
+        // OPTIMIZATION: If item already has cmd (e.g. from Continue Watching) AND it's Xtream, play immediately.
+        // If it's Stalker, we MUST go through the API to get a fresh/valid link.
+        if (!isPortal && item.cmd) {
+          setLoading(true);
+          setCurrentItem(item);
+          setRawStreamUrl(item.cmd);
+          // We set streamUrl to raw cmd. VideoPlayer will handle proxying if enabled.
+          // We avoid the old /proxy route to prevent confusion.
+          setStreamUrl(item.cmd);
+          setLoading(false);
+          return;
+        }
+
         setLoading(true);
         setCurrentItem(item);
         try {
@@ -347,18 +395,28 @@ export default function App() {
 
           if (files && files.length > 0) {
             const movieFile = files[0];
-            const linkData = await getMovieUrl({ id: movieFile.id });
 
-            if (
-              linkData &&
-              linkData.js &&
-              typeof linkData.js.cmd === 'string'
-            ) {
-              const rawUrl = linkData.js.cmd;
-              setRawStreamUrl(rawUrl);
-              setStreamUrl(`${BASE_URL}/proxy?url=${btoa(rawUrl)}`);
+            // SIMPLIFIED LOGIC:
+            // If Xtream (!isPortal), use the direct URL (cmd) via proxy.
+            // If Stalker (isPortal), fetch the secure link via API.
+            if (!isPortal && movieFile.cmd) {
+              setRawStreamUrl(movieFile.cmd);
+              setStreamUrl(`${BASE_URL}/proxy?url=${btoa(movieFile.cmd)}`);
             } else {
-              throw new Error('Movie stream URL not found.');
+              const linkData = await getMovieUrl({ id: movieFile.id });
+
+              if (
+                linkData &&
+                linkData.js &&
+                typeof linkData.js.cmd === 'string'
+              ) {
+                const rawUrl = linkData.js.cmd;
+                setRawStreamUrl(rawUrl);
+                // User requested to use /api/proxy for VOD Stalker portal
+                setStreamUrl(`${BASE_URL}/proxy?url=${btoa(rawUrl)}`);
+              } else {
+                throw new Error('Movie stream URL not found.');
+              }
             }
           } else {
             throw new Error('Movie file could not be found.');
@@ -385,7 +443,7 @@ export default function App() {
         }
 
         // This is the correct, proxied URL your backend provides
-        const channelUrl = `${URL_PATHS.HOST}/live.m3u8?cmd=${item.cmd}&id=${item.id}`;
+        const channelUrl = `${URL_PATHS.HOST}/live.m3u8?cmd=${item.cmd}&id=${item.id}&proxy=1`;
 
         localStorage.setItem('lastPlayedTvChannelId', item.id);
         setCurrentItem(item);
@@ -400,6 +458,7 @@ export default function App() {
           ...initialContext,
           category: item.id,
           parentTitle: displayTitle,
+          contentType,
         });
       }
     },
@@ -683,6 +742,7 @@ export default function App() {
       setHistory([]);
       setStreamUrl(null);
       setRawStreamUrl(null);
+      setContext(newContext);
       fetchData(newContext, type);
       if (type === 'tv') {
         loadEpgData();
@@ -698,6 +758,47 @@ export default function App() {
     },
     [contentType, fetchData, loadEpgData]
   );
+
+  const cycleSort = useCallback(() => {
+    const sortOptions = ['latest', 'alphabetic', 'oldest'];
+    const currentSort = context.sort || 'latest';
+    const currentIndex = sortOptions.indexOf(currentSort);
+    const nextIndex = (currentIndex + 1) % sortOptions.length;
+    const nextSort = sortOptions[nextIndex];
+    fetchData({ ...context, sort: nextSort, page: 1 });
+  }, [context, fetchData]);
+
+  const handleSearch = (e?: React.FormEvent<HTMLFormElement>) => {
+    if (e) e.preventDefault();
+    // Use the state 'searchTerm' instead of form elements
+    const search = searchTerm;
+
+    if (isTizen) {
+      setIsSearchActive(false);
+    }
+
+    // Preserve history!
+    setHistory((prev) => [
+      ...prev,
+      { ...context, focusedIndex: focusedIndex ?? 0 },
+    ]);
+
+    const newTitle = search
+      ? `Results for "${search}"`
+      : contentType === 'movie'
+        ? 'Movies'
+        : contentType === 'series'
+          ? 'Series'
+          : 'TV';
+
+    fetchData({
+      ...initialContext,
+      search,
+      category: search ? '*' : contentType === 'tv' ? null : '*',
+      parentTitle: newTitle,
+      contentType,
+    });
+  };
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -724,6 +825,61 @@ export default function App() {
         return;
       }
       // --- END: TIZEN SEARCH LOGIC ---
+
+      const activeElement = document.activeElement;
+      const isInput =
+        activeElement &&
+        (activeElement.tagName === 'INPUT' ||
+          activeElement.tagName === 'TEXTAREA');
+
+      if (isInput) {
+        // Allow Down (40) to exit input focus
+        if (e.keyCode === 40) {
+          e.preventDefault();
+          (activeElement as HTMLElement).blur();
+          setIsSearchTyping(false); // Stop typing mode
+          setFocusedIndex(0); // Focus first item
+          return;
+        }
+
+        // If we are typing, allow normal input behavior
+        if (isSearchTyping) {
+          // Allow Escape (27) or Enter (13) to stop typing
+          // Allow Escape (27) to stop typing
+          if (e.keyCode === 27) {
+            e.preventDefault();
+            setIsSearchTyping(false);
+            (activeElement as HTMLElement).blur();
+            return;
+          }
+
+          // Allow Enter (13) to stop typing AND submit form
+          if (e.keyCode === 13) {
+            e.preventDefault(); // Prevent duplicate form submission
+            setIsSearchTyping(false);
+            (activeElement as HTMLElement).blur();
+            handleSearch(); // Explicitly call search
+            return;
+          }
+          // Trap navigation keys inside input while typing
+          if ([37, 38, 39].includes(e.keyCode)) {
+            return;
+          }
+          return; // Let other keys (letters) pass through
+        }
+
+        // If NOT typing (just focused), trap keys or handle Enter to start typing
+        if (e.keyCode === 13) {
+          e.preventDefault();
+          setIsSearchTyping(true);
+          return;
+        }
+
+        // If focused but not typing, we might want to allow moving away with Left/Right/Up too?
+        // For now, let's stick to the requested "Enter to allow type"
+        // If we press other keys, we might want to prevent them if they would type
+        // But since we will set readOnly={!isSearchTyping}, we don't need to preventDefault all.
+      }
 
       const focusable = Array.from(
         document.querySelectorAll('[data-focusable="true"]')
@@ -807,6 +963,12 @@ export default function App() {
             if (isTizen && focusedElement.matches('input[type="search"]')) {
               setIsSearchActive(true);
               focusedElement.focus();
+            } else if (focusedElement.matches('input[type="search"]')) {
+              // Web: Enter on search input starts typing
+              setIsSearchTyping(true);
+              focusedElement.focus();
+            } else if (focusedElement.getAttribute('data-control') === 'sort') {
+              cycleSort();
             } else {
               focusedElement.click();
             }
@@ -814,10 +976,23 @@ export default function App() {
           break;
         case 0: // BACK on some devices
         case 10009: // RETURN on Tizen
-        case 8: // Backspace for web
+        case 8: {
+          // Backspace for web
+
+          const activeElement = document.activeElement;
+          const isInput =
+            activeElement &&
+            (activeElement.tagName === 'INPUT' ||
+              activeElement.tagName === 'TEXTAREA');
+
+          if (isInput) {
+            // If typing, DO NOT prevent default. Let the browser delete the character.
+            return;
+          }
           e.preventDefault();
           handleBack();
           break;
+        }
 
         // --- ADDED TIZEN COLOR KEY STUBS ---
         case 403:
@@ -827,7 +1002,13 @@ export default function App() {
           handleContentTypeChange('movie');
           break;
         case 405: // ColorF2Yellow
-          console.log('Yellow button pressed');
+          cycleSort();
+          break;
+        case 83: // 's' key for Web testing
+          if (!isInput) {
+            e.preventDefault();
+            cycleSort();
+          }
           break;
         case 406: // ColorF3Blue
           console.log('Blue button pressed');
@@ -854,32 +1035,15 @@ export default function App() {
     handlePageChange,
     checkAndFetchNextPage,
     handleClearWatched,
+    checkAndFetchNextPage,
+    handleClearWatched,
     handleContentTypeChange,
+    cycleSort,
+    isSearchTyping,
+    handleSearch,
   ]);
 
-  const handleSearch = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const search = (
-      e.target as typeof e.target & { elements: { search: { value: string } } }
-    ).elements.search.value;
-    if (isTizen) {
-      setIsSearchActive(false);
-    }
-    setHistory([]);
-    const newTitle = search
-      ? `Results for "${search}"`
-      : contentType === 'movie'
-        ? 'Movies'
-        : contentType === 'series'
-          ? 'Series'
-          : 'TV';
-    fetchData({
-      ...initialContext,
-      search,
-      category: search ? '*' : contentType === 'tv' ? null : '*',
-      parentTitle: newTitle,
-    });
-  };
+
 
   useEffect(() => {
     if (
@@ -970,7 +1134,7 @@ export default function App() {
       ) : (
         <div className="min-h-screen font-sans text-gray-200">
           <div className="container mx-auto p-4 sm:p-6">
-            <header className="sticky top-4 z-10 mb-6 rounded-xl border border-gray-700/80 bg-gray-800/50 p-4 backdrop-blur-lg">
+            <header className="sticky top-0 sm:top-4 z-10 mb-2 sm:mb-6 rounded-b-xl sm:rounded-xl border border-gray-700/80 bg-gray-800/50 p-2 sm:p-4 backdrop-blur-lg">
               <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
                 <div className="flex items-center self-start">
                   {(history.length > 0 || streamUrl) && !streamUrl && (
@@ -983,22 +1147,47 @@ export default function App() {
                       &larr;
                     </button>
                   )}
-                  <img src="stalker-logo.svg" width={180} />
-                  <h1 className="sm:text-l md:text-l text-xl font-bold tracking-wider text-white">
+                  <img src="stalker-logo.svg" className="w-28 sm:w-44" />
+                  <h1 className="sm:text-l md:text-l text-lg sm:text-xl font-bold tracking-wider text-white">
                     {currentTitle}
                   </h1>
                 </div>
 
+                {/* --- MOVED ADMIN/CLEAR BUTTONS HERE (Top Right) --- */}
                 {!streamUrl && (
-                  <div className="flex w-full flex-col items-center gap-4 sm:w-auto sm:flex-row">
+                  <div className="flex items-center">
+                    {!isTizen && (
+                      <button
+                        onClick={() => setShowAdmin(!showAdmin)}
+                        className="rounded-lg bg-blue-600 px-3 py-1 text-xs font-bold text-white transition-colors hover:bg-blue-700 sm:px-4 sm:py-2 sm:text-base"
+                        data-focusable="true"
+                        tabIndex={-1}
+                      >
+                        {showAdmin ? 'Back' : 'Admin'}
+                      </button>
+                    )}
+                    {isTizen && (
+                      <button
+                        onClick={handleClearWatched}
+                        className="rounded-lg bg-red-600 px-3 py-1 text-xs font-bold text-white transition-colors hover:bg-red-700 sm:px-4 sm:py-2 sm:text-base"
+                        data-focusable="true"
+                        tabIndex={-1}
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {!streamUrl && (
+                  <div className="flex w-full flex-col items-center gap-2 sm:gap-4 sm:w-auto sm:flex-row">
                     <div className="flex w-full justify-center space-x-2 rounded-full bg-gray-900/60 p-1 sm:w-auto">
                       <button
                         onClick={() => handleContentTypeChange('movie')}
-                        className={`w-full rounded-full px-4 py-2 text-sm font-semibold transition-colors duration-300 sm:px-6 ${
-                          contentType === 'movie'
-                            ? 'bg-blue-600 text-white'
-                            : 'text-gray-300 hover:bg-gray-700/50'
-                        }`}
+                        className={`w-full rounded-full px-2 py-1 sm:px-4 sm:py-2 text-xs sm:text-sm font-semibold transition-colors duration-300 ${contentType === 'movie'
+                          ? 'bg-blue-600 text-white'
+                          : 'text-gray-300 hover:bg-gray-700/50'
+                          }`}
                         data-focusable="true"
                         tabIndex={-1}
                       >
@@ -1006,11 +1195,10 @@ export default function App() {
                       </button>
                       <button
                         onClick={() => handleContentTypeChange('series')}
-                        className={`w-full rounded-full px-4 py-2 text-sm font-semibold transition-colors duration-300 sm:px-6 ${
-                          contentType === 'series'
-                            ? 'bg-blue-600 text-white'
-                            : 'text-gray-300 hover:bg-gray-700/50'
-                        }`}
+                        className={`w-full rounded-full px-2 py-1 sm:px-4 sm:py-2 text-xs sm:text-sm font-semibold transition-colors duration-300 ${contentType === 'series'
+                          ? 'bg-blue-600 text-white'
+                          : 'text-gray-300 hover:bg-gray-700/50'
+                          }`}
                         data-focusable="true"
                         tabIndex={-1}
                       >
@@ -1018,55 +1206,71 @@ export default function App() {
                       </button>
                       <button
                         onClick={() => handleContentTypeChange('tv')}
-                        className={`w-full rounded-full px-4 py-2 text-sm font-semibold transition-colors duration-300 sm:px-6 ${
-                          contentType === 'tv'
-                            ? 'bg-blue-600 text-white'
-                            : 'text-gray-300 hover:bg-gray-700/50'
-                        }`}
+                        className={`w-full rounded-full px-2 py-1 sm:px-4 sm:py-2 text-xs sm:text-sm font-semibold transition-colors duration-300 ${contentType === 'tv'
+                          ? 'bg-blue-600 text-white'
+                          : 'text-gray-300 hover:bg-gray-700/50'
+                          }`}
                         data-focusable="true"
                         tabIndex={-1}
                       >
                         TV
                       </button>
                     </div>
-                    <form onSubmit={handleSearch} className="w-full sm:w-auto">
-                      <input
-                        type="search"
-                        name="search"
-                        key={context.search}
-                        defaultValue={context.search}
-                        placeholder="Search titles..."
-                        className="w-full rounded-full border border-gray-700/80 bg-gray-900/50 px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 sm:w-64"
-                        data-focusable="true"
-                        readOnly={isTizen && !isSearchActive}
-                        onClick={() => {
-                          if (isTizen) setIsSearchActive(true);
-                        }}
-                        onBlur={() => {
-                          if (isTizen) setIsSearchActive(false);
-                        }}
-                      />
-                    </form>
-                    {!isTizen && (
-                      <button
-                        onClick={() => setShowAdmin(!showAdmin)}
-                        className="ml-4 rounded-lg bg-blue-600 px-4 py-2 font-bold text-white transition-colors hover:bg-blue-700"
-                        data-focusable="true"
-                        tabIndex={-1}
-                      >
-                        {showAdmin ? 'Back to Content' : 'Admin'}
-                      </button>
-                    )}
-                    {isTizen && !streamUrl && (
-                      <button
-                        onClick={handleClearWatched}
-                        className="ml-4 rounded-lg bg-red-600 px-4 py-2 font-bold text-white transition-colors hover:bg-red-700"
-                        data-focusable="true"
-                        tabIndex={-1}
-                      >
-                        Clear History
-                      </button>
-                    )}
+
+                    {/* --- ROW 3: Search + Sort (Combined) --- */}
+                    <div className="flex w-full gap-2 sm:w-auto">
+                      <form onSubmit={handleSearch} className="flex-grow sm:w-auto">
+                        <input
+                          type="search"
+                          name="search"
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                          placeholder="Search titles..."
+                          className="w-full rounded-full border border-gray-700/80 bg-gray-900/50 px-2 py-1 sm:px-4 sm:py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 sm:w-64"
+                          data-focusable="true"
+                          readOnly={isTizen ? !isSearchActive : !isSearchTyping} // ReadOnly unless typing/active
+                          onClick={() => {
+                            if (isTizen) setIsSearchActive(true);
+                            // On Web, click should probably enable typing too
+                            if (!isTizen) setIsSearchTyping(true);
+                          }}
+                          onBlur={() => {
+                            if (isTizen) setIsSearchActive(false);
+                            setIsSearchTyping(false);
+                          }}
+                        />
+                      </form>
+                      <div className="flex-shrink-0">
+                        {isTizen ? (
+                          <button
+                            onClick={cycleSort}
+                            className="rounded-lg border border-gray-700/80 bg-gray-900/50 px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            data-focusable="true"
+                            data-control="sort"
+                          >
+                            Sort: {context.sort === 'alphabetic' ? 'A-Z' : context.sort === 'oldest' ? 'Oldest' : 'Latest'}
+                          </button>
+                        ) : (
+                          <select
+                            value={context.sort || 'latest'}
+                            onChange={(e) => {
+                              const newSort = e.target.value;
+                              fetchData({ ...context, sort: newSort, page: 1 });
+                            }}
+                            className="rounded-lg border border-gray-700/80 bg-gray-900/50 px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            data-focusable="true"
+                            data-control="sort"
+                          >
+                            <option value="latest">Latest</option>
+                            <option value="alphabetic">A-Z</option>
+                            <option value="oldest">Oldest</option>
+                          </select>
+                        )}
+
+                      </div>
+                    </div>
+
+                    {/* --- REMOVED OLD ADMIN BUTTON LOCATION --- */}
                   </div>
                 )}
               </div>
@@ -1134,19 +1338,17 @@ export default function App() {
                             />
                           )}
                         <div
-                          className={` ${
-                            contentType === 'tv' // TV List
-                              ? 'channel-list flex flex-col gap-1'
-                              : isEpisodeList && !isTizen // Episode List (Web)
-                                ? 'flex flex-col gap-4'
-                                : isEpisodeList // Episode List (Tizen)
-                                  ? 'grid grid-cols-1 gap-4 md:grid-cols-2'
-                                  : 'grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 md:gap-6 lg:grid-cols-5 xl:grid-cols-6' // Movie/Series Grid
-                          } ${
-                            loading && items.length > 0 && context.page === 1
+                          className={` ${contentType === 'tv' // TV List
+                            ? 'channel-list flex flex-col gap-1'
+                            : isEpisodeList && !isTizen // Episode List (Web)
+                              ? 'flex flex-col gap-4'
+                              : isEpisodeList // Episode List (Tizen)
+                                ? 'grid grid-cols-1 gap-4 md:grid-cols-2'
+                                : 'grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 md:gap-6 lg:grid-cols-5 xl:grid-cols-6' // Movie/Series Grid
+                            } ${loading && items.length > 0 && context.page === 1
                               ? 'pointer-events-none opacity-50 transition-opacity duration-300'
                               : 'opacity-100'
-                          } `}
+                            } `}
                         >
                           {items?.map((item) =>
                             contentType === 'tv' ? (

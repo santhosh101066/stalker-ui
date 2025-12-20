@@ -7,7 +7,7 @@ interface ContinueWatchingProps {
   contentType: "movie" | "series" | "tv";
 }
 
-const ContinueWatching: React.FC<ContinueWatchingProps> = ({ onClick,contentType }) => {
+const ContinueWatching: React.FC<ContinueWatchingProps> = ({ onClick, contentType }) => {
   const [inProgressItems, setInProgressItems] = useState<MediaItem[]>([]);
 
   useEffect(() => {
@@ -36,6 +36,7 @@ const ContinueWatching: React.FC<ContinueWatchingProps> = ({ onClick,contentType
               is_episode: 0,
               is_playable_movie:
                 itemData.type === 'movie' && itemData.is_series != 1,
+              cmd: itemData.cmd, // Restore the cmd
             });
             addedIds.add(itemData.mediaId);
           }
