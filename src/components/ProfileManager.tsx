@@ -1,7 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { toast } from 'react-toastify';
 import { api } from '../api/api';
+import ConfirmationModal from './ConfirmationModal';
 
 type ConfigProfile = {
   id: number;
@@ -37,8 +38,31 @@ const ProfileManager = () => {
   const [newProfileName, setNewProfileName] = useState('');
   const [newProfileDescription, setNewProfileDescription] = useState('');
   const [newProfileProviderType, setNewProfileProviderType] = useState<'stalker' | 'xtream'>('stalker');
+
+  // Ref for duplicate name to avoid closure staleness in modal callback
+  const duplicateNameRef = useRef('');
   const [newProfileUsername, setNewProfileUsername] = useState('');
   const [newProfilePassword, setNewProfilePassword] = useState('');
+
+  // Confirmation Modal State
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    isDestructive?: boolean;
+    showInput?: boolean;
+    inputValue?: string;
+    inputPlaceholder?: string;
+    onInputChange?: (val: string) => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => { },
+    showInput: false,
+    inputValue: '',
+  });
 
   useEffect(() => {
     loadProfiles();
@@ -58,24 +82,30 @@ const ProfileManager = () => {
   };
 
   const handleActivateProfile = async (profileId: number) => {
-    if (
-      !window.confirm(
-        'Activating this profile will restart the server. Continue?'
-      )
-    ) {
-      return;
-    }
+    const profile = profiles.find((p) => p.id === profileId);
+    if (!profile) return;
 
-    try {
-      await api.post(`/profiles/${profileId}/activate`);
-      toast.success('Profile activated! Server is restarting...');
-      setTimeout(() => {
-        loadProfiles();
-      }, 2000);
-    } catch (error) {
-      toast.error('Failed to activate profile');
-      console.error('Error activating profile:', error);
-    }
+    const performActivation = async () => {
+      setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+      try {
+        await api.post(`/profiles/${profileId}/activate`);
+        toast.success('Profile activated! Server is restarting...');
+        setTimeout(() => {
+          loadProfiles();
+        }, 2000);
+      } catch (error) {
+        toast.error('Failed to activate profile');
+        console.error('Error activating profile:', error);
+      }
+    };
+
+    setConfirmModal({
+      isOpen: true,
+      title: 'Activate Profile',
+      message: 'Activating this profile will restart the server. Continue?',
+      onConfirm: performActivation,
+      isDestructive: false,
+    });
   };
 
   const handleToggleEnabled = async (profile: ConfigProfile) => {
@@ -91,18 +121,23 @@ const ProfileManager = () => {
   };
 
   const handleDeleteProfile = async (profile: ConfigProfile) => {
-    if (!window.confirm(`Are you sure you want to delete "${profile.name}"?`)) {
-      return;
-    }
-
-    try {
-      await api.delete(`/profiles/${profile.id}`);
-      toast.success('Profile deleted');
-      loadProfiles();
-    } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to delete profile');
-      console.error('Error deleting profile:', error);
-    }
+    setConfirmModal({
+      isOpen: true,
+      title: 'Delete Profile',
+      message: `Are you sure you want to delete "${profile.name}"? This action cannot be undone.`,
+      isDestructive: true,
+      onConfirm: async () => {
+        setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+        try {
+          await api.delete(`/profiles/${profile.id}`);
+          toast.success('Profile deleted');
+          loadProfiles();
+        } catch (error: any) {
+          toast.error(error.response?.data?.error || 'Failed to delete profile');
+          console.error('Error deleting profile:', error);
+        }
+      },
+    });
   };
 
   const handleCreateProfile = async () => {
@@ -145,27 +180,40 @@ const ProfileManager = () => {
   };
 
   const handleDuplicateProfile = async (profile: ConfigProfile) => {
-    const rawName = prompt(
-      `Enter name for duplicated profile:`,
-      `${profile.name} (Copy)`
-    );
-    if (!rawName) return;
+    const initialName = `${profile.name} (Copy)`;
+    duplicateNameRef.current = initialName;
 
-    // Fix: Trim whitespace here too
-    const safeName = rawName.trim();
-    if (!safeName) return;
+    setConfirmModal({
+      isOpen: true,
+      title: 'Duplicate Profile',
+      message: 'Enter a name for the new profile:',
+      showInput: true,
+      inputValue: initialName,
+      inputPlaceholder: 'New Profile Name',
+      onInputChange: (val) => {
+        duplicateNameRef.current = val;
+        setConfirmModal((prev) => ({ ...prev, inputValue: val }));
+      },
+      onConfirm: async () => {
+        const safeName = duplicateNameRef.current.trim();
+        if (!safeName) return;
 
-    try {
-      await api.post('/profiles', {
-        name: safeName,
-        description: profile.description,
-        config: profile.config,
-      });
-      toast.success('Profile duplicated successfully');
-      loadProfiles();
-    } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to duplicate profile');
-    }
+        setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+        try {
+          // Inherit config but use new name
+          await api.post('/profiles', {
+            name: safeName,
+            description: profile.description,
+            config: profile.config,
+          });
+          toast.success('Profile duplicated successfully');
+          loadProfiles();
+        } catch (error: any) {
+          toast.error(error.response?.data?.error || 'Failed to duplicate profile');
+        }
+      },
+      isDestructive: false,
+    });
   };
 
   if (loading) {
@@ -187,20 +235,34 @@ const ProfileManager = () => {
         </div>
         <button
           onClick={() => setShowCreateModal(true)}
-          className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 font-bold text-white transition-colors hover:bg-blue-700"
+          data-focusable="true"
+          className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 font-bold text-white shadow-lg shadow-blue-500/20 transition-all hover:scale-105 hover:bg-blue-500 active:scale-95"
         >
           <span>+</span> New Profile
         </button>
       </div>
 
+      <ConfirmationModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
+        isDestructive={confirmModal.isDestructive}
+        showInput={confirmModal.showInput}
+        inputValue={confirmModal.inputValue}
+        onInputChange={confirmModal.onInputChange}
+      />
+
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {profiles.map((profile) => (
           <div
             key={profile.id}
-            className={`relative flex flex-col justify-between rounded-xl border p-5 shadow-lg transition-all ${profile.isActive
-              ? 'border-green-500 bg-gray-800 ring-1 ring-green-500/50'
-              : 'border-gray-700 bg-gray-800/50 hover:bg-gray-800'
-              } ${!profile.isEnabled ? 'opacity-75' : ''}`}
+            data-focusable="true"
+            className={`relative flex flex-col justify-between rounded-xl border p-5 shadow-lg backdrop-blur-md transition-all ${profile.isActive
+              ? 'border-green-500 bg-green-900/10 ring-1 ring-green-500/50'
+              : 'border-gray-700/50 bg-gray-800/40 hover:bg-gray-800/60'
+              } ${!profile.isEnabled ? 'opacity-75 grayscale' : ''}`}
           >
             <div>
               <div className="flex items-start justify-between">
@@ -208,7 +270,7 @@ const ProfileManager = () => {
                   {profile.name}
                 </h3>
                 {profile.isActive && (
-                  <span className="shrink-0 rounded-full border border-green-500/30 bg-green-500/20 px-2 py-0.5 text-xs font-bold text-green-400">
+                  <span className="shrink-0 rounded-full border border-green-500/30 bg-green-500/20 px-2 py-0.5 text-xs font-bold text-green-400 shadow-[0_0_10px_rgba(34,197,94,0.3)]">
                     ACTIVE
                   </span>
                 )}
@@ -219,19 +281,19 @@ const ProfileManager = () => {
 
               {/* Mini Info Pills */}
               <div className="mt-4 flex flex-wrap gap-2 text-xs">
-                <span className="rounded bg-gray-700 px-2 py-1 text-gray-300">
+                <span className="rounded bg-gray-700/50 px-2 py-1 text-gray-300 backdrop-blur-sm">
                   Type:{' '}
-                  <span className="text-blue-400 uppercase">
+                  <span className="uppercase text-blue-400">
                     {profile.config.providerType || 'stalker'}
                   </span>
                 </span>
-                <span className="rounded bg-gray-700 px-2 py-1 text-gray-300">
+                <span className="rounded bg-gray-700/50 px-2 py-1 text-gray-300 backdrop-blur-sm">
                   Host:{' '}
                   <span className="text-blue-400">
                     {profile.config.hostname}
                   </span>
                 </span>
-                <span className="rounded bg-gray-700 px-2 py-1 text-gray-300">
+                <span className="rounded bg-gray-700/50 px-2 py-1 text-gray-300 backdrop-blur-sm">
                   Groups:{' '}
                   <span className="text-blue-400">
                     {profile.config.groups.length}
@@ -240,19 +302,21 @@ const ProfileManager = () => {
               </div>
             </div>
 
-            <div className="mt-6 flex items-center justify-end gap-2 border-t border-gray-700 pt-4">
+            <div className="mt-6 flex items-center justify-end gap-2 border-t border-gray-700/50 pt-4">
               {!profile.isActive && (
                 <>
                   <button
                     onClick={() => handleActivateProfile(profile.id)}
                     disabled={!profile.isEnabled}
-                    className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-600"
+                    data-focusable="true"
+                    className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-bold text-white shadow-lg shadow-green-900/20 hover:bg-green-500 active:scale-95 disabled:cursor-not-allowed disabled:bg-gray-600 disabled:opacity-50"
                   >
                     Activate
                   </button>
                   <button
                     onClick={() => handleDeleteProfile(profile)}
-                    className="rounded-lg bg-red-600/20 px-3 py-1.5 text-xs font-bold text-red-400 hover:bg-red-600/40"
+                    data-focusable="true"
+                    className="rounded-lg bg-red-500/10 px-3 py-1.5 text-xs font-bold text-red-400 border border-red-500/20 hover:bg-red-500/20 active:scale-95"
                   >
                     Delete
                   </button>
@@ -261,16 +325,18 @@ const ProfileManager = () => {
               <button
                 onClick={() => handleToggleEnabled(profile)}
                 disabled={profile.isActive}
-                className={`rounded-lg px-3 py-1.5 text-xs font-bold transition-colors ${profile.isActive
+                data-focusable="true"
+                className={`rounded-lg px-3 py-1.5 text-xs font-bold transition-all active:scale-95 ${profile.isActive
                   ? 'invisible'
-                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  : 'bg-gray-700/50 text-gray-300 hover:bg-gray-600/80 border border-gray-600/30'
                   }`}
               >
                 {profile.isEnabled ? 'Disable' : 'Enable'}
               </button>
               <button
                 onClick={() => handleDuplicateProfile(profile)}
-                className="rounded-lg bg-blue-600/20 px-3 py-1.5 text-xs font-bold text-blue-400 hover:bg-blue-600/40"
+                data-focusable="true"
+                className="rounded-lg bg-blue-500/10 px-3 py-1.5 text-xs font-bold text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 active:scale-95"
               >
                 Clone
               </button>
@@ -279,10 +345,10 @@ const ProfileManager = () => {
         ))}
       </div>
 
-      {/* Create Modal (Same logic, better styling) */}
+      {/* Create Modal (Glassmorphic) */}
       {showCreateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-2xl border border-gray-700 bg-gray-900 p-6 shadow-2xl">
+          <div className="w-full max-w-md rounded-2xl border border-gray-700/50 bg-gray-900/80 p-6 shadow-2xl backdrop-blur-md">
             <h2 className="mb-4 text-xl font-bold text-white">
               Create Profile
             </h2>
@@ -293,7 +359,8 @@ const ProfileManager = () => {
                 </label>
                 <input
                   type="text"
-                  className="w-full rounded-lg border border-gray-700 bg-gray-800 p-2 text-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  data-focusable="true"
+                  className="w-full rounded-lg border border-gray-600/50 bg-gray-800/50 p-2 text-white placeholder-gray-500 backdrop-blur-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   placeholder="e.g., Bedroom STB"
                   value={newProfileName}
                   onChange={(e) => setNewProfileName(e.target.value)}
@@ -305,7 +372,8 @@ const ProfileManager = () => {
                   Description
                 </label>
                 <textarea
-                  className="w-full resize-none rounded-lg border border-gray-700 bg-gray-800 p-2 text-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  data-focusable="true"
+                  className="w-full resize-none rounded-lg border border-gray-600/50 bg-gray-800/50 p-2 text-white placeholder-gray-500 backdrop-blur-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   rows={3}
                   value={newProfileDescription}
                   onChange={(e) => setNewProfileDescription(e.target.value)}
@@ -318,41 +386,44 @@ const ProfileManager = () => {
                   Provider Type
                 </label>
                 <div className="flex gap-4">
-                  <label className="flex cursor-pointer items-center gap-2">
+                  <label className="flex cursor-pointer items-center gap-2 group">
                     <input
                       type="radio"
                       name="newProfileProviderType"
                       value="stalker"
+                      data-focusable="true"
                       checked={newProfileProviderType === 'stalker'}
                       onChange={() => setNewProfileProviderType('stalker')}
-                      className="h-4 w-4 text-blue-600"
+                      className="h-4 w-4 text-blue-600 bg-gray-700 border-gray-600 focus:ring-blue-500"
                     />
-                    <span className="text-sm text-white">Stalker</span>
+                    <span className="text-sm text-gray-300 group-hover:text-white transition-colors">Stalker</span>
                   </label>
-                  <label className="flex cursor-pointer items-center gap-2">
+                  <label className="flex cursor-pointer items-center gap-2 group">
                     <input
                       type="radio"
                       name="newProfileProviderType"
                       value="xtream"
+                      data-focusable="true"
                       checked={newProfileProviderType === 'xtream'}
                       onChange={() => setNewProfileProviderType('xtream')}
-                      className="h-4 w-4 text-blue-600"
+                      className="h-4 w-4 text-blue-600 bg-gray-700 border-gray-600 focus:ring-blue-500"
                     />
-                    <span className="text-sm text-white">Xtream Codes</span>
+                    <span className="text-sm text-gray-300 group-hover:text-white transition-colors">Xtream Codes</span>
                   </label>
                 </div>
               </div>
 
               {/* Xtream Credentials (Conditional) */}
               {newProfileProviderType === 'xtream' && (
-                <div className="space-y-3 rounded bg-gray-800/50 p-3">
+                <div className="space-y-3 rounded-xl border border-gray-700/50 bg-gray-800/30 p-4">
                   <div>
                     <label className="mb-1 block text-xs font-medium text-gray-400">
                       Username
                     </label>
                     <input
                       type="text"
-                      className="w-full rounded-lg border border-gray-700 bg-gray-800 p-2 text-sm text-white focus:border-blue-500 focus:outline-none"
+                      data-focusable="true"
+                      className="w-full rounded-lg border border-gray-600/50 bg-gray-800/50 p-2 text-sm text-white focus:border-blue-500 focus:outline-none"
                       value={newProfileUsername}
                       onChange={(e) => setNewProfileUsername(e.target.value)}
                     />
@@ -363,7 +434,8 @@ const ProfileManager = () => {
                     </label>
                     <input
                       type="text"
-                      className="w-full rounded-lg border border-gray-700 bg-gray-800 p-2 text-sm text-white focus:border-blue-500 focus:outline-none"
+                      data-focusable="true"
+                      className="w-full rounded-lg border border-gray-600/50 bg-gray-800/50 p-2 text-sm text-white focus:border-blue-500 focus:outline-none"
                       value={newProfilePassword}
                       onChange={(e) => setNewProfilePassword(e.target.value)}
                     />
@@ -371,20 +443,22 @@ const ProfileManager = () => {
                 </div>
               )}
 
-              <div className="rounded bg-blue-900/20 p-3 text-xs text-blue-200">
+              <div className="rounded-lg bg-blue-900/10 border border-blue-500/20 p-3 text-xs text-blue-300">
                 This profile will inherit other settings from your current configuration.
               </div>
             </div>
             <div className="mt-6 flex justify-end gap-3">
               <button
                 onClick={() => setShowCreateModal(false)}
-                className="rounded-lg px-4 py-2 text-sm font-semibold text-gray-400 hover:text-white"
+                data-focusable="true"
+                className="rounded-lg px-4 py-2 text-sm font-semibold text-gray-400 hover:text-white hover:bg-white/5 transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleCreateProfile}
-                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700"
+                data-focusable="true"
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white shadow-lg shadow-blue-500/20 hover:bg-blue-500 active:scale-95 transition-all"
               >
                 Create
               </button>

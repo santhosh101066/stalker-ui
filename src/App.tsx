@@ -8,6 +8,7 @@ import {
   getEPG,
   getChannelGroups,
 } from './api/services';
+import { isTizenDevice } from './utils/helpers';
 import LoadingSpinner from './components/LoadingSpinner';
 import MediaCard from './components/MediaCard';
 import EpisodeCard from './components/EpisodeCard';
@@ -21,6 +22,8 @@ import 'react-toastify/dist/ReactToastify.css';
 import './App.css';
 import Admin from './components/Admin';
 import TvChannelListCard from './components/TvChannelListCard';
+import ConfirmationModal from './components/ConfirmationModal';
+import { useSocket } from './context/SocketContext';
 
 const PREFERRED_CONTENT_TYPE_KEY = 'preferredContentType';
 
@@ -58,7 +61,7 @@ const initialContext: ContextType = {
 };
 // --- Main Application Component ---
 export default function App() {
-  const isTizen = !!(window as any).tizen; // Detect Tizen environment
+  const isTizen = isTizenDevice(); // Detect Tizen environment
   const [isPortal, setIsPortal] = useState(false);
 
   const [context, setContext] = useState<ContextType>(initialContext);
@@ -74,6 +77,20 @@ export default function App() {
     initialType
   ); // 'movie' or 'series'
   const [showAdmin, setShowAdmin] = useState(false);
+
+  // Confirmation Modal State
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    isDestructive?: boolean;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => { },
+  });
 
   const [currentItem, setCurrentItem] = useState<MediaItem | null>(null);
   const [currentSeriesItem, setCurrentSeriesItem] = useState<MediaItem | null>(
@@ -593,27 +610,30 @@ export default function App() {
   }, [currentItem, contentType, debounceChannelChange]); // <-- Note new dependencies
 
   const handleClearWatched = useCallback(() => {
-    if (
-      window.confirm(
-        'Are you sure you want to clear all watched and in-progress statuses?'
-      )
-    ) {
-      Object.keys(localStorage).forEach((key) => {
-        // Clear completed, in-progress, AND resume time keys
-        if (
-          key.startsWith('video-completed-') ||
-          key.startsWith('video-in-progress-') ||
-          key.startsWith('video-progress-')
-        ) {
-          localStorage.removeItem(key);
-        }
-      });
-      toast.success('All watched and in-progress statuses have been cleared.');
+    setConfirmModal({
+      isOpen: true,
+      title: 'Clear History',
+      message: 'Are you sure you want to clear all watched and in-progress statuses?',
+      isDestructive: true,
+      onConfirm: () => {
+        setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+        Object.keys(localStorage).forEach((key) => {
+          // Clear completed, in-progress, AND resume time keys
+          if (
+            key.startsWith('video-completed-') ||
+            key.startsWith('video-in-progress-') ||
+            key.startsWith('video-progress-')
+          ) {
+            localStorage.removeItem(key);
+          }
+        });
+        toast.success('All watched and in-progress statuses have been cleared.');
 
-      // Re-fetch data to clear the "Continue Watching" list
-      fetchData(initialContext, contentType);
-    }
-  }, [fetchData, contentType]); // Add dependencies
+        // Re-fetch data to clear the "Continue Watching" list
+        fetchData(initialContext, contentType);
+      },
+    });
+  }, [fetchData, contentType, initialContext]); // Add dependencies
 
   useEffect(() => {
     // Reset focus when the view changes (e.g., new category, new search)
@@ -722,6 +742,38 @@ export default function App() {
       };
     }
   }, [isTizen]);
+
+  // --- Socket Receiver Logic ---
+  const { socket, isReceiver } = useSocket();
+
+  useEffect(() => {
+    if (!socket || !isReceiver) return;
+
+    const handleCastCommand = (data: { command: string; payload: any; from: string }) => {
+      console.log('Received Cast Command:', data);
+      if (data.command === 'play') {
+        const { media, streamUrl, rawStreamUrl } = data.payload.media;
+
+        toast.info(`Casting from ${data.from}...`);
+
+        // Set state to play video
+        setCurrentItem(media);
+        if (streamUrl) setStreamUrl(streamUrl);
+        if (rawStreamUrl) setRawStreamUrl(rawStreamUrl);
+
+        // Handle playback info (seek) if provided
+        if (data.payload.playbackInfo?.currentTime) {
+          localStorage.setItem(`video-progress-${media.id}`, data.payload.playbackInfo.currentTime);
+        }
+      }
+    };
+
+    socket.on('receive_cast_command', handleCastCommand);
+
+    return () => {
+      socket.off('receive_cast_command', handleCastCommand);
+    };
+  }, [socket, isReceiver]);
 
   const handleContentTypeChange = useCallback(
     (type: 'movie' | 'series' | 'tv') => {
@@ -1136,37 +1188,31 @@ export default function App() {
           <div className="container mx-auto p-4 sm:p-6">
             <header className="sticky top-0 sm:top-4 z-10 mb-2 sm:mb-6 rounded-b-xl sm:rounded-xl border border-gray-700/80 bg-gray-800/50 p-2 sm:p-4 backdrop-blur-lg">
               <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
-                <div className="flex items-center self-start">
+                <div className="flex items-center self-start sm:self-center">
                   {(history.length > 0 || streamUrl) && !streamUrl && (
                     <button
                       onClick={handleBack}
-                      className="mr-2 text-2xl text-white transition-colors hover:text-blue-400"
+                      className="mr-2 text-white transition-colors hover:text-blue-400"
                       data-focusable="true"
                       tabIndex={-1}
+                      aria-label="Back"
                     >
-                      &larr;
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                      </svg>
                     </button>
                   )}
                   <img src="stalker-logo.svg" className="w-28 sm:w-44" />
-                  <h1 className="sm:text-l md:text-l text-lg sm:text-xl font-bold tracking-wider text-white">
+                  <h1 className="text-lg sm:text-xl font-bold tracking-wider text-white">
                     {currentTitle}
                   </h1>
                 </div>
 
                 {/* --- MOVED ADMIN/CLEAR BUTTONS HERE (Top Right) --- */}
-                {!streamUrl && (
-                  <div className="flex items-center">
-                    {!isTizen && (
-                      <button
-                        onClick={() => setShowAdmin(!showAdmin)}
-                        className="rounded-lg bg-blue-600 px-3 py-1 text-xs font-bold text-white transition-colors hover:bg-blue-700 sm:px-4 sm:py-2 sm:text-base"
-                        data-focusable="true"
-                        tabIndex={-1}
-                      >
-                        {showAdmin ? 'Back' : 'Admin'}
-                      </button>
-                    )}
-                    {isTizen && (
+                {/* --- MOVED ADMIN/CLEAR BUTTONS HERE (Top Right) --- */}
+                {
+                  !streamUrl && isTizen && (
+                    <div className="flex items-center">
                       <button
                         onClick={handleClearWatched}
                         className="rounded-lg bg-red-600 px-3 py-1 text-xs font-bold text-white transition-colors hover:bg-red-700 sm:px-4 sm:py-2 sm:text-base"
@@ -1175,50 +1221,87 @@ export default function App() {
                       >
                         Clear
                       </button>
-                    )}
-                  </div>
-                )}
+                    </div>
+                  )
+                }
 
                 {!streamUrl && (
-                  <div className="flex w-full flex-col items-center gap-2 sm:gap-4 sm:w-auto sm:flex-row">
-                    <div className="flex w-full justify-center space-x-2 rounded-full bg-gray-900/60 p-1 sm:w-auto">
+                  <div className="flex w-full flex-wrap items-center justify-center gap-2 sm:w-auto sm:flex-nowrap sm:gap-4">
+                    <div className="flex w-auto justify-center space-x-2 rounded-full border border-gray-700/50 bg-gray-900/70 p-1 backdrop-blur-md transition-all duration-300">
                       <button
                         onClick={() => handleContentTypeChange('movie')}
-                        className={`w-full rounded-full px-2 py-1 sm:px-4 sm:py-2 text-xs sm:text-sm font-semibold transition-colors duration-300 ${contentType === 'movie'
-                          ? 'bg-blue-600 text-white'
-                          : 'text-gray-300 hover:bg-gray-700/50'
+                        className={`flex w-auto items-center justify-center rounded-full px-2 py-1 sm:px-4 sm:py-2 text-xs sm:text-sm font-semibold transition-all duration-300 active:scale-95 ${contentType === 'movie'
+                          ? 'bg-blue-600 shadow-lg shadow-blue-900/50 text-white'
+                          : 'text-gray-300 hover:bg-gray-700/50 hover:text-white'
                           }`}
                         data-focusable="true"
                         tabIndex={-1}
+                        title="Movies"
                       >
-                        Movies
+                        <span className="sm:hidden">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z" />
+                          </svg>
+                        </span>
+                        <span className="hidden sm:inline">Movies</span>
                       </button>
                       <button
                         onClick={() => handleContentTypeChange('series')}
-                        className={`w-full rounded-full px-2 py-1 sm:px-4 sm:py-2 text-xs sm:text-sm font-semibold transition-colors duration-300 ${contentType === 'series'
-                          ? 'bg-blue-600 text-white'
-                          : 'text-gray-300 hover:bg-gray-700/50'
+                        className={`flex w-auto items-center justify-center rounded-full px-2 py-1 sm:px-4 sm:py-2 text-xs sm:text-sm font-semibold transition-all duration-300 active:scale-95 ${contentType === 'series'
+                          ? 'bg-blue-600 shadow-lg shadow-blue-900/50 text-white'
+                          : 'text-gray-300 hover:bg-gray-700/50 hover:text-white'
                           }`}
                         data-focusable="true"
                         tabIndex={-1}
+                        title="Series"
                       >
-                        Series
+                        <span className="sm:hidden">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                          </svg>
+                        </span>
+                        <span className="hidden sm:inline">Series</span>
                       </button>
                       <button
                         onClick={() => handleContentTypeChange('tv')}
-                        className={`w-full rounded-full px-2 py-1 sm:px-4 sm:py-2 text-xs sm:text-sm font-semibold transition-colors duration-300 ${contentType === 'tv'
-                          ? 'bg-blue-600 text-white'
-                          : 'text-gray-300 hover:bg-gray-700/50'
+                        className={`flex w-auto items-center justify-center rounded-full px-2 py-1 sm:px-4 sm:py-2 text-xs sm:text-sm font-semibold transition-all duration-300 active:scale-95 ${contentType === 'tv'
+                          ? 'bg-blue-600 shadow-lg shadow-blue-900/50 text-white'
+                          : 'text-gray-300 hover:bg-gray-700/50 hover:text-white'
                           }`}
                         data-focusable="true"
                         tabIndex={-1}
+                        title="TV"
                       >
-                        TV
+                        <span className="sm:hidden">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                          </svg>
+                        </span>
+                        <span className="hidden sm:inline">TV</span>
                       </button>
+                      {/* Admin Button - Icon on Mobile, Text on Desktop */}
+                      {!isTizen && (
+                        <button
+                          onClick={() => setShowAdmin(!showAdmin)}
+                          className={`flex items-center justify-center rounded-full p-2 transition-colors duration-300 ${showAdmin
+                            ? 'bg-red-600 text-white hover:bg-red-700'
+                            : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                            }`}
+                          data-focusable="true"
+                          tabIndex={-1}
+                          title={showAdmin ? 'Close Admin' : 'Admin Settings'}
+                        >
+                          {/* Icon (Cog) */}
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 sm:h-6 sm:w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          </svg>
+                        </button>
+                      )}
                     </div>
 
                     {/* --- ROW 3: Search + Sort (Combined) --- */}
-                    <div className="flex w-full gap-2 sm:w-auto">
+                    <div className="flex w-auto flex-grow gap-2 sm:w-auto sm:flex-grow-0 items-center">
                       <form onSubmit={handleSearch} className="flex-grow sm:w-auto">
                         <input
                           type="search"
@@ -1226,7 +1309,7 @@ export default function App() {
                           value={searchTerm}
                           onChange={(e) => setSearchTerm(e.target.value)}
                           placeholder="Search titles..."
-                          className="w-full rounded-full border border-gray-700/80 bg-gray-900/50 px-2 py-1 sm:px-4 sm:py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 sm:w-64"
+                          className="w-full rounded-full border border-gray-700/50 bg-gray-900/70 px-4 py-2 text-white shadow-sm backdrop-blur-md transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-gray-800/90 sm:w-64"
                           data-focusable="true"
                           readOnly={isTizen ? !isSearchActive : !isSearchTyping} // ReadOnly unless typing/active
                           onClick={() => {
@@ -1241,32 +1324,33 @@ export default function App() {
                         />
                       </form>
                       <div className="flex-shrink-0">
-                        {isTizen ? (
-                          <button
-                            onClick={cycleSort}
-                            className="rounded-lg border border-gray-700/80 bg-gray-900/50 px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            data-focusable="true"
-                            data-control="sort"
-                          >
-                            Sort: {context.sort === 'alphabetic' ? 'A-Z' : context.sort === 'oldest' ? 'Oldest' : 'Latest'}
-                          </button>
-                        ) : (
-                          <select
-                            value={context.sort || 'latest'}
-                            onChange={(e) => {
-                              const newSort = e.target.value;
-                              fetchData({ ...context, sort: newSort, page: 1 });
-                            }}
-                            className="rounded-lg border border-gray-700/80 bg-gray-900/50 px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            data-focusable="true"
-                            data-control="sort"
-                          >
-                            <option value="latest">Latest</option>
-                            <option value="alphabetic">A-Z</option>
-                            <option value="oldest">Oldest</option>
-                          </select>
-                        )}
-
+                        <button
+                          onClick={cycleSort}
+                          className="flex items-center justify-center rounded-full border border-gray-700/50 bg-gray-900/70 p-2 text-white shadow-sm backdrop-blur-md transition-all duration-300 hover:bg-gray-800/90 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500 active:scale-95"
+                          data-focusable="true"
+                          data-control="sort"
+                          title={`Sort: ${context.sort === 'alphabetic' ? 'A-Z' : context.sort === 'oldest' ? 'Oldest' : 'Latest'}`}
+                        >
+                          {/* Icon based on sort state */}
+                          {(!context.sort || context.sort === 'latest') && (
+                            // Latest (Bars Arrow Down)
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9m-9 4h9m5-4v12m0 0l-4-4m4 4l4-4" />
+                            </svg>
+                          )}
+                          {context.sort === 'oldest' && (
+                            // Oldest (Bars Arrow Up)
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
+                            </svg>
+                          )}
+                          {context.sort === 'alphabetic' && (
+                            // Alphabetic (A-Z / Language)
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />
+                            </svg>
+                          )}
+                        </button>
                       </div>
                     </div>
 
@@ -1422,6 +1506,14 @@ export default function App() {
           </div>
         </div>
       )}
+      <ConfirmationModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
+        isDestructive={confirmModal.isDestructive}
+      />
       <ToastContainer />
     </>
   );
