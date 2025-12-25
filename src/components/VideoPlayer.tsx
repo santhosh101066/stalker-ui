@@ -13,7 +13,6 @@ import { FaChromecast } from 'react-icons/fa';
 
 type VideoFitMode = 'contain' | 'cover' | 'fill';
 const FIT_MODES: VideoFitMode[] = ['contain', 'cover', 'fill'];
-const RETRY_TIMEOUT_MS = 5000;
 
 interface MediaPlaylist {
   id: number;
@@ -383,7 +382,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
             setReloadTrigger(prev => prev + 1);
             setIsRecovering(false); // Remount
             isRetrying.current = false;
-          }, RETRY_TIMEOUT_MS);
+          }, 10000);
         } else {
           toast.error("Stream unavailable (404).");
           // Keep isRetrying true to prevent further attempts until user fixes or manual reload
@@ -398,7 +397,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
           setReloadTrigger(prev => prev + 1);
           setIsRecovering(false); // Remount
           isRetrying.current = false;
-        }, RETRY_TIMEOUT_MS);
+        }, 10000);
       } else {
         // Other errors: Infinite retries, standard delay
         toast.warning(`Playback error. Retrying...`);
@@ -408,7 +407,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
           setReloadTrigger(prev => prev + 1);
           setIsRecovering(false); // Remount
           isRetrying.current = false;
-        }, RETRY_TIMEOUT_MS);
+        }, 10000);
       }
 
     } catch (err) {
@@ -422,7 +421,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         setReloadTrigger(prev => prev + 1);
         setIsRecovering(false); // Remount
         isRetrying.current = false;
-      }, RETRY_TIMEOUT_MS);
+      }, 10000);
     }
   }, [retryCount, streamUrl, rawStreamUrl]);
 
@@ -631,10 +630,22 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     if (!item && !previewChannelInfo && !channelInfo) return;
     const mediaItem = item || previewChannelInfo || channelInfo;
 
+    // Construct absolute URLs using configured HOST if available, otherwise origin
+    // This is crucial for casting to work when server is on a different IP than localhost
+    const baseUrl = URL_PATHS.HOST || window.location.origin;
+
+    const absoluteUrl = streamUrl && streamUrl.startsWith('http')
+      ? streamUrl
+      : streamUrl ? `${baseUrl}${streamUrl.startsWith('/') ? '' : '/'}${streamUrl}` : undefined;
+
+    const absoluteRawUrl = rawStreamUrl && rawStreamUrl.startsWith('http')
+      ? rawStreamUrl
+      : rawStreamUrl ? `${baseUrl}${rawStreamUrl.startsWith('/') ? '' : '/'}${rawStreamUrl}` : undefined;
+
     castTo(deviceId, {
       media: mediaItem,
-      streamUrl,
-      rawStreamUrl
+      streamUrl: absoluteUrl,
+      rawStreamUrl: absoluteRawUrl
     }, {
       currentTime: playerRef.current?.currentTime || 0
     });
@@ -1172,33 +1183,13 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
         {isRecovering ? (
           <div className="flex h-full w-full flex-col items-center justify-center bg-black/80 text-white backdrop-blur-sm">
-            <div className="relative mb-4 h-12 w-12">
-              <div className="absolute h-full w-full animate-ping rounded-full bg-blue-500 opacity-75"></div>
-              <div className="relative flex h-full w-full items-center justify-center rounded-full bg-blue-600">
-                <svg
-                  className="h-6 w-6 animate-spin text-white"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  ></circle>
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  ></path>
-                </svg>
-              </div>
+            <div className="relative mb-6 h-16 w-16">
+              <div className="absolute h-full w-full animate-ping rounded-full bg-blue-500 opacity-20"></div>
+              <div className="relative flex h-full w-full items-center justify-center rounded-full border-4 border-blue-500/30 border-t-blue-500 animate-spin"></div>
             </div>
-            <div className="text-xl font-bold">Connecting...</div>
+            <div className="text-2xl font-bold tracking-wide">Connecting...</div>
             <div className="mt-2 text-sm text-gray-400">
-              Retrying stream connection ({retryCount > 0 ? `${retryCount}/2` : 'Auto'})...
+              {retryCount > 0 ? `Retrying connection (${retryCount})...` : 'Establishing secure stream...'}
             </div>
           </div>
         ) : (
@@ -1249,7 +1240,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
           </div>
         )}
 
-        {isBuffering && !isRecovering && (
+        {isBuffering && (
           <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
             <div className="relative h-16 w-16">
               <div className="absolute h-full w-full animate-ping rounded-full bg-blue-400 opacity-75"></div>

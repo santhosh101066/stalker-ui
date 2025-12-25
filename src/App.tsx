@@ -752,7 +752,7 @@ export default function App() {
     const handleCastCommand = (data: { command: string; payload: any; from: string }) => {
       console.log('Received Cast Command:', data);
       if (data.command === 'play') {
-        const { media, streamUrl, rawStreamUrl } = data.payload.media;
+        const { media, streamUrl, rawStreamUrl } = data.payload;
 
         toast.info(`Casting from ${data.from}...`);
 

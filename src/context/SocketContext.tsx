@@ -38,7 +38,9 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     const SOCKET_URL = URL_PATHS.HOST;
 
     const isTizen = isTizenDevice();
-    const isReceiver = isTizen; // Tizen devices are receivers
+    // Allow manual override via query param for testing (e.g. ?device=receiver)
+    const searchParams = new URLSearchParams(window.location.search);
+    const isReceiver = isTizen || searchParams.get('device') === 'receiver';
 
     useEffect(() => {
         // Determine device ID
