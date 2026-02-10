@@ -4,7 +4,7 @@ import { api } from '../api/api';
 import { getChannelGroups } from '../api/services';
 import ProfileManager from './ProfileManager';
 import ConfirmationModal from './ConfirmationModal';
-import { useSocket } from '../context/SocketContext'; // Import useSocket
+import { useSocket } from '../context/useSocket'; // Import useSocket
 import { useRef } from 'react';
 
 type Config = {

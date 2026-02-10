@@ -1,39 +1,11 @@
-import React, { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+
+import React, { useEffect, useState, type ReactNode } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { v4 as uuidv4 } from 'uuid';
 import { URL_PATHS } from '../api/api';
 import { isTizenDevice } from '../utils/helpers';
-
-interface Device {
-    id: string;
-    name: string;
-    type: 'receiver' | 'controller';
-    ip: string;
-}
-
-interface SocketContextProps {
-    socket: Socket | null;
-    isConnected: boolean;
-    receivers: Device[];
-    isReceiver: boolean;
-    castTo: (targetDeviceId: string, media: any, playbackInfo?: {
-        currentTime?: number;
-        volume?: number;
-        muted?: boolean;
-        subtitleTrackIndex?: number;
-        audioTrackIndex?: number;
-    }) => void;
-}
-
-const SocketContext = createContext<SocketContextProps | undefined>(undefined);
-
-export const useSocket = () => {
-    const context = useContext(SocketContext);
-    if (!context) {
-        throw new Error('useSocket must be used within a SocketProvider');
-    }
-    return context;
-};
+import { SocketContext } from './useSocket';
+import type { Device } from './SocketContextTypes';
 
 export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [socket, setSocket] = useState<Socket | null>(null);
@@ -108,6 +80,7 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         };
     }, [SOCKET_URL, isReceiver]);
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const castTo = (targetDeviceId: string, content: any, playbackInfo?: {
         currentTime?: number;
         volume?: number;

@@ -7,7 +7,7 @@ interface TvChannelListProps {
   channelGroups: ChannelGroup[]; // <-- NEW PROP
   onChannelSelect: (item: MediaItem) => void;
   onBack: () => void;
-  currentItemId: string | null;
+  currentItemId: string | null | undefined;
 }
 
 const TvChannelList: React.FC<TvChannelListProps> = ({
@@ -62,7 +62,7 @@ const TvChannelList: React.FC<TvChannelListProps> = ({
   const channelListRef = useRef<HTMLDivElement>(null);
 
   // Filter channels based on the selected group
-const filteredChannels = useMemo(() => {
+  const filteredChannels = useMemo(() => {
     if (!selectedGroup || selectedGroup.id === 'all') {
       return channels;
     }
@@ -88,7 +88,7 @@ const filteredChannels = useMemo(() => {
     setFocusedGroupIndex(index);
     setFocusedChannelIndex(0);
     setFocusedColumn('channels');
-  },[]);
+  }, []);
 
   // Handle keyboard navigation
   useEffect(() => {
@@ -196,13 +196,12 @@ const filteredChannels = useMemo(() => {
             data-focusable="true"
             // --- ADDED onClick ---
             onClick={() => handleGroupClick(group, index)}
-            className={`p-3 text-left text-lg font-semibold text-white transition-colors duration-150 ${
-              focusedColumn === 'groups' && focusedGroupIndex === index
+            className={`p-3 text-left text-lg font-semibold text-white transition-colors duration-150 ${focusedColumn === 'groups' && focusedGroupIndex === index
                 ? 'bg-blue-600' // Focused
                 : selectedGroup.id === group.id
                   ? 'bg-gray-700' // Selected but not focused
                   : 'hover:bg-gray-700/50' // Default
-            }`}
+              }`}
           >
             {group.title}
           </div>

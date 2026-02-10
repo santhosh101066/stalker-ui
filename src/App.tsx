@@ -23,7 +23,7 @@ import './App.css';
 import Admin from './components/Admin';
 import TvChannelListCard from './components/TvChannelListCard';
 import ConfirmationModal from './components/ConfirmationModal';
-import { useSocket } from './context/SocketContext';
+import { useSocket } from './context/useSocket';
 
 const PREFERRED_CONTENT_TYPE_KEY = 'preferredContentType';
 
@@ -252,21 +252,18 @@ export default function App() {
   const toggleFavorite = useCallback((item: MediaItem) => {
     if (!item || !item.id) return;
 
-    setFavorites((prevFavorites) => {
-      const newFavorites = new Set(prevFavorites);
-      if (newFavorites.has(item.id)) {
-        newFavorites.delete(item.id);
-        toast.info(`Removed ${item.name || 'Channel'} from favorites`);
-      } else {
-        newFavorites.add(item.id);
-        toast.success(`Added ${item.name || 'Channel'} to favorites`);
-      }
-
-      const favoritesArray = Array.from(newFavorites);
-      localStorage.setItem('favorite_channels', JSON.stringify(favoritesArray));
-      return favoritesArray;
-    });
-  }, []);
+    if (favorites.includes(item.id)) {
+      const newFavs = favorites.filter((id) => id !== item.id);
+      setFavorites(newFavs);
+      localStorage.setItem('favorite_channels', JSON.stringify(newFavs));
+      toast.info(`Removed ${item.name || 'Channel'} from favorites`);
+    } else {
+      const newFavs = [...favorites, item.id];
+      setFavorites(newFavs);
+      localStorage.setItem('favorite_channels', JSON.stringify(newFavs));
+      toast.success(`Added ${item.name || 'Channel'} to favorites`);
+    }
+  }, [favorites]);
 
   useEffect(() => {
     fetchData(initialContext);
