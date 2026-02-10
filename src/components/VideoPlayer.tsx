@@ -38,8 +38,15 @@ interface VideoPlayerProps {
   previewChannelInfo?: MediaItem | null;
   epgData: Record<string, EPG_List[]>;
   channelGroups?: ChannelGroup[];
-  favorites: string[]; // <-- ADD THIS
+  favorites: string[];
   toggleFavorite: (item: MediaItem) => void;
+  initialPlaybackState?: {
+    currentTime?: number;
+    volume?: number;
+    muted?: boolean;
+    subtitleTrackIndex?: number;
+    audioTrackIndex?: number;
+  };
 }
 
 const useLiveClock = () => {
@@ -87,8 +94,9 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   onChannelSelect,
   epgData,
   channelGroups,
-  favorites, // <-- ADD THIS
+  favorites,
   toggleFavorite,
+  initialPlaybackState,
 }) => {
   const isTizen = isTizenDevice();
   const playerContainerRef = useRef<HTMLDivElement>(null);
@@ -105,6 +113,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [isMuted, setIsMuted] = useState(false);
   const [volume, setVolume] = useState(1);
   const [progress, setProgress] = useState(0);
+  const [buffered, setBuffered] = useState(0); // [NEW] Buffer state
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [controlsVisible, setControlsVisible] = useState(true);
@@ -123,6 +132,14 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
   const seekBuffer = useRef(0);
   const seekApplyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Cumulative Seek Refs
+  const seekRunTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const seekRunStart = useRef<number | null>(null);
+  const seekRunLevel = useRef<number>(0);
+  const seekRunDirection = useRef<number>(0); // 1 or -1
+  const SEEK_LEVELS = [10, 30, 60, 180];
+  const [seekOverlay, setSeekOverlay] = useState<{ visible: boolean; text: string; time: string } | null>(null);
 
   const [showChannelList, setShowChannelList] = useState(false);
 
@@ -156,6 +173,21 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       // Check active
       const activeIndex = subs.findIndex((t: any) => t.mode === 'showing');
       setCurrentSubtitleTrack(activeIndex);
+
+      // AUTO-APPLY CAST STATE: Enable subtitle if requested
+      if (initialPlaybackState?.subtitleTrackIndex !== undefined && initialPlaybackState.subtitleTrackIndex !== -1) {
+        if (subs[initialPlaybackState.subtitleTrackIndex]) {
+          // We need to type cast to modify mode
+          const targetTrack = subs[initialPlaybackState.subtitleTrackIndex] as TextTrack;
+          // Only set if not already showing (prevents loops if subscribe fires often)
+          if (targetTrack.mode !== 'showing') {
+            // Disable others
+            subs.forEach((t: any) => { if (t !== targetTrack) t.mode = 'disabled'; });
+            targetTrack.mode = 'showing';
+            console.log(`[Cast] Auto-enabled subtitle track ${initialPlaybackState.subtitleTrackIndex}`);
+          }
+        }
+      }
     });
   }, []);
 
@@ -226,6 +258,15 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
       // Restore Progress Logic
       if (!hasRestoredProgress.current && mediaId) {
+
+        // 1. Check if we have Cast State first
+        if (initialPlaybackState?.currentTime) {
+          console.log(`[Cast] Resuming playback at: ${initialPlaybackState.currentTime}`);
+          playerRef.current.currentTime = initialPlaybackState.currentTime;
+          hasRestoredProgress.current = true;
+          return;
+        }
+
         const savedProgress = localStorage.getItem(`video-progress-${itemId}`);
         if (savedProgress) {
           const startTime = parseFloat(savedProgress);
@@ -237,7 +278,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         hasRestoredProgress.current = true;
       }
     }
-  }, [volume, isMuted, mediaId, itemId]);
+  }, [volume, isMuted, mediaId, itemId, initialPlaybackState]);
 
   const handleTimeUpdate = useCallback((_: any) => {
     // Vidstack provides detail.currentTime in seconds, but depending on event type it might be different.
@@ -250,10 +291,28 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
     if (contentType === 'tv') {
       setProgress(0);
+      setBuffered(0);
       setDuration(0);
     } else {
       const totalDuration = duration + seekOffset;
       const currentPos = currentTime + seekOffset;
+
+      // Calculate Buffer
+      if (player.buffered && player.buffered.length > 0 && duration > 0) {
+        // Find the buffer range that covers the current time
+        let bufferedEnd = 0;
+        // Find the furthest buffered point for the current playback position
+        for (let i = 0; i < player.buffered.length; i++) {
+          if (player.buffered.start(i) <= currentTime + 2) {
+            const end = player.buffered.end(i);
+            if (end > bufferedEnd) {
+              bufferedEnd = end;
+            }
+          }
+        }
+
+        setBuffered((bufferedEnd / duration) * 100);
+      }
 
       if (!seeking) {
         if (duration > 0) {
@@ -563,34 +622,74 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     [skip, duration]
   );
 
-  const handleSkipButtonClick = useCallback(
-    (seconds: number) => {
+  const handleSmartSkip = useCallback(
+    (direction: number) => {
       const player = playerRef.current;
-      const seekBar = seekBarRef.current;
       // Use state duration if player.duration is unavailable
       const currentDuration = (player && Number.isFinite(player.duration)) ? player.duration : duration;
 
-      if (player && currentDuration > 0 && seekBar) {
-        const newTime = Math.max(
-          0,
-          Math.min(currentDuration, player.currentTime + seconds)
-        );
-        const newProgress = (newTime / currentDuration) * 100;
-        const newPosition = (newProgress / 100) * seekBar.offsetWidth;
+      if (!player || currentDuration <= 0) return;
 
-        setHoverTime(newTime);
-        setHoverPosition(newPosition);
-        setIsTooltipVisible(true);
-
-        skip(seconds);
-
-        setTimeout(() => {
-          setIsTooltipVisible(false);
-        }, 500);
+      // Check if we are continuing a run
+      if (seekRunTimer.current) {
+        clearTimeout(seekRunTimer.current);
       }
+
+      // Determine reset condition
+      // If direction changed (user clicked + then -) or start is null (new run)
+      if (seekRunStart.current === null || seekRunDirection.current !== direction) {
+        seekRunStart.current = player.currentTime;
+        seekRunLevel.current = 0;
+        seekRunDirection.current = direction;
+      } else {
+        // Continue run: always increment level
+        seekRunLevel.current += 1;
+      }
+
+      let offset;
+      const maxLevelIndex = SEEK_LEVELS.length - 1;
+      if (seekRunLevel.current <= maxLevelIndex) {
+        offset = SEEK_LEVELS[seekRunLevel.current];
+      } else {
+        // Beyond 180s, add 60s per step
+        const baseOffset = SEEK_LEVELS[maxLevelIndex]; // 180
+        const extraSteps = seekRunLevel.current - maxLevelIndex;
+        offset = baseOffset + (extraSteps * 60);
+      }
+
+      const totalDelta = offset * direction;
+      const targetTime = Math.max(0, Math.min(currentDuration, seekRunStart.current! + totalDelta));
+
+      // Apply Seek
+      player.currentTime = targetTime;
+
+      // Update Timeline UI Immediately
+      const newProgress = (targetTime / currentDuration) * 100;
+      setProgress(newProgress);
+      setCurrentTime(targetTime);
+
+      // Show Overlay
+      const sign = direction > 0 ? '+' : '-';
+      setSeekOverlay({
+        visible: true,
+        text: `${sign}${offset}s`,
+        time: formatTime(targetTime)
+      });
+
+      // Set Timer to end run
+      seekRunTimer.current = setTimeout(() => {
+        seekRunStart.current = null;
+        seekRunLevel.current = 0;
+        setSeekOverlay(null);
+      }, 1500);
     },
-    [skip, duration]
+    [duration]
   );
+  // Kept for backward compat or other uses
+  const handleSkipButtonClick = useCallback((seconds: number) => {
+    // Forward to smart skip dependent on sign
+    handleSmartSkip(seconds > 0 ? 1 : -1);
+  }, [handleSmartSkip]);
 
   const handleVideoLevelChange = (levelIndex: number) => {
     setCurrentVideoLevel(levelIndex);
@@ -647,7 +746,13 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       streamUrl: absoluteUrl,
       rawStreamUrl: absoluteRawUrl
     }, {
-      currentTime: playerRef.current?.currentTime || 0
+      currentTime: playerRef.current?.currentTime || 0,
+      volume: volume,
+      muted: isMuted,
+      // Find index of the currently showing subtitle track
+      subtitleTrackIndex: currentSubtitleTrack,
+      // Placeholder for audio track index if implemented later
+      audioTrackIndex: currentAudioTrack
     });
 
     toast.success('Casting started...');
@@ -948,6 +1053,22 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     setSeeking(true);
   };
 
+  const handleSeekTouchEnd = (e: React.TouchEvent<HTMLInputElement>) => {
+    if (contentType === 'tv') return;
+    setSeeking(false);
+    const player = playerRef.current;
+
+    const currentDuration = (player && Number.isFinite(player.duration)) ? player.duration : duration;
+
+    if (player && currentDuration > 0) {
+      // For touch, we might need to rely on the current value of the input
+      // because TouchEvent doesn't have the same direct value access in the same way MouseEvent sometimes gets treated or we just read the input's value
+      const seekTime =
+        (Number((e.target as HTMLInputElement).value) / 100) * (currentDuration + seekOffset);
+      player.currentTime = seekTime;
+    }
+  };
+
   const handleSeekMouseUp = (e: React.MouseEvent<HTMLInputElement>) => {
     if (contentType === 'tv') return;
     setSeeking(false);
@@ -958,7 +1079,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
     if (player && currentDuration > 0) {
       const seekTime =
-        (Number((e.target as HTMLInputElement).value) / 100) * (currentDuration + seekOffset);
+        (Number((e.currentTarget as HTMLInputElement).value) / 100) * (currentDuration + seekOffset);
       player.currentTime = seekTime;
     }
   };
@@ -1017,6 +1138,15 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
             screen.orientation.lock('landscape').catch((e) => {
               console.warn("Orientation lock failed:", e);
             });
+          } else if ('lockOrientation' in screen) {
+            // @ts-ignore - older API
+            screen.lockOrientation('landscape');
+          } else if ('mozLockOrientation' in screen) {
+            // @ts-ignore - older API
+            screen.mozLockOrientation('landscape');
+          } else if ('msLockOrientation' in screen) {
+            // @ts-ignore - older API
+            screen.msLockOrientation('landscape');
           }
         } catch (err: any) {
           console.error(
@@ -1026,7 +1156,17 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       } else {
         if (screen.orientation && 'unlock' in screen.orientation) {
           screen.orientation.unlock();
+        } else if ('unlockOrientation' in screen) {
+          // @ts-ignore - older API
+          screen.unlockOrientation();
+        } else if ('mozUnlockOrientation' in screen) {
+          // @ts-ignore - older API
+          screen.mozUnlockOrientation();
+        } else if ('msUnlockOrientation' in screen) {
+          // @ts-ignore - older API
+          screen.msUnlockOrientation();
         }
+
         if (document.exitFullscreen) {
           document.exitFullscreen();
         }
@@ -1752,180 +1892,155 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
               </div>
             </div>
           ) : (
+            <>
             // --- EXISTING MOVIE/SERIES CONTROLS ---
-            <div
-              className="pointer-events-auto absolute bottom-0 left-0 right-0 p-4"
-              style={{
-                background:
-                  'linear-gradient(to top, rgba(0,0,0,1) 0%, rgba(0,0,0,0.9) 70%, rgba(0,0,0,0) 100%)',
-              }}
-            >
-              {/* Seek Bar */}
-              <div className="relative w-full">
-                {isTooltipVisible && (
-                  <div
-                    className="absolute bottom-full mb-2 rounded bg-black bg-opacity-75 px-2 py-1 text-xs text-white"
-                    style={{
-                      left: `${hoverPosition} px`,
-                      transform: 'translateX(-50%)',
-                    }}
-                  >
-                    {formatTime(hoverTime)}
+              {/* Smart Seek Overlay */}
+              {seekOverlay && (
+                <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 flex flex-col items-center justify-center pointer-events-none z-30 animate-in fade-in zoom-in duration-200">
+                  <div className="bg-black/80 backdrop-blur-md text-white rounded-full px-6 py-4 flex flex-col items-center shadow-lg">
+                    <span className="text-3xl font-bold">{seekOverlay.text}</span>
+                    <span className="text-sm text-gray-300 mt-1">{seekOverlay.time}</span>
                   </div>
-                )}
-                <input
-                  ref={seekBarRef}
-                  type="range"
-                  min="0"
-                  max="100"
-                  value={progress}
-                  onMouseDown={handleSeekMouseDown}
-                  onMouseUp={handleSeekMouseUp}
-                  onChange={handleSeekChange}
-                  onMouseMove={handleSeekBarHover}
-                  onMouseEnter={() => setIsTooltipVisible(true)}
-                  onMouseLeave={() => setIsTooltipVisible(false)}
-                  className="range-sm h-1 w-full cursor-pointer appearance-none rounded-lg bg-gray-600"
-                  style={{ accentColor: '#3b82f6' }}
-                  data-focusable="true"
-                  data-control="seekbar"
-                />
-              </div>
-
-              {/* Button Row */}
-              <div className="mt-2 flex items-center justify-between text-white">
-                {/* Left Controls (Play, Skip, Time) */}
-                <div className="flex items-center space-x-4">
-                  <button
-                    data-focusable="true"
-                    data-control="play-pause"
-                    onClick={togglePlayPause}
-
-                    className="text-white hover:text-blue-400"
-                  >
-                    {isPlaying ? (
-                      <svg
-                        className="h-8 w-8"
-                        fill="currentColor"
-                        viewBox="0 0 20 20"
-                      >
-                        <path
-                          fillRule="evenodd"
-                          d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z"
-                          clipRule="evenodd"
-                        ></path>
-                      </svg>
-                    ) : (
-                      <svg
-                        className="h-8 w-8"
-                        fill="currentColor"
-                        viewBox="0 0 20 20"
-                      >
-                        <path
-                          fillRule="evenodd"
-                          d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z"
-                          clipRule="evenodd"
-                        ></path>
-                      </svg>
-                    )}
-                  </button>
-                  <div className="flex items-center space-x-2">
-                    <button
-                      data-focusable="true"
-                      onClick={() => handleSkipButtonClick(-30)}
-                      className="text-white hover:text-blue-400"
-                    >
-                      <svg
-                        className="h-6 w-6"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth="2"
-                          d="M15 19l-7-7 7-7"
-                        ></path>
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth="2"
-                          d="M8 19l-7-7 7-7"
-                        ></path>
-                      </svg>
-                    </button>
-                    <button
-                      data-focusable="true"
-                      onClick={() => handleSkipButtonClick(30)}
-                      className="text-white hover:text-blue-400"
-                    >
-                      <svg
-                        className="h-6 w-6"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth="2"
-                          d="M9 5l7 7-7 7"
-                        ></path>
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth="2"
-                          d="M16 5l7 7-7 7"
-                        ></path>
-                      </svg>
-                    </button>
-                  </div>
-                  <span className="font-mono text-sm">
-                    {formatTime(currentTime)} / {formatTime(duration)}
-                  </span>
                 </div>
+              )}
 
-                {/* Right Controls (Mute, Fit, Subs, Fullscreen) */}
-                <div className="flex items-center space-x-4">
-                  {!isTizen && (
-                    <>
-                      <button
-                        data-focusable="true"
-                        onClick={toggleMute}
-                        className="text-white hover:text-blue-400"
-                      >
-                        {isMuted || volume === 0 ? (
-                          <svg
-                            className="h-6 w-6"
-                            fill="currentColor"
-                            viewBox="0 0 20 20"
-                          >
-                            <path
-                              fillRule="evenodd"
-                              d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM12.293 7.293a1 1 0 011.414 0L15 8.586l1.293-1.293a1 1 0 111.414 1.414L16.414 10l1.293 1.293a1 1 0 01-1.414 1.414L15 11.414l-1.293 1.293a1 1 0 01-1.414-1.414L13.586 10l-1.293-1.293a1 1 0 010-1.414z"
-                              clipRule="evenodd"
-                            ></path>
-                          </svg>
-                        ) : (
-                          <svg
-                            className="h-6 w-6"
-                            fill="currentColor"
-                            viewBox="0 0 20 20"
-                          >
-                            <path
-                              fillRule="evenodd"
-                              d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM14.657 2.929a1 1 0 011.414 0A9.972 9.972 0 0119 10a9.972 9.972 0 01-2.929 7.071 1 1 0 01-1.414-1.414A7.971 7.971 0 0017 10c0-2.21-.894-4.208-2.343-5.657a1 1 0 010-1.414zm-2.829 2.828a1 1 0 011.415 0A5.983 5.983 0 0115 10a5.984 5.984 0 01-1.757 4.243 1 1 0 01-1.415-1.415A3.984 3.984 0 0013 10a3.983 3.983 0 00-1.172-2.828 1 1 0 010-1.415z"
-                              clipRule="evenodd"
-                            ></path>
-                          </svg>
-                        )}
-                      </button>
-                    </>
+              <div
+                className="pointer-events-auto absolute bottom-0 left-0 right-0 p-4"
+                style={{
+                  background:
+                    'linear-gradient(to top, rgba(0,0,0,1) 0%, rgba(0,0,0,0.9) 70%, rgba(0,0,0,0) 100%)',
+                }}
+              >
+                {/* YouTube-style Seek Bar */}
+                <div className="relative w-full group/timeline flex items-center h-4 cursor-pointer">
+
+                  {/* Visual Track Container */}
+                  <div className="absolute left-0 right-0 h-1 group-hover/timeline:h-1.5 group-focus-within/timeline:h-1.5 transition-all duration-200 bg-gray-600/50 rounded-full overflow-hidden">
+                    {/* Buffer Bar */}
+                    <div
+                      className="absolute top-0 left-0 h-full bg-gray-400/50 transition-all duration-200"
+                      style={{ width: `${buffered}%` }}
+                    ></div>
+                    {/* Progress Bar */}
+                    <div
+                      className="absolute top-0 left-0 h-full bg-blue-500 transition-all duration-75 ease-linear"
+                      style={{ width: `${progress}%` }}
+                    ></div>
+                  </div>
+
+                  {/* Thumb (Visual Only) */}
+                  <div
+                    className="absolute h-3.5 w-3.5 bg-blue-500 rounded-full shadow-md scale-0 group-hover/timeline:scale-100 group-focus-within/timeline:scale-100 transition-transform duration-200 pointer-events-none z-10"
+                    style={{ left: `${progress}%`, transform: `translateX(-50%)` }}
+                  ></div>
+
+                  {/* Hover Time Tooltip */}
+                  {isTooltipVisible && (
+                    <div
+                      className="absolute bottom-full mb-3 rounded bg-black bg-opacity-75 px-2 py-1 text-xs text-white transform -translate-x-1/2 pointer-events-none"
+                      style={{
+                        left: `${hoverPosition}px`, // hoverPosition is already pixel value from left
+                      }}
+                    >
+                      {formatTime(hoverTime)}
+                    </div>
                   )}
 
-                  <div className="relative">
-                    {/* --- ADD CAST BUTTON HERE --- */}
+                  {/* Interaction Layer (Invisible Input) */}
+                  <input
+                    ref={seekBarRef}
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="0.01"
+                    value={progress}
+                    onMouseDown={handleSeekMouseDown}
+                    onMouseUp={handleSeekMouseUp}
+                    onTouchStart={handleSeekMouseDown}
+                    onTouchEnd={handleSeekTouchEnd}
+                    onChange={handleSeekChange}
+                    onMouseMove={handleSeekBarHover}
+                    onMouseEnter={() => setIsTooltipVisible(true)}
+                    onMouseLeave={() => setIsTooltipVisible(false)}
+                    onFocus={() => {
+                      // Ensure parent knows we are focused if needed for key handling visualization
+                      // or just rely on global focus index
+                    }}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20 focus:outline-none"
+                    data-focusable="true"
+                    data-control="seekbar"
+                    aria-label="Seek"
+                  />
+                </div>
+
+                {/* Button Row */}
+                <div className="mt-2 flex items-center justify-between text-white px-2">
+                  {/* Left Controls: Play, Volume, Time */}
+                  <div className="flex items-center space-x-4">
+                    <button
+                      data-focusable="true"
+                      data-control="play-pause"
+                      onClick={togglePlayPause}
+                      className="text-white hover:text-blue-400 transition-colors"
+                    >
+                      {isPlaying ? (
+                        <svg className="h-8 w-8" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd"></path>
+                        </svg>
+                      ) : (
+                        <svg className="h-8 w-8" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd"></path>
+                        </svg>
+                      )}
+                    </button>
+
+                    <div className="flex items-center space-x-2">
+                      <button data-focusable="true" onClick={() => handleSkipButtonClick(-10)} className="text-white hover:text-blue-400">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0019 16V8a1 1 0 00-1.6-.8l-5.333 4zM4.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0011 16V8a1 1 0 00-1.6-.8l-5.334 4z"></path></svg>
+                      </button>
+                      <button data-focusable="true" onClick={() => handleSkipButtonClick(10)} className="text-white hover:text-blue-400">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11.933 12.8a1 1 0 000-1.6l-5.333-4A1 1 0 005 8v8a1 1 0 001.6.8l5.333-4zM19.933 12.8a1 1 0 000-1.6l-5.333-4A1 1 0 0013 8v8a1 1 0 001.6.8l5.333-4z"></path></svg>
+                      </button>
+                    </div>
+
+                    {!isTizen && (
+                      <div className="flex items-center group/volume">
+                        <button
+                          data-focusable="true"
+                          onClick={toggleMute}
+                          className="text-white hover:text-blue-400"
+                        >
+                          {isMuted || volume === 0 ? (
+                            <svg className="h-6 w-6" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM12.293 7.293a1 1 0 011.414 0L15 8.586l1.293-1.293a1 1 0 111.414 1.414L16.414 10l1.293 1.293a1 1 0 01-1.414 1.414L15 11.414l-1.293 1.293a1 1 0 01-1.414-1.414L13.586 10l-1.293-1.293a1 1 0 010-1.414z" clipRule="evenodd"></path></svg>
+                          ) : (
+                            <svg className="h-6 w-6" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM14.657 2.929a1 1 0 011.414 0A9.972 9.972 0 0119 10a9.972 9.972 0 01-2.929 7.071 1 1 0 01-1.414-1.414A7.971 7.971 0 0017 10c0-2.21-.894-4.208-2.343-5.657a1 1 0 010-1.414zm-2.829 2.828a1 1 0 011.415 0A5.983 5.983 0 0115 10a5.984 5.984 0 01-1.757 4.243 1 1 0 01-1.415-1.415A3.984 3.984 0 0013 10a3.983 3.983 0 00-1.172-2.828 1 1 0 010-1.415z" clipRule="evenodd"></path></svg>
+                          )}
+                        </button>
+                        <div className="w-0 overflow-hidden group-hover/volume:w-24 transition-all duration-300 ease-in-out ml-2 flex items-center">
+                          <input
+                            data-focusable="true"
+                            data-control="volume"
+                            type="range"
+                            min="0"
+                            max="1"
+                            step="0.01"
+                            value={volume}
+                            onChange={handleVolumeChange}
+                            className="range-sm h-1 w-20 cursor-pointer appearance-none rounded-lg bg-gray-600"
+                            style={{ accentColor: '#3b82f6' }}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    <span className="font-mono text-sm text-gray-300">
+                      {formatTime(currentTime)} / {formatTime(duration)}
+                    </span>
+                  </div>
+
+                  {/* Right Controls: Cast, Favorites, Settings, Fullscreen */}
+                  <div className="flex items-center space-x-4">
+                    {/* Cast Button */}
                     {!isReceiver && (
                       <button
                         data-focusable="true"
@@ -1937,244 +2052,150 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
                             setActiveSettingsMenu('cast');
                           }
                         }}
-                        className="text-white hover:text-blue-400 mr-2"
-                      >
-                        <FaChromecast className="h-6 w-6" />
-                      </button>
-                    )}
-                    {showSettingsButton && (
-                      <button
-                        data-focusable="true"
-                        onClick={() => {
-                          if (isSettingsMenuOpen && activeSettingsMenu !== 'main' && activeSettingsMenu !== 'cast') {
-                            setActiveSettingsMenu('main');
-                          } else {
-                            toggleSettingsMenu();
-                          }
-                        }}
                         className="text-white hover:text-blue-400"
+                        title="Cast"
                       >
-                        <svg
-                          className="h-6 w-6"
-                          fill="currentColor"
-                          viewBox="0 0 20 20"
-                        >
-                          <path
-                            fillRule="evenodd"
-                            d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01-.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106A1.532 1.532 0 0111.49 3.17zM10 13a3 3 0 100-6 3 3 0 000 6z"
-                            clipRule="evenodd"
-                          />
-                        </svg>
+                        <FaChromecast className="h-5 w-5" />
                       </button>
                     )}
-                    {/* --- ADD SETTINGS MENU --- */}
-                    {isSettingsMenuOpen && (
-                      <div
-                        ref={settingsMenuRef}
-                        className="absolute bottom-full right-0 mb-2 w-48 rounded-lg bg-gray-800 bg-opacity-90 py-1 text-sm text-white"
-                      >
-                        {activeSettingsMenu === 'main' && (
-                          <>
-                            {videoLevels.length > 1 && (
-                              <button
-                                onClick={() => setActiveSettingsMenu('quality')}
-                                className="block w-full px-4 py-2 text-left hover:bg-gray-700"
-                                data-focusable="true"
-                              >
-                                Quality
-                              </button>
-                            )}
-                            {audioTracks.length > 1 && (
-                              <button
-                                onClick={() => setActiveSettingsMenu('audio')}
-                                className="block w-full px-4 py-2 text-left hover:bg-gray-700"
-                                data-focusable="true"
-                              >
-                                Audio
-                              </button>
-                            )}
-                            {subtitleTracks.length > 0 && (
-                              <button
-                                onClick={() =>
-                                  setActiveSettingsMenu('subtitles')
-                                }
-                                className="block w-full px-4 py-2 text-left hover:bg-gray-700"
-                                data-focusable="true"
-                              >
-                                Subtitles
-                              </button>
-                            )}
-                            {!isReceiver && (
-                              <button
-                                onClick={() => setActiveSettingsMenu('cast')}
-                                className="block w-full px-4 py-2 text-left hover:bg-gray-700"
-                                data-focusable="true"
-                              >
-                                <div className="flex items-center">
-                                  <FaChromecast className="mr-2" /> Cast to Device
-                                </div>
-                              </button>
-                            )}
-                          </>
-                        )}
 
-                        {activeSettingsMenu === 'cast' && (
-                          <>
-                            <button
-                              onClick={() => setActiveSettingsMenu('main')}
-                              className="block w-full px-4 py-2 text-left text-gray-400 hover:bg-gray-700 border-b border-gray-600 mb-1"
-                            >
-                              ← Back
-                            </button>
-                            {receivers.length === 0 ? (
-                              <div className="px-4 py-2 text-gray-400 text-xs">No devices found</div>
-                            ) : (
-                              receivers.map((device) => (
-                                <button
-                                  key={device.id}
-                                  onClick={() => handleCast(device.id)}
-                                  className="block w-full px-4 py-2 text-left hover:bg-gray-700 truncate"
-                                  data-focusable="true"
-                                >
-                                  {device.name}
+                    {/* Favorite Button */}
+
+
+                    <div className="relative">
+                      {showSettingsButton && (
+                        <button
+                          data-focusable="true"
+                          onClick={() => {
+                            if (isSettingsMenuOpen && activeSettingsMenu !== 'main' && activeSettingsMenu !== 'cast') {
+                              setActiveSettingsMenu('main');
+                            } else {
+                              toggleSettingsMenu();
+                            }
+                          }}
+                          className="text-white hover:text-blue-400"
+                          title="Settings"
+                        >
+                          <svg className="h-6 w-6" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01-.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106A1.532 1.532 0 0111.49 3.17zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
+                          </svg>
+                        </button>
+                      )}
+                      {/* --- SETTINGS MENU --- */}
+                      {isSettingsMenuOpen && (
+                        <div
+                          ref={settingsMenuRef}
+                          className="absolute bottom-full right-0 mb-4 w-56 rounded-lg bg-gray-900/95 backdrop-blur shadow-xl border border-gray-700 py-2 text-sm text-white overflow-hidden z-20"
+                        >
+                          {/* Menu Content Same As Before but cleaned up */}
+                          {activeSettingsMenu === 'main' && (
+                            <>
+                              {videoLevels.length > 1 && (
+                                <button onClick={() => setActiveSettingsMenu('quality')} className="flex items-center w-full px-4 py-3 hover:bg-gray-800 transition-colors" data-focusable="true">
+                                  <span className="flex-1 text-left">Quality</span>
+                                  <span className="text-xs text-gray-400">{currentVideoLevel === -1 ? 'Auto' : `${videoLevels[currentVideoLevel]?.height}p`}</span>
+                                  <svg className="w-4 h-4 ml-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path></svg>
                                 </button>
-                              ))
-                            )}
-                          </>
-                        )}
-
-                        {activeSettingsMenu === 'quality' && (
-                          <>
-                            <button
-                              onClick={() => handleVideoLevelChange(-1)}
-                              className={`block w-full px-4 py-2 text-left hover:bg-gray-700 ${currentVideoLevel === -1 ? 'bg-blue-500' : ''} `}
-                              data-focusable="true"
-                            >
-                              Auto
-                            </button>
-                            {videoLevels.map((level, index) => (
-                              <button
-                                key={String(level.url) + index}
-                                onClick={() => handleVideoLevelChange(index)}
-                                data-focusable="true"
-                                className={`block w-full px-4 py-2 text-left hover:bg-gray-700 ${currentVideoLevel === index ? 'bg-blue-500' : ''} `}
-                              >
-                                {level.height}p{' '}
-                                {level.bitrate > 0 &&
-                                  `(${(level.bitrate / 1000000).toFixed(1)} Mbps)`}
+                              )}
+                              {audioTracks.length > 1 && (
+                                <button onClick={() => setActiveSettingsMenu('audio')} className="flex items-center w-full px-4 py-3 hover:bg-gray-800 transition-colors" data-focusable="true">
+                                  <span className="flex-1 text-left">Audio</span>
+                                  <svg className="w-4 h-4 ml-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path></svg>
+                                </button>
+                              )}
+                              {subtitleTracks.length > 0 && (
+                                <button onClick={() => setActiveSettingsMenu('subtitles')} className="flex items-center w-full px-4 py-3 hover:bg-gray-800 transition-colors" data-focusable="true">
+                                  <span className="flex-1 text-left">Subtitles</span>
+                                  <span className="text-xs text-gray-400">{currentSubtitleTrack === -1 ? 'Off' : (subtitleTracks[currentSubtitleTrack]?.label || 'On')}</span>
+                                  <svg className="w-4 h-4 ml-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path></svg>
+                                </button>
+                              )}
+                              {!isReceiver && (
+                                <button onClick={() => setActiveSettingsMenu('cast')} className="flex items-center w-full px-4 py-3 hover:bg-gray-800 transition-colors" data-focusable="true">
+                                  <FaChromecast className="mr-3" /> <span className="text-left">Cast to Device</span>
+                                </button>
+                              )}
+                            </>
+                          )}
+                          {/* Submenus (Quality, Audio, Subtitles, Cast) - keep simpler structure for brevity in replacement but styled */}
+                          {activeSettingsMenu !== 'main' && (
+                            <>
+                              <button onClick={() => setActiveSettingsMenu('main')} className="flex items-center w-full px-4 py-2 bg-gray-800/50 hover:bg-gray-800 text-gray-300 border-b border-gray-700 mb-1">
+                                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"></path></svg>
+                                Back
                               </button>
-                            ))}
-                          </>
-                        )}
 
-                        {activeSettingsMenu === 'audio' && (
-                          <>
-                            {audioTracks.map((track) => (
-                              <button
-                                key={track.id}
-                                data-focusable="true"
-                                onClick={() => handleAudioTrackChange(track.id)}
-                                className={`block w-full px-4 py-2 text-left hover:bg-gray-700 ${currentAudioTrack === track.id ? 'bg-blue-500' : ''} `}
-                              >
-                                {track.name} {track.lang && `(${track.lang})`}
-                              </button>
-                            ))}
-                          </>
-                        )}
+                              {activeSettingsMenu === 'quality' && (
+                                <>
+                                  <button onClick={() => handleVideoLevelChange(-1)} className={`block w-full px-4 py-2 text-left hover:bg-gray-800 ${currentVideoLevel === -1 ? 'text-blue-400 font-semibold' : ''}`} data-focusable="true">Auto</button>
+                                  {videoLevels.map((level, index) => (
+                                    <button key={index} onClick={() => handleVideoLevelChange(index)} className={`block w-full px-4 py-2 text-left hover:bg-gray-800 ${currentVideoLevel === index ? 'text-blue-400 font-semibold' : ''}`} data-focusable="true">
+                                      {level.height}p
+                                    </button>
+                                  ))}
+                                </>
+                              )}
 
-                        {activeSettingsMenu === 'subtitles' && (
-                          <>
-                            <button
-                              onClick={() => handleSubtitleTrackChange(null)}
-                              data-focusable="true"
-                              className={`block w-full px-4 py-2 text-left hover:bg-gray-700 ${currentSubtitleTrack === -1 ? 'bg-blue-500' : ''} `}
-                            >
-                              Off
-                            </button>
-                            {subtitleTracks.map((track, i) => (
-                              <button
-                                data-focusable="true"
-                                key={i}
-                                onClick={() => handleSubtitleTrackChange(track)}
-                                className={`block w-full px-4 py-2 text-left hover:bg-gray-700 ${currentSubtitleTrack === i ? 'bg-blue-500' : ''} `}
-                              >
-                                {track.label || `Subtitle ${i + 1}`} {track.language && `(${track.language})`}
-                              </button>
-                            ))}
-                          </>
-                        )}
-                      </div>
-                    )}
-                  </div>
+                              {activeSettingsMenu === 'audio' && audioTracks.map(track => (
+                                <button key={track.id} onClick={() => handleAudioTrackChange(track.id)} className={`block w-full px-4 py-2 text-left hover:bg-gray-800 ${currentAudioTrack === track.id ? 'text-blue-400 font-semibold' : ''}`} data-focusable="true">
+                                  {track.name}
+                                </button>
+                              ))}
 
-                  <button
-                    data-focusable="true"
-                    onClick={cycleFitMode}
-                    className="w-16 text-center text-xs font-semibold uppercase text-white hover:text-blue-400"
-                  >
-                    {fitMode === 'contain' && 'Fit'}
-                    {fitMode === 'cover' && 'Fill'}
-                    {fitMode === 'fill' && 'Stretch'}
-                  </button>
+                              {activeSettingsMenu === 'subtitles' && (
+                                <>
+                                  <button onClick={() => handleSubtitleTrackChange(null)} className={`block w-full px-4 py-2 text-left hover:bg-gray-800 ${currentSubtitleTrack === -1 ? 'text-blue-400 font-semibold' : ''}`} data-focusable="true">Off</button>
+                                  {subtitleTracks.map((track, i) => (
+                                    <button key={i} onClick={() => handleSubtitleTrackChange(track)} className={`block w-full px-4 py-2 text-left hover:bg-gray-800 ${currentSubtitleTrack === i ? 'text-blue-400 font-semibold' : ''}`} data-focusable="true">
+                                      {track.label || `Subtitle ${i + 1}`}
+                                    </button>
+                                  ))}
+                                </>
+                              )}
 
-                  {!isTizen && (
-                    <>
-                      <input
-                        data-focusable="true"
-                        data-control="volume"
-                        type="range"
-                        min="0"
-                        max="1"
-                        step="0.01"
-                        value={volume}
-                        onChange={handleVolumeChange}
-                        className="range-sm h-1 w-24 cursor-pointer appearance-none rounded-lg bg-gray-600"
-                        style={{ accentColor: '#3b82f6' }}
-                      />
+                              {activeSettingsMenu === 'cast' && receivers.map(device => (
+                                <button key={device.id} onClick={() => handleCast(device.id)} className="block w-full px-4 py-2 text-left hover:bg-gray-800 truncate" data-focusable="true">{device.name}</button>
+                              ))}
+                              {activeSettingsMenu === 'cast' && receivers.length === 0 && <div className="px-4 py-2 text-gray-500 text-xs">No devices found</div>}
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    <button
+                      data-focusable="true"
+                      onClick={cycleFitMode}
+                      className="w-12 text-center text-xs font-bold uppercase text-gray-300 hover:text-white"
+                      title="Fit Mode"
+                    >
+                      {fitMode === 'contain' && 'Fit'}
+                      {fitMode === 'cover' && 'Fill'}
+                      {fitMode === 'fill' && 'Stretch'}
+                    </button>
+
+                    {!isTizen && (
                       <button
                         data-focusable="true"
                         onClick={toggleFullscreen}
                         className="text-white hover:text-blue-400"
+                        title="Fullscreen"
                       >
                         {isFullscreen ? (
-                          <svg
-                            className="h-6 w-6"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth="2"
-                              d="M10 4H4v6m10 10h6v-6M4 20l6-6m4-4l6-6"
-                            ></path>
-                          </svg>
+                          <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 4H4v6m10 10h6v-6M4 20l6-6m4-4l6-6"></path></svg>
                         ) : (
-                          <svg
-                            className="h-6 w-6"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth="2"
-                              d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 1v4m0 0h-4m4 0l-5-5"
-                            ></path>
-                          </svg>
+                          <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 1v4m0 0h-4m4 0l-5-5"></path></svg>
                         )}
                       </button>
-                    </>
-                  )}
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
+            </>
           )}
         </div>
       </div>
-    </div>
+    </div >
   );
 };
 

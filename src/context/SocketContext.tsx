@@ -16,7 +16,13 @@ interface SocketContextProps {
     isConnected: boolean;
     receivers: Device[];
     isReceiver: boolean;
-    castTo: (targetDeviceId: string, media: any, playbackInfo?: any) => void;
+    castTo: (targetDeviceId: string, media: any, playbackInfo?: {
+        currentTime?: number;
+        volume?: number;
+        muted?: boolean;
+        subtitleTrackIndex?: number;
+        audioTrackIndex?: number;
+    }) => void;
 }
 
 const SocketContext = createContext<SocketContextProps | undefined>(undefined);
@@ -102,13 +108,19 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         };
     }, [SOCKET_URL, isReceiver]);
 
-    const castTo = (targetDeviceId: string, media: any, playbackInfo?: any) => {
+    const castTo = (targetDeviceId: string, content: any, playbackInfo?: {
+        currentTime?: number;
+        volume?: number;
+        muted?: boolean;
+        subtitleTrackIndex?: number;
+        audioTrackIndex?: number;
+    }) => {
         if (!socket) return;
         socket.emit('cast_command', {
             targetDeviceId,
             command: 'play',
             payload: {
-                media,
+                ...content,
                 playbackInfo
             }
         });

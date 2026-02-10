@@ -117,6 +117,15 @@ export default function App() {
     }
   });
 
+  // Stores playback state from incoming Cast command to initialize player
+  const [pendingPlaybackState, setPendingPlaybackState] = useState<{
+    currentTime?: number;
+    volume?: number;
+    muted?: boolean;
+    subtitleTrackIndex?: number;
+    audioTrackIndex?: number;
+  } | undefined>(undefined);
+
   const isFetchingMore = useRef(false);
 
   const loadEpgData = useCallback(async () => {
@@ -758,12 +767,18 @@ export default function App() {
 
         // Set state to play video
         setCurrentItem(media);
-        if (streamUrl) setStreamUrl(streamUrl);
         if (rawStreamUrl) setRawStreamUrl(rawStreamUrl);
+        // Ensure streamUrl is set to trigger player mount (VideoPlayer handles rawStreamUrl)
+        console.log('[App] Setting streamUrl. raw:', rawStreamUrl, 'stream:', streamUrl);
+        if (streamUrl) {
+          setStreamUrl(streamUrl);
+        } else if (rawStreamUrl) {
+          setStreamUrl(rawStreamUrl);
+        }
 
-        // Handle playback info (seek) if provided
-        if (data.payload.playbackInfo?.currentTime) {
-          localStorage.setItem(`video-progress-${media.id}`, data.payload.playbackInfo.currentTime);
+        // Handle playback info (seek, volume, tracks)
+        if (data.payload.playbackInfo) {
+          setPendingPlaybackState(data.payload.playbackInfo);
         }
       }
     };
@@ -1388,27 +1403,33 @@ export default function App() {
 
                   {/* --- Video Player (unchanged logic) --- */}
                   {!error && streamUrl ? (
-                    <VideoPlayer
-                      streamUrl={streamUrl}
-                      rawStreamUrl={rawStreamUrl}
-                      onBack={handleBack}
-                      itemId={currentItem?.id || null}
-                      context={context}
-                      contentType={contentType}
-                      mediaId={
-                        contentType === 'series'
-                          ? context.movieId // This is the Series ID
-                          : contentType === 'movie' && currentItem
-                            ? currentItem.id // This is the Movie ID
-                            : null
-                      }
-                      item={currentSeriesItem || currentItem}
-                      seriesItem={currentSeriesItem}
-                      epgData={epgData}
-                      channelGroups={channelGroups}
-                      favorites={favorites}
-                      toggleFavorite={toggleFavorite}
-                    />
+                    (() => {
+                      console.log('[DEBUG] Rendering VideoPlayer. streamUrl:', streamUrl);
+                      return (
+                        <VideoPlayer
+                          streamUrl={streamUrl}
+                          rawStreamUrl={rawStreamUrl}
+                          onBack={handleBack}
+                          itemId={currentItem?.id || null}
+                          context={context}
+                          contentType={contentType}
+                          mediaId={
+                            contentType === 'series'
+                              ? context.movieId // This is the Series ID
+                              : contentType === 'movie' && currentItem
+                                ? currentItem.id // This is the Movie ID
+                                : null
+                          }
+                          item={currentSeriesItem || currentItem}
+                          seriesItem={currentSeriesItem}
+                          epgData={epgData}
+                          channelGroups={channelGroups}
+                          favorites={favorites}
+                          toggleFavorite={toggleFavorite}
+                          initialPlaybackState={pendingPlaybackState}
+                        />
+                      );
+                    })()
                   ) : (
                     // --- Content Grid (now visible during load, if !error) ---
                     !error && (
