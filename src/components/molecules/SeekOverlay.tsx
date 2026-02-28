@@ -1,5 +1,5 @@
 import React from 'react';
-import type { SeekOverlayData } from '../types';
+import type { SeekOverlayData } from '@/types';
 
 interface SeekOverlayProps {
     seekOverlay: SeekOverlayData | null;

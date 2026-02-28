@@ -3,16 +3,16 @@ import React, { useEffect } from 'react';
 import { MediaPlayer, MediaProvider } from '@vidstack/react';
 import '@vidstack/react/player/styles/base.css';
 
-import TvChannelList, { type TvChannelListRef } from '../TvChannelList';
-import './VideoPlayerContent.css';
+import TvChannelList, { type TvChannelListRef } from '@/components/organisms/TvChannelList';
+import '@/components/organisms/VideoPlayerContent.css';
 
 // Import components
-import { BufferingOverlay } from './components/BufferingOverlay';
-import { SeekOverlay } from './components/SeekOverlay';
-import { TopBar } from './components/TopBar';
-import { TVControls } from './components/TVControls';
-import { VODControls } from './components/VODControls';
-import { useVideoContext } from './context/useVideoContext';
+import { BufferingOverlay } from '@/components/molecules/BufferingOverlay';
+import { SeekOverlay } from '@/components/molecules/SeekOverlay';
+import { TopBar } from '@/components/organisms/TopBar';
+import { TVControls } from '@/components/organisms/TVControls';
+import { VODControls } from '@/components/organisms/VODControls';
+import { useVideoContext } from '@/context/video/useVideoContext';
 
 const VideoPlayerContent: React.FC = () => {
     const {

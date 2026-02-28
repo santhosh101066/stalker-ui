@@ -1,11 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useRef, useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
-import { formatTime, isTizenDevice } from '../../../utils/helpers';
+import { formatTime, isTizenDevice } from '@/utils/helpers';
 import { isHLSProvider, type MediaProviderAdapter } from '@vidstack/react';
 import { toast } from 'react-toastify';
-import { URL_PATHS } from '../../../api/api';
-import type { VideoFitMode, MediaPlaylist, SeekOverlayData } from '../types';
-import { VideoContext, type VideoContextType } from './VideoContextTypes';
+import { URL_PATHS } from '@/services/api';
+import type { VideoFitMode, MediaPlaylist, SeekOverlayData } from '@/types';
+import { VideoContext, type VideoContextType } from '@/context/video/VideoContextTypes';
 
 
 // Provider Props

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback, forwardRef, useImperativeHandle } from 'react';
-import type { MediaItem, ChannelGroup } from '../types';
-import TvChannelListCard from './TvChannelListCard';
-import './TvChannelList.css';
+import type { MediaItem, ChannelGroup } from '@/types';
+import TvChannelListCard from '@/components/molecules/TvChannelListCard';
+import '@/components/organisms/TvChannelList.css';
 
 export interface TvChannelListRef {
   handleKeyDown: (e: KeyboardEvent) => void;

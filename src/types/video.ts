@@ -1,4 +1,4 @@
-import type { ChannelGroup, ContextType, EPG_List, MediaItem } from '../../types';
+import type { ChannelGroup, ContextType, EPG_List, MediaItem } from '@/types';
 
 export type VideoFitMode = 'contain' | 'cover' | 'fill';
 

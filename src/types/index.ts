@@ -43,3 +43,5 @@ export interface ChannelGroup {
   id: string;
   title: string;
 }
+
+export * from './video';

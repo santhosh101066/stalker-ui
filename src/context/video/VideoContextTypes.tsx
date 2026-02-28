@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { createContext } from 'react';
 import type { MediaProviderAdapter } from '@vidstack/react';
-import type { VideoFitMode, MediaPlaylist, SeekOverlayData } from '../types';
+import type { VideoFitMode, MediaPlaylist, SeekOverlayData } from '@/types';
 
 // Context State Interface
 export interface VideoContextState {

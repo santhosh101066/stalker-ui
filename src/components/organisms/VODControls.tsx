@@ -3,12 +3,12 @@ import { FaChromecast } from 'react-icons/fa';
 import {
     PlayIcon, PauseIcon, FastRewindIcon, FastForwardIcon,
     SettingsIcon, FullscreenExitIcon, FullscreenIcon
-} from './Icons';
-import { formatTime } from '../../../utils/helpers';
-import { SeekBar } from './SeekBar';
-import { VolumeControl } from './VolumeControl';
-import { SettingsMenu } from './SettingsMenu';
-import { useVideoContext } from '../context/useVideoContext';
+} from '@/components/atoms/Icons';
+import { formatTime } from '@/utils/helpers';
+import { SeekBar } from '@/components/molecules/SeekBar';
+import { VolumeControl } from '@/components/molecules/VolumeControl';
+import { SettingsMenu } from '@/components/molecules/SettingsMenu';
+import { useVideoContext } from '@/context/video';
 
 export const VODControls = React.memo(() => {
     const {

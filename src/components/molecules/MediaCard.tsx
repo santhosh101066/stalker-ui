@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { URL_PATHS } from '../api/api';
-import type { MediaItem } from '../types';
+import { URL_PATHS } from '@/services/api';
+import type { MediaItem } from '@/types';
 
 interface MediaCardProps {
   item: MediaItem;

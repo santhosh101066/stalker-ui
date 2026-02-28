@@ -1,6 +1,6 @@
 import React from 'react';
-import { useVideoContext } from '../context';
-import { VolumeMutedIcon, VolumeUpIcon } from './Icons';
+import { useVideoContext } from '@/context/video';
+import { VolumeMutedIcon, VolumeUpIcon } from '@/components/atoms/Icons';
 
 export const VolumeControl = React.memo(() => {
     const { volume, isMuted, handleVolumeChange, toggleMute } = useVideoContext();

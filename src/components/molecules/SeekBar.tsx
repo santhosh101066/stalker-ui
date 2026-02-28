@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { formatTime } from '../../../utils/helpers';
-import { useVideoContext } from '../context/useVideoContext';
+import { formatTime } from '@/utils/helpers';
+import { useVideoContext } from '@/context/video';
 
 export const SeekBar = React.memo(() => {
     const {

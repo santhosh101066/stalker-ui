@@ -2,10 +2,10 @@
 import React, { useEffect, useState, type ReactNode } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { v4 as uuidv4 } from 'uuid';
-import { URL_PATHS } from '../api/api';
-import { isTizenDevice } from '../utils/helpers';
-import { SocketContext } from './useSocket';
-import type { Device } from './SocketContextTypes';
+import { URL_PATHS } from '@/services/api';
+import { isTizenDevice } from '@/utils/helpers';
+import { SocketContext } from '@/context/useSocket';
+import type { Device } from '@/context/SocketContextTypes';
 
 export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [socket, setSocket] = useState<Socket | null>(null);

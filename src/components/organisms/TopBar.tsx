@@ -1,6 +1,6 @@
 import React from 'react';
-import { useVideoContext } from '../context';
-import { BackArrowIcon, CopyLinkIcon } from './Icons';
+import { useVideoContext } from '@/context/video';
+import { BackArrowIcon, CopyLinkIcon } from '@/components/atoms/Icons';
 
 interface TopBarProps {
     onBack: () => void;

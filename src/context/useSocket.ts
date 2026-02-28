@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react';
-import type { SocketContextProps } from './SocketContextTypes';
+import type { SocketContextProps } from '@/context/SocketContextTypes';
 
 export const SocketContext = createContext<SocketContextProps | undefined>(undefined);
 

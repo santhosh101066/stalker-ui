@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import type { EPG_List, MediaItem, ChannelGroup } from '../types';
-import { api, type ApiResponse } from './api';
+import type { EPG_List, MediaItem, ChannelGroup } from '@/types';
+import { api, type ApiResponse } from '@/services/api';
 
 export const API_PATHS = {
   MOVIES: '/v2/movies',

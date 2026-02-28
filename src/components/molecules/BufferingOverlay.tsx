@@ -1,5 +1,5 @@
 import React from 'react';
-import { useVideoContext } from '../context';
+import { useVideoContext } from '@/context/video';
 
 export const BufferingOverlay = React.memo(() => {
     const { isBuffering } = useVideoContext();

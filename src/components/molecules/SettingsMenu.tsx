@@ -1,6 +1,6 @@
 import React from 'react';
 import { FaChromecast } from 'react-icons/fa';
-import { useVideoContext } from '../context/useVideoContext';
+import { useVideoContext } from '@/context/video';
 
 export const SettingsMenu = React.memo(() => {
     const {

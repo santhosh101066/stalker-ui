@@ -1,8 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useState, useRef } from 'react';
 import { toast } from 'react-toastify';
-import { api } from '../api/api';
-import ConfirmationModal from './ConfirmationModal';
+import { api } from '@/services/api';
+import ConfirmationModal from '@/components/molecules/ConfirmationModal';
 
 type ConfigProfile = {
   id: number;

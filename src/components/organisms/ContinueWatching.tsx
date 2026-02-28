@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import MediaCard from './MediaCard';
-import type { MediaItem } from '../types';
+import MediaCard from '@/components/molecules/MediaCard';
+import type { MediaItem } from '@/types';
 
 interface ContinueWatchingProps {
   onClick: (item: MediaItem) => void;

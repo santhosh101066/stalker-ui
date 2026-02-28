@@ -1,5 +1,5 @@
 import { useContext } from 'react';
-import { VideoContext } from './VideoContextTypes';
+import { VideoContext } from '@/context/video/VideoContextTypes';
 
 // Custom hook to use the context
 export const useVideoContext = () => {

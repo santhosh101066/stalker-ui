@@ -4,10 +4,10 @@ import {
     PlayIcon, PauseIcon, ListIcon, SettingsIcon,
     HeartSolidIcon, HeartOutlineIcon, VolumeMutedIcon,
     VolumeUpIcon, FullscreenExitIcon, FullscreenIcon
-} from './Icons';
-import { URL_PATHS } from '../../../api/api';
-import { SettingsMenu } from './SettingsMenu';
-import { useVideoContext } from '../context/useVideoContext';
+} from '@/components/atoms/Icons';
+import { URL_PATHS } from '@/services/api';
+import { SettingsMenu } from '@/components/molecules/SettingsMenu';
+import { useVideoContext } from '@/context/video';
 
 const formatTimestamp = (timestamp: number): string => {
     if (isNaN(timestamp)) return '...';

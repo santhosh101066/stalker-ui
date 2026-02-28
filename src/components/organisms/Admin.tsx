@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { toast } from 'react-toastify';
-import { api } from '../api/api';
-import { getChannelGroups } from '../api/services';
-import ProfileManager from './ProfileManager';
-import ConfirmationModal from './ConfirmationModal';
-import { useSocket } from '../context/useSocket'; // Import useSocket
+import { api } from '@/services/api';
+import { getChannelGroups } from '@/services/services';
+import ProfileManager from '@/components/organisms/ProfileManager';
+import ConfirmationModal from '@/components/molecules/ConfirmationModal';
+import { useSocket } from '@/context/useSocket'; // Import useSocket
 import { useRef } from 'react';
 
 type Config = {
@@ -731,7 +731,7 @@ const Admin = () => {
                   <button type="button" onClick={handleClearWatched} data-focusable="true" className="rounded-lg bg-red-900/30 text-red-400 px-3 py-2 text-xs font-bold hover:bg-red-900/50">Clear History</button>
                   <button type="button" data-focusable="true" onClick={async () => {
                     try {
-                      const { getExpiry } = await import('../api/services');
+                      const { getExpiry } = await import('@/services/services');
                       const response = await getExpiry();
                       if (response.success && response.expiry) {
                         toast.success(`Expires on: ${response.expiry}`);
