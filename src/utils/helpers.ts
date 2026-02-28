@@ -16,7 +16,6 @@ export const isTizenDevice = (): boolean => {
   // Check specifically for mock query param
   const urlParams = new URLSearchParams(window.location.search);
   if (urlParams.get('mock_tizen') === 'true') {
-    console.log("Enabling Tizen Mock mode via URL param");
     return true;
   }
 

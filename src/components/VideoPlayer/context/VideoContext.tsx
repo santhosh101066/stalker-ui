@@ -187,13 +187,18 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
     const togglePlayPause = useCallback(() => {
         const player = playerRef.current;
         if (player) {
-            if (player.paused) {
-                player.play();
-            } else {
-                player.pause();
+            try {
+                // Check if player state is available/ready if needed, but simple null check usually enough
+                if (player.paused) {
+                    player.play();
+                } else {
+                    player.pause();
+                }
+            } catch (error) {
+                console.error("Error toggling play/pause:", error);
             }
         }
-    }, []);
+    }, [playerRef]);
 
     const handlePlay = useCallback(() => {
         setIsPlaying(true);
@@ -242,9 +247,11 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
         if (contentType === 'tv') return;
         setSeeking(false);
         const player = playerRef.current;
-        const currentDuration = (player && Number.isFinite(player.duration)) ? player.duration : duration;
+        if (!player) return; // Guard clause
 
-        if (player && currentDuration > 0) {
+        const currentDuration = Number.isFinite(player.duration) ? player.duration : duration;
+
+        if (currentDuration > 0) {
             const seekTime = (Number((e.target as HTMLInputElement).value) / 100) * (currentDuration + seekOffset);
             player.currentTime = seekTime;
         }
@@ -254,9 +261,11 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
         if (contentType === 'tv') return;
         setSeeking(false);
         const player = playerRef.current;
-        const currentDuration = (player && Number.isFinite(player.duration)) ? player.duration : duration;
+        if (!player) return; // Guard clause
 
-        if (player && currentDuration > 0) {
+        const currentDuration = Number.isFinite(player.duration) ? player.duration : duration;
+
+        if (currentDuration > 0) {
             const seekTime = (Number((e.currentTarget as HTMLInputElement).value) / 100) * (currentDuration + seekOffset);
             player.currentTime = seekTime;
         }
@@ -596,9 +605,9 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
 
         // Check for 404 / component failure
         if (errorCode === 4 || errorMessage.includes('404') || errorMessage.includes('Not Found') || errorMessage.includes('500') || errorMessage.includes('Not Found')) {
-            // SPECIAL HANDLING FOR TV: Retry on 404 up to 2 times
-            if (contentType === 'tv' && retryCount < 2) {
-                console.log(`[VideoPlayer] 404 detected on Live TV. Retrying... (${retryCount + 1}/2)`);
+            // SPECIAL HANDLING FOR TV: Retry on 404 up to 10 times to allow server-side resolution
+            if (contentType === 'tv' && retryCount < 10) {
+                console.log(`[VideoPlayer] 404 detected on Live TV. Retrying... (${retryCount + 1}/10)`);
                 // Fall through to the retry logic below
             } else {
                 // Immediate fail for VOD or if retries exhausted
@@ -608,7 +617,7 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
             }
         }
 
-        if (retryCount < 3) {
+        if (retryCount < 10) {
             isRetrying.current = true;
             setIsRecovering(true);
 

@@ -1,5 +1,5 @@
 export const URL_PATHS = {
-  HOST: import.meta.env.VITE_API_HOST || '',
+  HOST: import.meta.env.VITE_API_HOST || 'http://localhost:3000',
 };
 
 export const BASE_URL = `${URL_PATHS.HOST}/api`;

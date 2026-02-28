@@ -22,6 +22,7 @@ import 'react-toastify/dist/ReactToastify.css';
 import './App.css';
 import Admin from './components/Admin';
 import TvChannelListCard from './components/TvChannelListCard';
+import TvChannelList from './components/TvChannelList';
 import ConfirmationModal from './components/ConfirmationModal';
 import { useSocket } from './context/useSocket';
 
@@ -1114,7 +1115,8 @@ export default function App() {
       playLastTvChannel &&
       items.length > 0 &&
       contentType === 'tv' &&
-      !loading
+      !loading &&
+      isTizen // Only auto-play on Tizen
     ) {
       const channelToPlay =
         playLastTvChannel === '__play_first__'
@@ -1439,42 +1441,59 @@ export default function App() {
                               contentType={contentType}
                             />
                           )}
-                        <div
-                          className={` ${contentType === 'tv' // TV List
-                            ? 'channel-list flex flex-col gap-1'
-                            : isEpisodeList && !isTizen // Episode List (Web)
-                              ? 'flex flex-col gap-4'
-                              : isEpisodeList // Episode List (Tizen)
-                                ? 'grid grid-cols-1 gap-4 md:grid-cols-2'
-                                : 'grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 md:gap-6 lg:grid-cols-5 xl:grid-cols-6' // Movie/Series Grid
-                            } ${loading && items.length > 0 && context.page === 1
-                              ? 'pointer-events-none opacity-50 transition-opacity duration-300'
-                              : 'opacity-100'
-                            } `}
-                        >
-                          {items?.map((item) =>
-                            contentType === 'tv' ? (
-                              <TvChannelListCard
-                                key={item.id}
-                                item={item}
-                                onClick={handleItemClick}
-                                isFocused={false} // Focus is handled by App.tsx's useEffect
-                              />
-                            ) : isEpisodeList ? (
-                              <EpisodeCard
-                                key={item.id}
-                                item={item}
-                                onClick={handleItemClick}
-                              />
-                            ) : (
-                              <MediaCard
-                                key={item.id}
-                                item={item}
-                                onClick={handleItemClick}
-                              />
-                            )
-                          )}
-                        </div>
+
+                        {/* --- NEW: Render TvChannelList for Mobile/Web TV View --- */}
+                        {!isTizen && contentType === 'tv' ? (
+                          <div className="relative h-[calc(100vh-100px)] w-full overflow-hidden rounded-xl border border-gray-700 bg-gray-900/50">
+                            <TvChannelList
+                              channels={items}
+                              channelGroups={channelGroups}
+                              onChannelSelect={handleItemClick}
+                              onBack={() => {
+                                // Optional: Handle back to exit TV mode or similar
+                                handleContentTypeChange('movie');
+                              }}
+                              currentItemId={null} // No current item selected yet in this view
+                            />
+                          </div>
+                        ) : (
+                          <div
+                            className={` ${contentType === 'tv' // TV List (Tizen)
+                              ? 'channel-list flex flex-col gap-1'
+                              : isEpisodeList && !isTizen // Episode List (Web)
+                                ? 'flex flex-col gap-4'
+                                : isEpisodeList // Episode List (Tizen)
+                                  ? 'grid grid-cols-1 gap-4 md:grid-cols-2'
+                                  : 'grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 md:gap-6 lg:grid-cols-5 xl:grid-cols-6' // Movie/Series Grid
+                              } ${loading && items.length > 0 && context.page === 1
+                                ? 'pointer-events-none opacity-50 transition-opacity duration-300'
+                                : 'opacity-100'
+                              } `}
+                          >
+                            {items?.map((item) =>
+                              contentType === 'tv' ? (
+                                <TvChannelListCard
+                                  key={item.id}
+                                  item={item}
+                                  onClick={handleItemClick}
+                                  isFocused={false} // Focus is handled by App.tsx's useEffect
+                                />
+                              ) : isEpisodeList ? (
+                                <EpisodeCard
+                                  key={item.id}
+                                  item={item}
+                                  onClick={handleItemClick}
+                                />
+                              ) : (
+                                <MediaCard
+                                  key={item.id}
+                                  item={item}
+                                  onClick={handleItemClick}
+                                />
+                              )
+                            )}
+                          </div>
+                        )}
 
                         {/* --- No content messages (now must check !loading) --- */}
                         {!items?.length && !loading && !context.search && (

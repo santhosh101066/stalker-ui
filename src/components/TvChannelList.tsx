@@ -1,6 +1,11 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback, forwardRef, useImperativeHandle } from 'react';
 import type { MediaItem, ChannelGroup } from '../types';
 import TvChannelListCard from './TvChannelListCard';
+import './TvChannelList.css';
+
+export interface TvChannelListRef {
+  handleKeyDown: (e: KeyboardEvent) => void;
+}
 
 interface TvChannelListProps {
   channels: MediaItem[];
@@ -10,45 +15,65 @@ interface TvChannelListProps {
   currentItemId: string | null | undefined;
 }
 
-const TvChannelList: React.FC<TvChannelListProps> = ({
+const TvChannelList = forwardRef<TvChannelListRef, TvChannelListProps>(({
   channels,
   channelGroups,
   onChannelSelect,
   onBack,
   currentItemId,
-}) => {
+}, ref) => {
   // Find initial group and channel
-  const findInitialIndexes = () => {
+  const findInitialIndexes = useCallback(() => {
     if (!currentItemId) return { groupIdx: 0, channelIdx: 0 };
     const currentChannel = channels.find((c) => c.id === currentItemId);
-    if (!currentChannel) return { groupIdx: 0, channelIdx: 0 };
+    const resolvedGroupIdx = currentChannel
+      ? channelGroups.findIndex((g) => String(g.id) === String(currentChannel.tv_genre_id))
+      : -1;
 
-    const groupIdx = channelGroups.findIndex(
-      (g) => g.id === currentChannel.tv_genre_id
-    );
+    let targetGroupIdx = 0;
 
-    if (groupIdx > -1) {
-      // Found group, now find channel index within that group
-      const filteredChannels = channels.filter(
-        (c) => c.tv_genre_id === channelGroups[groupIdx].id
-      );
-      const channelIdx = filteredChannels.findIndex(
-        (c) => c.id === currentItemId
-      );
-      return { groupIdx, channelIdx: Math.max(0, channelIdx) };
+    if (resolvedGroupIdx > -1) {
+      targetGroupIdx = resolvedGroupIdx;
+    } else {
+      // If the channel's group is not found, fallback to "All Channels",
+      // which might be ID 'all', so we look for it, else index 0
+      const allIdx = channelGroups.findIndex(g => g.id === 'all');
+      targetGroupIdx = allIdx > -1 ? allIdx : 0;
     }
 
-    // Could not find group, default to "All Channels"
-    const allChannelsIdx = channels.findIndex((c) => c.id === currentItemId);
-    return { groupIdx: 0, channelIdx: Math.max(0, allChannelsIdx) };
-  };
+    if (!channelGroups[targetGroupIdx]) return { groupIdx: 0, channelIdx: 0 };
+
+    let targetChannelIdx = 0;
+    if (targetGroupIdx > -1) {
+      const filteredChannelsVal = channels.filter(
+        (c) => String(c.tv_genre_id) === String(channelGroups[targetGroupIdx].id)
+      );
+      if (channelGroups[targetGroupIdx].id === 'all') {
+        targetChannelIdx = channels.findIndex((c) => c.id === currentItemId);
+      } else {
+        targetChannelIdx = filteredChannelsVal.findIndex((c) => c.id === currentItemId);
+      }
+    }
+
+    return { groupIdx: targetGroupIdx, channelIdx: Math.max(0, targetChannelIdx) };
+  }, [currentItemId, channels, channelGroups]);
 
   const initialIndexes = findInitialIndexes();
+
+  // --- Responsive State ---
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [showChannelsList, setShowChannelsList] = useState(false);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const [focusedColumn, setFocusedColumn] = useState<'groups' | 'channels'>(
     'channels'
   );
-  const [selectedGroup, setSelectedGroup] = useState<ChannelGroup>(
+  const [selectedGroup, setSelectedGroup] = useState<ChannelGroup | undefined>(
     channelGroups[initialIndexes.groupIdx] || channelGroups[0]
   );
   const [focusedGroupIndex, setFocusedGroupIndex] = useState(
@@ -57,6 +82,15 @@ const TvChannelList: React.FC<TvChannelListProps> = ({
   const [focusedChannelIndex, setFocusedChannelIndex] = useState(
     initialIndexes.channelIdx
   );
+
+  useEffect(() => {
+    if (!selectedGroup && channelGroups.length > 0) {
+      const indexes = findInitialIndexes();
+      setSelectedGroup(channelGroups[indexes.groupIdx] || channelGroups[0]);
+      setFocusedGroupIndex(indexes.groupIdx);
+      setFocusedChannelIndex(indexes.channelIdx);
+    }
+  }, [selectedGroup, channelGroups, findInitialIndexes]);
 
   const groupListRef = useRef<HTMLDivElement>(null);
   const channelListRef = useRef<HTMLDivElement>(null);
@@ -79,7 +113,7 @@ const TvChannelList: React.FC<TvChannelListProps> = ({
       }
     }
     // --- END BLOCK ---
-    return channels.filter((c) => c.tv_genre_id === selectedGroup.id);
+    return channels.filter((c) => String(c.tv_genre_id) === String(selectedGroup.id));
   }, [channels, selectedGroup]);
 
   // --- NEW: Click handler for groups ---
@@ -88,66 +122,70 @@ const TvChannelList: React.FC<TvChannelListProps> = ({
     setFocusedGroupIndex(index);
     setFocusedChannelIndex(0);
     setFocusedColumn('channels');
-  }, []);
+    if (isMobile) {
+      setShowChannelsList(true);
+    }
+  }, [isMobile]);
 
   // Handle keyboard navigation
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    // Allow specific navigation keys, include 10073 (CH_LIST)
+    const activeKeys = [37, 38, 39, 40, 13, 0, 10009, 8, 10073];
+    if (!activeKeys.includes(e.keyCode)) return;
 
-      switch (e.keyCode) {
-        case 37: // LEFT
-          setFocusedColumn('groups');
-          break;
-        case 39: // RIGHT
-          setFocusedColumn('channels');
-          break;
-        case 38: // UP
-          if (focusedColumn === 'groups') {
-            setFocusedGroupIndex((prev) => (prev > 0 ? prev - 1 : 0));
-          } else {
-            setFocusedChannelIndex((prev) => (prev > 0 ? prev - 1 : 0));
-          }
-          break;
-        case 40: // DOWN
-          if (focusedColumn === 'groups') {
-            setFocusedGroupIndex((prev) =>
-              prev < channelGroups.length - 1
-                ? prev + 1
-                : channelGroups.length - 1
-            );
-          } else {
-            setFocusedChannelIndex((prev) =>
-              prev < filteredChannels.length - 1
-                ? prev + 1
-                : filteredChannels.length - 1
-            );
-          }
-          break;
-        case 13: // ENTER
-          if (focusedColumn === 'groups') {
-            // --- Use the new click handler function ---
-            handleGroupClick(
-              channelGroups[focusedGroupIndex],
-              focusedGroupIndex
-            );
-          } else {
-            onChannelSelect(filteredChannels[focusedChannelIndex]);
-          }
-          break;
-        case 0: // BACK on some devices
-        case 10009: // RETURN on Tizen
-        case 8: // Backspace for web
+    e.preventDefault();
+    e.stopPropagation();
+
+    switch (e.keyCode) {
+      case 37: // LEFT
+        setFocusedColumn('groups');
+        break;
+      case 39: // RIGHT
+        setFocusedColumn('channels');
+        break;
+      case 38: // UP
+        if (focusedColumn === 'groups') {
+          setFocusedGroupIndex((prev) => (prev > 0 ? prev - 1 : 0));
+        } else {
+          setFocusedChannelIndex((prev) => (prev > 0 ? prev - 1 : 0));
+        }
+        break;
+      case 40: // DOWN
+        if (focusedColumn === 'groups') {
+          setFocusedGroupIndex((prev) =>
+            prev < channelGroups.length - 1
+              ? prev + 1
+              : channelGroups.length - 1
+          );
+        } else {
+          setFocusedChannelIndex((prev) =>
+            prev < filteredChannels.length - 1
+              ? prev + 1
+              : filteredChannels.length - 1
+          );
+        }
+        break;
+      case 13: // ENTER
+        if (focusedColumn === 'groups') {
+          handleGroupClick(
+            channelGroups[focusedGroupIndex],
+            focusedGroupIndex
+          );
+        } else {
+          onChannelSelect(filteredChannels[focusedChannelIndex]);
+        }
+        break;
+      case 0: // BACK on some devices
+      case 10009: // RETURN on Tizen
+      case 8: // Backspace for web
+      case 10073: // CH_LIST (Tizen) toggle to close
+        if (isMobile && showChannelsList) {
+          setShowChannelsList(false);
+        } else {
           onBack();
-          break;
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-    };
+        }
+        break;
+    }
   }, [
     focusedColumn,
     focusedGroupIndex,
@@ -156,8 +194,14 @@ const TvChannelList: React.FC<TvChannelListProps> = ({
     filteredChannels,
     onChannelSelect,
     onBack,
-    handleGroupClick, // <-- Add new dependency
+    handleGroupClick,
+    isMobile,
+    showChannelsList
   ]);
+
+  useImperativeHandle(ref, () => ({
+    handleKeyDown
+  }), [handleKeyDown]);
 
   // Scroll groups
   useEffect(() => {
@@ -185,34 +229,50 @@ const TvChannelList: React.FC<TvChannelListProps> = ({
 
   return (
     <div
-      className="absolute left-0 top-0 z-40 flex h-full w-full max-w-xl flex-row bg-gray-900 bg-opacity-80 backdrop-blur-md"
+      className="absolute left-0 top-0 z-40 flex h-full w-full max-w-full flex-row bg-gray-900 bg-opacity-95 md:bg-opacity-80 backdrop-blur-md"
       tabIndex={-1}
     >
       {/* Column 1: Groups */}
-      <div ref={groupListRef} className="h-full w-1/3 overflow-y-auto p-2">
-        {channelGroups.map((group, index) => (
-          <div
-            key={group.id}
-            data-focusable="true"
-            // --- ADDED onClick ---
-            onClick={() => handleGroupClick(group, index)}
-            className={`p-3 text-left text-lg font-semibold text-white transition-colors duration-150 ${focusedColumn === 'groups' && focusedGroupIndex === index
+      <div
+        ref={groupListRef}
+        className={`h-full w-full md:w-1/3 overflow-y-auto custom-scrollbar p-2 ${isMobile && showChannelsList ? 'hidden' : 'block'}`}
+      >
+        {isMobile && <h2 className="p-3 text-xl font-bold text-white border-b border-gray-700 mb-2">Groups</h2>}
+        {channelGroups?.map((group, index) => {
+          if (!group) return null; // Skip undefined groups
+          return (
+            <div
+              key={group.id || index}
+              data-focusable="true"
+              // --- ADDED onClick ---
+              onClick={() => handleGroupClick(group, index)}
+              className={`p-3 text-left text-lg font-semibold text-white transition-colors duration-150 ${focusedColumn === 'groups' && focusedGroupIndex === index
                 ? 'bg-blue-600' // Focused
-                : selectedGroup.id === group.id
+                : selectedGroup?.id === group.id
                   ? 'bg-gray-700' // Selected but not focused
                   : 'hover:bg-gray-700/50' // Default
-              }`}
-          >
-            {group.title}
-          </div>
-        ))}
+                }`}
+            >
+              {group.title}
+            </div>
+          );
+        })}
       </div>
 
       {/* Column 2: Channels */}
       <div
         ref={channelListRef}
-        className="h-full w-2/3 overflow-y-auto border-l border-gray-700"
+        className={`h-full w-full md:w-2/3 overflow-y-auto custom-scrollbar md:border-l border-gray-700 ${isMobile && !showChannelsList ? 'hidden' : 'block'}`}
       >
+        {isMobile && (
+          <button
+            onClick={() => setShowChannelsList(false)}
+            className="flex items-center w-full p-4 text-white bg-gray-800 border-b border-gray-700 sticky top-0 z-10"
+          >
+            <span className="material-icons mr-2">arrow_back</span>
+            <span className="font-bold text-lg">{selectedGroup?.title || 'Channels'}</span>
+          </button>
+        )}
         {filteredChannels.map((item, index) => (
           <TvChannelListCard
             key={item.id}
@@ -226,6 +286,8 @@ const TvChannelList: React.FC<TvChannelListProps> = ({
       </div>
     </div>
   );
-};
+});
+
+TvChannelList.displayName = 'TvChannelList';
 
 export default TvChannelList;

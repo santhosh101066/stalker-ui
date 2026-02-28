@@ -3,7 +3,8 @@ import React, { useEffect } from 'react';
 import { MediaPlayer, MediaProvider } from '@vidstack/react';
 import '@vidstack/react/player/styles/base.css';
 
-import TvChannelList from '../TvChannelList';
+import TvChannelList, { type TvChannelListRef } from '../TvChannelList';
+import './VideoPlayerContent.css';
 
 // Import components
 import { BufferingOverlay } from './components/BufferingOverlay';
@@ -64,6 +65,7 @@ const VideoPlayerContent: React.FC = () => {
         handleError,
         handleVideoClick,
         handleMouseMove,
+        toggleChannelList,
 
         // UI Actions
         setControlsVisible,
@@ -85,6 +87,7 @@ const VideoPlayerContent: React.FC = () => {
     } = useVideoContext();
 
     const cursorTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+    const tvChannelListRef = React.useRef<TvChannelListRef>(null);
 
     // Keyboard navigation
     useEffect(() => {
@@ -192,6 +195,12 @@ const VideoPlayerContent: React.FC = () => {
                         toggleFavorite(channelInfo);
                     }
                     break;
+                case 10073: // CH_LIST (Tizen)
+                    e.preventDefault();
+                    if (contentType === 'tv') {
+                        toggleChannelList();
+                    }
+                    break;
                 case 0: // BACK on some devices
                 case 10009: // RETURN on Tizen
                 case 8: // BACK
@@ -253,6 +262,9 @@ const VideoPlayerContent: React.FC = () => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if (showChannelList) {
                 e.stopPropagation();
+                if (tvChannelListRef.current) {
+                    tvChannelListRef.current.handleKeyDown(e);
+                }
                 return;
             }
             const wereControlsHidden = !controlsVisible;
@@ -346,29 +358,8 @@ const VideoPlayerContent: React.FC = () => {
             className="h-[100dvh] w-full bg-black"
             data-focusable="true"
             tabIndex={-1}
+            style={{ '--video-fit-mode': fitMode } as React.CSSProperties}
         >
-            <style>{`
-        media-player {
-          width: 100%;
-          height: 100%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          background-color: black;
-        }
-        media-provider {
-          width: 100%;
-          height: 100%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        .media-provider video {
-          width: 100% !important;
-          height: 100% !important;
-          object-fit: ${fitMode} !important;
-        }
-      `}</style>
             <div
                 ref={playerContainerRef}
                 onMouseMove={handleMouseMove}
@@ -388,6 +379,7 @@ const VideoPlayerContent: React.FC = () => {
                     channels &&
                     onChannelSelect && (
                         <TvChannelList
+                            ref={tvChannelListRef}
                             channels={channels}
                             channelGroups={channelGroups || []}
                             onChannelSelect={(item) => {
