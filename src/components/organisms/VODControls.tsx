@@ -2,7 +2,7 @@ import React from 'react';
 import { FaChromecast } from 'react-icons/fa';
 import {
     PlayIcon, PauseIcon, FastRewindIcon, FastForwardIcon,
-    SettingsIcon, FullscreenExitIcon, FullscreenIcon
+    SettingsIcon, FullscreenExitIcon, FullscreenIcon, TrashIcon
 } from '@/components/atoms/Icons';
 import { formatTime } from '@/utils/helpers';
 import { SeekBar } from '@/components/molecules/SeekBar';
@@ -30,6 +30,13 @@ export const VODControls = React.memo(() => {
         setActiveSettingsMenu: onActiveSettingsMenuChange,
         setIsSettingsMenuOpen: onSetIsSettingsMenuOpen,
     } = useVideoContext();
+
+    const handleClearCache = React.useCallback(() => {
+        if (window.confirm('Are you sure you want to clear local storage? This will reset recent channels, favorites, and watch history.')) {
+            localStorage.clear();
+            window.location.reload();
+        }
+    }, []);
 
     return (
         <div
@@ -127,6 +134,14 @@ export const VODControls = React.memo(() => {
                                     <SettingsIcon className="h-5 w-5 md:h-6 md:w-6" />
                                 </button>
                             )}
+                            <button
+                                data-focusable="true"
+                                onClick={handleClearCache}
+                                className="ml-1 text-white hover:text-red-400 md:ml-2"
+                                title="Clear Cache"
+                            >
+                                <TrashIcon className="h-5 w-5 md:h-6 md:w-6" />
+                            </button>
                             {/* Settings Menu */}
                             <SettingsMenu />
                         </div>

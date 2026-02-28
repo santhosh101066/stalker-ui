@@ -80,6 +80,7 @@ export interface VideoContextState {
     channels?: any[];
     channelGroups?: any[];
     favorites?: string[];
+    recentChannels?: string[];
 
     // Cast State
     receivers: any[];

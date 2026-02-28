@@ -28,6 +28,7 @@ interface VideoProviderProps {
     onPrevChannel?: () => void;
     onChannelSelect?: (item: any) => void;
     favorites: string[];
+    recentChannels?: string[];
     toggleFavorite: (channel: any) => void;
     initialPlaybackState?: any;
     onEnded?: () => void;
@@ -56,6 +57,7 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
     onPrevChannel,
     onChannelSelect,
     favorites,
+    recentChannels,
     toggleFavorite,
     initialPlaybackState,
     onBack,
@@ -212,12 +214,12 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
     const handleVolumeChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
         const player = playerRef.current;
         const newVolume = parseFloat(e.target.value);
-        
+
         if (player) {
             player.volume = newVolume;
             player.muted = (newVolume === 0);
         }
-        
+
         // React state-ah update panna thaan UI (slider & icon) udane maarum!
         setVolume(newVolume);
         setIsMuted(newVolume === 0);
@@ -232,7 +234,7 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
 
             // Unmute aagum bodhu (nextMuted === false) AND volume 0-la irundha mattum 1-ku mathanum
             if (!nextMuted && player.volume === 0) {
-                player.volume = 1; 
+                player.volume = 1;
                 setVolume(1);
             }
         }
@@ -532,8 +534,8 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
 
     const handleTimeUpdate = useCallback((event: any) => {
         // Vidstack gives the current time directly inside event.detail
-        const time = typeof event?.detail === 'number' 
-            ? event.detail 
+        const time = typeof event?.detail === 'number'
+            ? event.detail
             : event?.target?.currentTime ?? playerRef.current?.currentTime ?? 0;
 
         // Safely get duration from player state
@@ -548,7 +550,7 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
             const player = playerRef.current;
             // Get buffered ranges safely
             const bufferedRanges = player?.state?.buffered ?? player?.buffered;
-            
+
             if (bufferedRanges && bufferedRanges.length > 0) {
                 const bufferedEnd = bufferedRanges.end(bufferedRanges.length - 1);
                 const bufferedPercent = (bufferedEnd / dur) * 100;
@@ -574,8 +576,8 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
 
     const handleDurationChange = useCallback((event: any) => {
         // Vidstack passes duration in event.detail
-        const newDuration = typeof event?.detail === 'number' 
-            ? event.detail 
+        const newDuration = typeof event?.detail === 'number'
+            ? event.detail
             : event?.target?.duration ?? playerRef.current?.duration;
 
         if (Number.isFinite(newDuration) && newDuration > 0) {
@@ -787,6 +789,7 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
         channels,
         channelGroups,
         favorites,
+        recentChannels,
 
         // Cast State
         receivers, // Need to accept these in Provider props

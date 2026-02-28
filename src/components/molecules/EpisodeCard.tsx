@@ -48,7 +48,7 @@ const EpisodeCard: React.FC<EpisodeCardProps> = ({ item, onClick }) => {
       {!isCompleted && isInProgress && (
         <div className="absolute right-2 top-2 z-10 h-3 w-3 rounded-full bg-yellow-500"></div>
       )}
-      <div className="relative flex h-16 w-24 shrink-0 items-center justify-center overflow-hidden bg-gray-700 sm:h-20 sm:w-32">
+      <div className="relative flex h-14 w-20 shrink-0 items-center justify-center overflow-hidden bg-gray-700 sm:h-16 sm:w-24">
         {imageUrl && !imageError ? (
           <img
             src={imageUrl}
@@ -58,7 +58,7 @@ const EpisodeCard: React.FC<EpisodeCardProps> = ({ item, onClick }) => {
           />
         ) : (
           <div className="bg-linear-to-br flex h-full w-full items-center justify-center from-gray-700 to-gray-800">
-            <span className="select-none text-xl font-bold text-gray-400 sm:text-2xl">
+            <span className="select-none text-lg font-bold text-gray-400 sm:text-xl">
               {initials}
             </span>
           </div>

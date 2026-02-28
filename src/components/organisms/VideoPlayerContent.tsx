@@ -260,17 +260,35 @@ const VideoPlayerContent: React.FC = () => {
         };
 
         const handleKeyDown = (e: KeyboardEvent) => {
+            // First pass for Global Color Keys that should ALWAYS work
+            if (e.keyCode === 405 && contentType === 'tv' && channelInfo) { // Yellow = Toggle Fav
+                e.preventDefault();
+                e.stopPropagation();
+                toggleFavorite(channelInfo);
+                return;
+            } else if (e.keyCode === 10073) { // CH_LIST
+                e.preventDefault();
+                e.stopPropagation();
+                if (contentType === 'tv') {
+                    toggleChannelList();
+                }
+                return;
+            }
+
             if (showChannelList) {
+                // When channel list is open, we stop propagation here UNLESS it's a color key
+                // but the critical color keys were already caught above
                 e.stopPropagation();
                 if (tvChannelListRef.current) {
                     tvChannelListRef.current.handleKeyDown(e);
                 }
                 return;
             }
+
             const wereControlsHidden = !controlsVisible;
             showControlsAndCursor();
             e.stopPropagation();
-            if (wereControlsHidden && e.keyCode !== 405) {
+            if (wereControlsHidden) {
                 return;
             }
             if (isSettingsMenuOpen) {
@@ -388,18 +406,46 @@ const VideoPlayerContent: React.FC = () => {
                             }}
                             onBack={() => setShowChannelList(false)}
                             currentItemId={itemId}
+                            isOverlay={true}
                         />
                     )}
 
+
+
                 {isRecovering ? (
-                    <div className="flex h-full w-full flex-col items-center justify-center bg-black/80 text-white backdrop-blur-sm">
-                        <div className="relative mb-6 h-16 w-16">
-                            <div className="absolute h-full w-full animate-ping rounded-full bg-blue-500 opacity-20"></div>
-                            <div className="relative flex h-full w-full items-center justify-center rounded-full border-4 border-blue-500/30 border-t-blue-500 animate-spin"></div>
+                    <div className="flex h-full w-full flex-col items-center justify-center bg-gray-950/90 text-white backdrop-blur-md">
+                        {/* Animated Rings Container */}
+                        <div className="relative mb-8 h-20 w-20">
+                            {/* Outer expanding ring for depth */}
+                            <div className="absolute inset-0 animate-ping rounded-full bg-blue-500/20"></div>
+
+                            {/* Inner pulsing glow */}
+                            <div className="absolute inset-2 animate-pulse rounded-full bg-blue-500/30 blur-md"></div>
+
+                            {/* Multi-colored smooth spinner */}
+                            <div className="absolute inset-0 rounded-full border-4 border-white/5 border-t-blue-500 border-r-indigo-500 animate-spin"></div>
+
+                            {/* Center glowing dot */}
+                            <div className="absolute inset-0 m-auto h-2 w-2 rounded-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.8)]"></div>
                         </div>
-                        <div className="text-2xl font-bold tracking-wide">Connecting...</div>
-                        <div className="mt-2 text-sm text-gray-400">
-                            {retryCount > 0 ? `Retrying connection (${retryCount})...` : 'Establishing secure stream...'}
+
+                        {/* Text Content */}
+                        <div className="flex flex-col items-center space-y-2 text-center">
+                            <div className="text-2xl font-bold tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400">
+                                Connecting<span className="animate-pulse">...</span>
+                            </div>
+
+                            <div className="text-sm font-medium tracking-wide transition-colors duration-300">
+                                {retryCount > 0 ? (
+                                    <span className="text-amber-400/90">
+                                        Retrying connection ({retryCount})...
+                                    </span>
+                                ) : (
+                                    <span className="text-gray-400">
+                                        Establishing secure stream
+                                    </span>
+                                )}
+                            </div>
                         </div>
                     </div>
                 ) : (

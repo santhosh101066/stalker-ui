@@ -119,6 +119,16 @@ export default function App() {
     }
   });
 
+  const [recentChannels, setRecentChannels] = useState<string[]>(() => {
+    try {
+      const storedRecents = localStorage.getItem('recent_channels');
+      return storedRecents ? JSON.parse(storedRecents) : [];
+    } catch (e) {
+      console.error('Failed to parse recent_channels from localStorage', e);
+      return [];
+    }
+  });
+
   // Stores playback state from incoming Cast command to initialize player
   const [pendingPlaybackState, setPendingPlaybackState] = useState<{
     currentTime?: number;
@@ -229,6 +239,7 @@ export default function App() {
           setItems(filteredChannels); // Set items to filtered channels
           setTotalItemsCount(filteredChannels.length);
           setChannelGroups([
+            { id: 'recent', title: 'Recent Channels' },
             { id: 'fav', title: 'Favorites' },
             { id: 'all', title: 'All Channels' },
             ...allGroups,
@@ -290,7 +301,8 @@ export default function App() {
 
   const handleItemClick = useCallback(
     async (item: MediaItem) => {
-      if (contentType === 'tv' && currentItem?.id === item.id) {
+      // Allow reopening the same channel, only prevent IF streamUrl is actively open (which means player is visible)
+      if (contentType === 'tv' && streamUrl && currentItem?.id === item.id) {
         return;
       }
       if (channelChangeTimer.current) {
@@ -472,6 +484,15 @@ export default function App() {
 
         localStorage.setItem('lastPlayedTvChannelId', item.id);
         setCurrentItem(item);
+
+        // --- ADD RECENT CHANNELS LOGIC ---
+        setRecentChannels(prev => {
+          const filtered = prev.filter(id => id !== item.id);
+          const updated = [item.id, ...filtered].slice(0, 20); // Keep top 20
+          localStorage.setItem('recent_channels', JSON.stringify(updated));
+          return updated;
+        });
+        // --- END RECENT CHANNELS LOGIC ---
 
         // Set both URLs. The player will pick one.
         // We don't need to btoa() or use /proxy because /live.m3u8 IS the proxy.
@@ -1277,6 +1298,7 @@ export default function App() {
                           epgData={epgData}
                           channelGroups={channelGroups}
                           favorites={favorites}
+                          recentChannels={recentChannels} // <-- PASS RECENT CHANNELS
                           toggleFavorite={toggleFavorite}
                           initialPlaybackState={pendingPlaybackState}
                         />
@@ -1307,6 +1329,7 @@ export default function App() {
                                 handleContentTypeChange('movie');
                               }}
                               currentItemId={null} // No current item selected yet in this view
+                              showCloseButton={false}
                             />
                           </div>
                         ) : (

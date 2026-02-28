@@ -27,6 +27,7 @@ export interface VideoPlayerProps {
     epgData: Record<string, EPG_List[]>;
     channelGroups?: ChannelGroup[];
     favorites: string[];
+    recentChannels?: string[];
     toggleFavorite: (item: MediaItem) => void;
     initialPlaybackState?: {
         currentTime?: number;

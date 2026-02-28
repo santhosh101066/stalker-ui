@@ -111,6 +111,19 @@ export const SettingsMenu = React.memo(() => {
                             <FaChromecast className="mr-3" /> <span className="text-left">Cast to Device</span>
                         </button>
                     )}
+                    <button
+                        onClick={() => {
+                            if (window.confirm('Are you sure you want to clear local storage? This will reset recent channels, favorites, and watch history.')) {
+                                localStorage.clear();
+                                window.location.reload();
+                            }
+                        }}
+                        className={menuItemClasses}
+                        data-focusable="true"
+                    >
+                        {isVOD && <span className="flex-1 text-left text-red-400">Clear Cache</span>}
+                        {!isVOD && <span className="text-red-400">Clear Cache</span>}
+                    </button>
                 </>
             )}
 

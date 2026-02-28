@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback, forwardRef, useImperativeHandle } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback, forwardRef, useImperativeHandle } from 'react';
 import type { MediaItem, ChannelGroup } from '@/types';
 import TvChannelListCard from '@/components/molecules/TvChannelListCard';
 import '@/components/organisms/TvChannelList.css';
@@ -9,10 +9,12 @@ export interface TvChannelListRef {
 
 interface TvChannelListProps {
   channels: MediaItem[];
-  channelGroups: ChannelGroup[]; // <-- NEW PROP
+  channelGroups: ChannelGroup[];
   onChannelSelect: (item: MediaItem) => void;
   onBack: () => void;
   currentItemId: string | null | undefined;
+  showCloseButton?: boolean;
+  isOverlay?: boolean;
 }
 
 const TvChannelList = forwardRef<TvChannelListRef, TvChannelListProps>(({
@@ -21,6 +23,8 @@ const TvChannelList = forwardRef<TvChannelListRef, TvChannelListProps>(({
   onChannelSelect,
   onBack,
   currentItemId,
+  showCloseButton = true,
+  isOverlay = false,
 }, ref) => {
   // Find initial group and channel
   const findInitialIndexes = useCallback(() => {
@@ -112,6 +116,19 @@ const TvChannelList = forwardRef<TvChannelListRef, TvChannelListProps>(({
         return [];
       }
     }
+    if (selectedGroup.id === 'recent') {
+      try {
+        const storedRecents = localStorage.getItem('recent_channels');
+        const recents: string[] = storedRecents ? JSON.parse(storedRecents) : [];
+        // Map recent IDs back to channel objects, maintaining the recent order
+        return recents
+          .map(id => channels.find(c => String(c.id) === String(id)))
+          .filter((c): c is MediaItem => c !== undefined);
+      } catch (e) {
+        console.error('Failed to parse recents', e);
+        return [];
+      }
+    }
     // --- END BLOCK ---
     return channels.filter((c) => String(c.tv_genre_id) === String(selectedGroup.id));
   }, [channels, selectedGroup]);
@@ -131,7 +148,10 @@ const TvChannelList = forwardRef<TvChannelListRef, TvChannelListProps>(({
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     // Allow specific navigation keys, include 10073 (CH_LIST)
     const activeKeys = [37, 38, 39, 40, 13, 0, 10009, 8, 10073];
-    if (!activeKeys.includes(e.keyCode)) return;
+    if (!activeKeys.includes(e.keyCode)) {
+      // Allow global keys (like Red/Green/Yellow/Blue/s) to bubble up to App.tsx or VideoPlayerContent
+      return;
+    }
 
     e.preventDefault();
     e.stopPropagation();
@@ -229,15 +249,19 @@ const TvChannelList = forwardRef<TvChannelListRef, TvChannelListProps>(({
 
   return (
     <div
-      className="absolute left-0 top-0 z-40 flex h-full w-full max-w-full flex-row bg-gray-900 bg-opacity-95 md:bg-opacity-80 backdrop-blur-md"
+      className={`absolute left-0 top-0 z-40 flex h-full flex-row glass-panel shadow-2xl transition-all duration-300 ${isOverlay
+        ? 'w-full md:w-auto md:max-w-[480px] lg:max-w-[560px]'
+        : 'w-full'
+        }`}
       tabIndex={-1}
     >
       {/* Desktop Close Button */}
-      {!isMobile && (
+      {!isMobile && showCloseButton && (
         <button
           onClick={onBack}
-          className="absolute top-4 right-6 text-gray-400 hover:text-white transition-colors z-50"
+          className="absolute top-4 right-6 text-gray-400 hover:text-white transition-transform hover:scale-110 focus:scale-110 focus:text-white z-50 p-2 rounded-full focus:bg-white/10 outline-none"
           aria-label="Close"
+          data-focusable="true"
         >
           <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -248,60 +272,79 @@ const TvChannelList = forwardRef<TvChannelListRef, TvChannelListProps>(({
       {/* Column 1: Groups */}
       <div
         ref={groupListRef}
-        className={`h-full w-full md:w-1/3 overflow-y-auto custom-scrollbar p-2 ${isMobile && showChannelsList ? 'hidden' : 'block'}`}
+        className={`h-full w-full md:w-[150px] lg:w-[180px] flex-shrink-0 overflow-y-auto custom-scrollbar no-scrollbar-mobile p-3 flex flex-col bg-gray-900/60 border-r border-white/5 shadow-[4px_0_24px_rgba(0,0,0,0.2)] z-20 ${isMobile && showChannelsList ? 'hidden' : 'block animate-in slide-in-from-left duration-300'
+          }`}
       >
-        {isMobile && (
-          <div className="flex items-center justify-between border-b border-gray-700 mb-1 p-2">
-            <h2 className="text-base sm:text-lg font-bold text-white">Groups</h2>
+        <div className="flex items-center justify-between mb-4 px-2 mt-2">
+          <h2 className="text-sm sm:text-base font-black tracking-tight text-white/80 uppercase drop-shadow-md">Categories</h2>
+          {isMobile && showCloseButton && (
             <button
               onClick={onBack}
-              className="text-gray-400 hover:text-white transition-colors"
+              className="text-gray-400 hover:text-white transition-colors bg-white/5 rounded-full p-2"
               aria-label="Close"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
-          </div>
-        )}
-        {channelGroups?.map((group, index) => {
-          if (!group) return null; // Skip undefined groups
-          return (
-            <div
-              key={group.id || index}
-              data-focusable="true"
-              // --- ADDED onClick ---
-              onClick={() => handleGroupClick(group, index)}
-              className={`px-3 py-2 text-left text-sm sm:text-base font-medium sm:font-semibold text-white transition-colors duration-150 ${focusedColumn === 'groups' && focusedGroupIndex === index
-                ? 'bg-blue-600' // Focused
-                : selectedGroup?.id === group.id
-                  ? 'bg-gray-700' // Selected but not focused
-                  : 'hover:bg-gray-700/50' // Default
-                }`}
-            >
-              {group.title}
-            </div>
-          );
-        })}
+          )}
+        </div>
+
+        <div className="flex flex-col gap-1 overflow-y-auto custom-scrollbar pb-20">
+          {channelGroups?.map((group, index) => {
+            if (!group) return null; // Skip undefined groups
+
+            const isGroupFocused = focusedColumn === 'groups' && focusedGroupIndex === index;
+            const isGroupSelected = selectedGroup?.id === group.id;
+
+            return (
+              <div
+                key={group.id || index}
+                data-focusable="true"
+                onClick={() => handleGroupClick(group, index)}
+                className={`px-2 py-2 rounded-lg text-left text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer flex items-center justify-between group ${isGroupFocused
+                  ? 'bg-blue-600 text-white shadow-md shadow-blue-900/30 scale-[1.01]' // Focused on TV
+                  : isGroupSelected
+                    ? 'bg-white/15 text-white shadow-inner' // Selected but not focused
+                    : 'text-gray-400 hover:bg-white/10 hover:text-gray-100' // Default
+                  }`}
+              >
+                <span className="truncate drop-shadow-sm">{group.title}</span>
+                {(isGroupFocused || isGroupSelected) && (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 opacity-70" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                  </svg>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {/* Column 2: Channels */}
       <div
         ref={channelListRef}
-        className={`h-full w-full md:w-2/3 overflow-y-auto custom-scrollbar md:border-l border-gray-700 ${isMobile && !showChannelsList ? 'hidden' : 'block'}`}
+        className={`h-full flex-1 overflow-y-auto custom-scrollbar no-scrollbar-mobile p-2 sm:p-3 bg-gray-900/30 relative z-10 ${isMobile
+          ? (showChannelsList ? 'block slide-enter-active' : 'hidden')
+          : 'block'
+          }`}
       >
         {isMobile && (
-          <div className="flex items-center justify-between bg-gray-800 border-b border-gray-700 sticky top-0 z-10 w-full p-2 sm:p-4">
+          <div className="flex items-center justify-between bg-gray-900/90 backdrop-blur-xl border-b border-white/10 sticky top-0 z-20 w-full p-3 sm:p-4 mb-2 shadow-md rounded-b-2xl">
             <button
               onClick={() => setShowChannelsList(false)}
-              className="flex items-center text-white flex-1"
+              className="flex items-center text-white/90 hover:text-white flex-1 transition-colors"
             >
-              <span className="material-icons mr-2">arrow_back</span>
-              <span className="font-bold text-base sm:text-lg truncate">{selectedGroup?.title || 'Channels'}</span>
+              <div className="bg-white/10 rounded-full p-1 mr-3">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </div>
+              <span className="font-extrabold text-lg sm:text-xl truncate tracking-tight">{selectedGroup?.title || 'Channels'}</span>
             </button>
             <button
               onClick={onBack}
-              className="text-gray-400 hover:text-white transition-colors ml-2"
+              className="text-gray-400 hover:text-white transition-colors bg-white/5 rounded-full p-2 ml-2"
               aria-label="Close"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -310,16 +353,35 @@ const TvChannelList = forwardRef<TvChannelListRef, TvChannelListProps>(({
             </button>
           </div>
         )}
-        {filteredChannels.map((item, index) => (
-          <TvChannelListCard
-            key={item.id}
-            item={item}
-            onClick={onChannelSelect}
-            isFocused={
-              focusedColumn === 'channels' && focusedChannelIndex === index
-            }
-          />
-        ))}
+
+        {!isMobile && (
+          <div className="mb-6 px-3">
+            <h1 className="text-3xl font-black text-white/90 tracking-tight drop-shadow-md">{selectedGroup?.title || 'Channels'}</h1>
+            <p className="text-gray-400 mt-1">{filteredChannels.length} channels available</p>
+          </div>
+        )}
+
+        <div className="flex flex-col gap-0.5 pb-32">
+          {filteredChannels.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-64 text-gray-500">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 mb-4 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <p className="text-lg font-medium">No channels found</p>
+            </div>
+          ) : (
+            filteredChannels.map((item, index) => (
+              <TvChannelListCard
+                key={item.id}
+                item={item}
+                onClick={onChannelSelect}
+                isFocused={
+                  focusedColumn === 'channels' && focusedChannelIndex === index
+                }
+              />
+            ))
+          )}
+        </div>
       </div>
     </div>
   );

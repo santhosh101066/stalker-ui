@@ -111,7 +111,7 @@ const MediaCard: React.FC<MediaCardProps> = ({ item, onClick }) => {
       {!isCompleted && isInProgress && (
         <div className="absolute right-2 top-2 z-10 h-3 w-3 rounded-full bg-yellow-500"></div>
       )}
-      <div className="relative flex h-40 w-full items-center justify-center overflow-hidden bg-gray-700 sm:h-48 md:h-64">
+      <div className="relative flex h-32 w-full items-center justify-center overflow-hidden bg-gray-700 sm:h-40 md:h-56">
         {isVisible && imageUrl && !imageError ? (
           <img
             src={imageUrl}
