@@ -48,7 +48,7 @@ const EpisodeCard: React.FC<EpisodeCardProps> = ({ item, onClick }) => {
       {!isCompleted && isInProgress && (
         <div className="absolute right-2 top-2 z-10 h-3 w-3 rounded-full bg-yellow-500"></div>
       )}
-      <div className="relative flex h-20 w-32 shrink-0 items-center justify-center overflow-hidden bg-gray-700">
+      <div className="relative flex h-16 w-24 shrink-0 items-center justify-center overflow-hidden bg-gray-700 sm:h-20 sm:w-32">
         {imageUrl && !imageError ? (
           <img
             src={imageUrl}
@@ -58,14 +58,14 @@ const EpisodeCard: React.FC<EpisodeCardProps> = ({ item, onClick }) => {
           />
         ) : (
           <div className="bg-linear-to-br flex h-full w-full items-center justify-center from-gray-700 to-gray-800">
-            <span className="select-none text-2xl font-bold text-gray-400">
+            <span className="select-none text-xl font-bold text-gray-400 sm:text-2xl">
               {initials}
             </span>
           </div>
         )}
       </div>
-      <div className="overflow-hidden p-4">
-        <h3 className="text-md truncate font-semibold text-white transition-colors duration-300 group-hover:text-blue-400">
+      <div className="overflow-hidden p-2 sm:p-4">
+        <h3 className="truncate text-sm font-semibold text-white transition-colors duration-300 group-hover:text-blue-400 sm:text-base">
           {displayTitle}
         </h3>
       </div>

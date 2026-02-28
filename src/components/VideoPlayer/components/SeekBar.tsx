@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { formatTime } from '../../../utils/helpers';
 import { useVideoContext } from '../context/useVideoContext';
 
@@ -19,7 +19,32 @@ export const SeekBar = React.memo(() => {
         contentType,
     } = useVideoContext();
 
+    // Drag pannumbodhu mattum video time-a override panna indha local state!
+    const [localProgress, setLocalProgress] = useState<number | null>(null);
+
     if (contentType === 'tv') return null;
+
+    const safeProgress = Number.isFinite(progress) ? Math.max(0, Math.min(100, progress)) : 0;
+    const safeBuffered = Number.isFinite(buffered) ? Math.max(0, Math.min(100, buffered)) : 0;
+
+    // Local drag nadantha adha eduthuko, illana video progress ah eduthuko
+    const displayProgress = localProgress !== null ? localProgress : safeProgress;
+
+    // Custom Handlers for smooth dragging
+    const onDragChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setLocalProgress(Number(e.target.value)); // Visual track-a instant ah update pannum
+        handleSeekChange(e); // Context-a update pannum
+    };
+
+    const onMouseDragEnd = (e: React.MouseEvent<HTMLInputElement>) => {
+        setLocalProgress(null); // Drag mudinjadhum local state-a clear panni video kaila kuduthudrom
+        handleSeekMouseUp(e);
+    };
+
+    const onTouchDragEnd = (e: React.TouchEvent<HTMLInputElement>) => {
+        setLocalProgress(null);
+        handleSeekTouchEnd(e);
+    };
 
     return (
         <div className="relative w-full group/timeline flex items-center h-4 cursor-pointer">
@@ -28,19 +53,20 @@ export const SeekBar = React.memo(() => {
                 {/* Buffer Bar */}
                 <div
                     className="absolute top-0 left-0 h-full bg-gray-400/50 transition-all duration-200"
-                    style={{ width: `${buffered}%` }}
+                    style={{ width: `${safeBuffered}%` }}
                 ></div>
-                {/* Progress Bar */}
+                
+                {/* Progress Bar (Blue Line) - Ippo idhu lag aagama unga koodave varum! */}
                 <div
-                    className="absolute top-0 left-0 h-full bg-blue-500 transition-all duration-75 ease-linear"
-                    style={{ width: `${progress}%` }}
+                    className="absolute top-0 left-0 h-full bg-blue-500"
+                    style={{ width: `${displayProgress}%` }}
                 ></div>
             </div>
 
             {/* Thumb (Visual Only) */}
             <div
                 className="absolute h-3.5 w-3.5 bg-blue-500 rounded-full shadow-md scale-0 group-hover/timeline:scale-100 group-focus-within/timeline:scale-100 transition-transform duration-200 pointer-events-none z-10"
-                style={{ left: `${progress}%`, transform: `translateX(-50%)` }}
+                style={{ left: `${displayProgress}%`, transform: `translateX(-50%)` }}
             ></div>
 
             {/* Hover Time Tooltip */}
@@ -62,12 +88,12 @@ export const SeekBar = React.memo(() => {
                 min="0"
                 max="100"
                 step="0.01"
-                value={progress}
+                value={displayProgress}
                 onMouseDown={handleSeekMouseDown}
-                onMouseUp={handleSeekMouseUp}
+                onMouseUp={onMouseDragEnd}
                 onTouchStart={handleSeekMouseDown}
-                onTouchEnd={handleSeekTouchEnd}
-                onChange={handleSeekChange}
+                onTouchEnd={onTouchDragEnd}
+                onChange={onDragChange}
                 onMouseMove={handleSeekBarHover}
                 onMouseEnter={() => setIsTooltipVisible(true)}
                 onMouseLeave={() => setIsTooltipVisible(false)}

@@ -370,12 +370,12 @@ const Admin = () => {
   };
 
   return (
-    <div className="mx-auto my-6 max-w-7xl px-4">
+    <div className="mx-auto mt-2 mb-6 max-w-7xl px-2 sm:px-4">
       {/* Tab Navigation */}
       <div className="mb-6 flex border-b border-gray-700">
         <button
           onClick={() => setActiveTab('profiles')}
-          className={`px-6 py-3 text-sm font-bold transition-colors ${activeTab === 'profiles'
+          className={`px-2 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm font-bold transition-colors ${activeTab === 'profiles'
             ? 'border-b-2 border-blue-500 text-blue-400'
             : 'text-gray-400 hover:text-white'
             }`}
@@ -385,7 +385,7 @@ const Admin = () => {
         </button>
         <button
           onClick={() => setActiveTab('config')}
-          className={`px-6 py-3 text-sm font-bold transition-colors ${activeTab === 'config'
+          className={`px-2 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm font-bold transition-colors ${activeTab === 'config'
             ? 'border-b-2 border-blue-500 text-blue-400'
             : 'text-gray-400 hover:text-white'
             }`}
@@ -395,7 +395,7 @@ const Admin = () => {
         </button>
         <button
           onClick={() => setActiveTab('logs')}
-          className={`px-6 py-3 text-sm font-bold transition-colors ${activeTab === 'logs'
+          className={`px-2 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm font-bold transition-colors ${activeTab === 'logs'
             ? 'border-b-2 border-blue-500 text-blue-400'
             : 'text-gray-400 hover:text-white'
             }`}
@@ -465,13 +465,13 @@ const Admin = () => {
         </div>
       ) : (
         <div className="animate-fade-in space-y-6">
-          <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-4 lg:grid-cols-2">
 
             {/* Left Column: Server & Identity */}
             <div className="space-y-6">
 
               {/* Server Settings Group */}
-              <div className="rounded-xl border border-gray-700 bg-gray-800 p-5 shadow-sm">
+              <div className="rounded-xl border border-gray-700 bg-gray-800 p-3 sm:p-5 shadow-sm">
                 <div className="mb-4 flex items-center justify-between">
                   <h3 className="text-lg font-bold text-white">Server Connection</h3>
                   <button type="button" onClick={handleImportClick} data-focusable="true" className="text-xs font-semibold text-blue-400 hover:text-blue-300">
@@ -523,7 +523,7 @@ const Admin = () => {
                       data-focusable="true"
                     />
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="mb-1 block text-xs font-medium uppercase text-gray-500">Port</label>
                       <input
@@ -550,7 +550,7 @@ const Admin = () => {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-6 pt-2">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6 pt-2">
                     <label className="flex cursor-pointer items-center gap-2" data-focusable="true">
                       <div className="relative">
                         <input type="checkbox" name="proxy" checked={config.proxy} onChange={handleInputChange} className="peer sr-only" data-focusable="true" />
@@ -572,7 +572,7 @@ const Admin = () => {
               </div>
 
               {/* DYNAMIC GROUP: Credentials or MAC */}
-              <div className="rounded-xl border border-gray-700 bg-gray-800 p-5 shadow-sm">
+              <div className="rounded-xl border border-gray-700 bg-gray-800 p-3 sm:p-5 shadow-sm">
                 <h3 className="mb-4 text-lg font-bold text-white">Authentication</h3>
 
                 {config.providerType === 'xtream' ? (
@@ -616,7 +616,7 @@ const Admin = () => {
                         data-focusable="true"
                       />
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
                         <label className="mb-1 block text-xs font-medium uppercase text-gray-500">STB Model</label>
                         <input
@@ -669,7 +669,7 @@ const Admin = () => {
             <div className="space-y-6">
 
               {/* Groups Management */}
-              <div className="rounded-xl border border-gray-700 bg-gray-800 p-5 shadow-sm">
+              <div className="rounded-xl border border-gray-700 bg-gray-800 p-3 sm:p-5 shadow-sm">
                 <div className="mb-4 flex items-center justify-between">
                   <h3 className="text-lg font-bold text-white">Content Groups</h3>
                   <div className="flex gap-2">
@@ -697,7 +697,7 @@ const Admin = () => {
                 </select>
                 <p className="mt-2 text-xs text-gray-500">Hold Ctrl/Cmd to select multiple. {config.groups.length} selected.</p>
 
-                <div className="mt-4 grid grid-cols-2 gap-2">
+                <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <button
                     type="button"
                     onClick={handleRefreshChannels}
@@ -747,7 +747,7 @@ const Admin = () => {
 
               {/* Tokens (Only relevant for Stalker, but safe to keep visible or hide) */}
               {config.providerType === 'stalker' && (
-                <div className="rounded-xl border border-gray-700 bg-gray-800 p-5 shadow-sm">
+                <div className="rounded-xl border border-gray-700 bg-gray-800 p-3 sm:p-5 shadow-sm">
                   <div className="mb-4 flex items-center justify-between">
                     <h3 className="text-lg font-bold text-white">Auth Tokens</h3>
                     <div className="flex gap-2">
@@ -778,13 +778,13 @@ const Admin = () => {
             {/* Bottom Sticky Action Bar */}
             <div className="col-span-full sticky bottom-4 z-10 rounded-xl border border-blue-500/30 bg-gray-900/90 p-4 shadow-2xl backdrop-blur-md">
               <div className="flex items-center justify-between">
-                <div className="text-sm text-gray-400">
+                <div className="text-xs sm:text-sm text-gray-400">
                   Updates to <strong>Active Configuration</strong> will require a server restart.
                 </div>
                 <button
                   type="submit"
                   data-focusable="true"
-                  className="rounded-lg bg-blue-600 px-8 py-3 font-bold text-white shadow-lg shadow-blue-500/20 transition-all hover:scale-105 hover:bg-blue-500"
+                  className="rounded-lg bg-blue-600 px-4 py-2 sm:px-8 sm:py-3 text-sm sm:font-bold text-white shadow-lg shadow-blue-500/20 transition-all hover:scale-105 hover:bg-blue-500"
                 >
                   Save & Restart Server
                 </button>

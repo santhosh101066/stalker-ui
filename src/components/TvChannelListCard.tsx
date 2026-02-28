@@ -31,10 +31,10 @@ const TvChannelListCard: React.FC<TvChannelListCardProps> = ({
       data-focusable="true"
       tabIndex={-1}
     >
-      <span className="w-12 pr-2 text-left text-sm font-medium text-gray-400">
+      <span className="w-8 pr-1 text-left text-xs font-medium text-gray-400 sm:w-12 sm:pr-2 sm:text-sm">
         {item.number}
       </span>
-      <div className="mr-3 flex h-12 w-16 flex-shrink-0 items-center justify-center overflow-hidden rounded-sm bg-gray-700">
+      <div className="mr-2 flex h-8 w-12 flex-shrink-0 items-center justify-center overflow-hidden rounded-sm bg-gray-700 sm:mr-3 sm:h-12 sm:w-16">
         {imageUrl ? (
           <img
             src={imageUrl}
@@ -45,7 +45,7 @@ const TvChannelListCard: React.FC<TvChannelListCardProps> = ({
           <span className="text-xs text-gray-500">No Logo</span>
         )}
       </div>
-      <h3 className="truncate text-base font-semibold text-white">
+      <h3 className="truncate text-sm font-semibold text-white sm:text-base">
         {displayTitle}
       </h3>
     </div>

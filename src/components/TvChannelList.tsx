@@ -232,12 +232,38 @@ const TvChannelList = forwardRef<TvChannelListRef, TvChannelListProps>(({
       className="absolute left-0 top-0 z-40 flex h-full w-full max-w-full flex-row bg-gray-900 bg-opacity-95 md:bg-opacity-80 backdrop-blur-md"
       tabIndex={-1}
     >
+      {/* Desktop Close Button */}
+      {!isMobile && (
+        <button
+          onClick={onBack}
+          className="absolute top-4 right-6 text-gray-400 hover:text-white transition-colors z-50"
+          aria-label="Close"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      )}
+
       {/* Column 1: Groups */}
       <div
         ref={groupListRef}
         className={`h-full w-full md:w-1/3 overflow-y-auto custom-scrollbar p-2 ${isMobile && showChannelsList ? 'hidden' : 'block'}`}
       >
-        {isMobile && <h2 className="p-3 text-xl font-bold text-white border-b border-gray-700 mb-2">Groups</h2>}
+        {isMobile && (
+          <div className="flex items-center justify-between border-b border-gray-700 mb-1 p-2">
+            <h2 className="text-base sm:text-lg font-bold text-white">Groups</h2>
+            <button
+              onClick={onBack}
+              className="text-gray-400 hover:text-white transition-colors"
+              aria-label="Close"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        )}
         {channelGroups?.map((group, index) => {
           if (!group) return null; // Skip undefined groups
           return (
@@ -246,7 +272,7 @@ const TvChannelList = forwardRef<TvChannelListRef, TvChannelListProps>(({
               data-focusable="true"
               // --- ADDED onClick ---
               onClick={() => handleGroupClick(group, index)}
-              className={`p-3 text-left text-lg font-semibold text-white transition-colors duration-150 ${focusedColumn === 'groups' && focusedGroupIndex === index
+              className={`px-3 py-2 text-left text-sm sm:text-base font-medium sm:font-semibold text-white transition-colors duration-150 ${focusedColumn === 'groups' && focusedGroupIndex === index
                 ? 'bg-blue-600' // Focused
                 : selectedGroup?.id === group.id
                   ? 'bg-gray-700' // Selected but not focused
@@ -265,13 +291,24 @@ const TvChannelList = forwardRef<TvChannelListRef, TvChannelListProps>(({
         className={`h-full w-full md:w-2/3 overflow-y-auto custom-scrollbar md:border-l border-gray-700 ${isMobile && !showChannelsList ? 'hidden' : 'block'}`}
       >
         {isMobile && (
-          <button
-            onClick={() => setShowChannelsList(false)}
-            className="flex items-center w-full p-4 text-white bg-gray-800 border-b border-gray-700 sticky top-0 z-10"
-          >
-            <span className="material-icons mr-2">arrow_back</span>
-            <span className="font-bold text-lg">{selectedGroup?.title || 'Channels'}</span>
-          </button>
+          <div className="flex items-center justify-between bg-gray-800 border-b border-gray-700 sticky top-0 z-10 w-full p-2 sm:p-4">
+            <button
+              onClick={() => setShowChannelsList(false)}
+              className="flex items-center text-white flex-1"
+            >
+              <span className="material-icons mr-2">arrow_back</span>
+              <span className="font-bold text-base sm:text-lg truncate">{selectedGroup?.title || 'Channels'}</span>
+            </button>
+            <button
+              onClick={onBack}
+              className="text-gray-400 hover:text-white transition-colors ml-2"
+              aria-label="Close"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
         )}
         {filteredChannels.map((item, index) => (
           <TvChannelListCard

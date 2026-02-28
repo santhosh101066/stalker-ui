@@ -111,7 +111,7 @@ const MediaCard: React.FC<MediaCardProps> = ({ item, onClick }) => {
       {!isCompleted && isInProgress && (
         <div className="absolute right-2 top-2 z-10 h-3 w-3 rounded-full bg-yellow-500"></div>
       )}
-      <div className="relative flex h-48 w-full items-center justify-center overflow-hidden bg-gray-700 md:h-64">
+      <div className="relative flex h-40 w-full items-center justify-center overflow-hidden bg-gray-700 sm:h-48 md:h-64">
         {isVisible && imageUrl && !imageError ? (
           <img
             src={imageUrl}
@@ -121,14 +121,14 @@ const MediaCard: React.FC<MediaCardProps> = ({ item, onClick }) => {
           />
         ) : (
           <div className="bg-linear-to-br flex h-full w-full items-center justify-center from-gray-700 to-gray-800">
-            <span className="select-none text-4xl font-bold text-gray-400">
+            <span className="select-none text-2xl font-bold text-gray-400 md:text-4xl">
               {initials}
             </span>
           </div>
         )}
       </div>
-      <div className="p-4">
-        <h3 className="text-md truncate font-bold text-white transition-colors duration-300 group-hover:text-blue-400">
+      <div className="p-2 md:p-4">
+        <h3 className="truncate text-sm font-bold text-white transition-colors duration-300 group-hover:text-blue-400 md:text-base">
           {displayTitle}
         </h3>
       </div>

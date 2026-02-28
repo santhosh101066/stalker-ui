@@ -211,12 +211,17 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
     // Volume actions
     const handleVolumeChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
         const player = playerRef.current;
+        const newVolume = parseFloat(e.target.value);
+        
         if (player) {
-            const newVolume = parseFloat(e.target.value);
             player.volume = newVolume;
             player.muted = (newVolume === 0);
         }
-    }, []);
+        
+        // React state-ah update panna thaan UI (slider & icon) udane maarum!
+        setVolume(newVolume);
+        setIsMuted(newVolume === 0);
+    }, [setVolume, setIsMuted]); // Dependencies add pannikonga
 
     const toggleMute = useCallback(() => {
         const player = playerRef.current;
@@ -225,17 +230,13 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
             player.muted = nextMuted;
             setIsMuted(nextMuted);
 
-            if (nextMuted) {
-                toast.info('Muted', { autoClose: 1000, hideProgressBar: true });
-            } else {
-                toast.info('Unmuted', { autoClose: 1000, hideProgressBar: true });
-                if (player.volume === 0) {
-                    player.volume = 1; // Restore volume if it was 0
-                    setVolume(1);
-                }
+            // Unmute aagum bodhu (nextMuted === false) AND volume 0-la irundha mattum 1-ku mathanum
+            if (!nextMuted && player.volume === 0) {
+                player.volume = 1; 
+                setVolume(1);
             }
         }
-    }, []);
+    }, [setIsMuted, setVolume]);
 
     // Seek actions
     const handleSeekMouseDown = useCallback(() => {
@@ -465,7 +466,7 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
             rawStreamUrl: absoluteRawUrl
         }, {
             currentTime: playerRef.current?.currentTime || 0,
-            volume: volume,
+            volume: 1,
             muted: isMuted,
             subtitleTrackIndex: currentSubtitleTrack,
             audioTrackIndex: currentAudioTrack
@@ -530,11 +531,13 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
     }, [initialPlaybackState]);
 
     const handleTimeUpdate = useCallback((event: any) => {
-        const player = event.target;
-        if (!player) return;
+        // Vidstack gives the current time directly inside event.detail
+        const time = typeof event?.detail === 'number' 
+            ? event.detail 
+            : event?.target?.currentTime ?? playerRef.current?.currentTime ?? 0;
 
-        const time = player.currentTime;
-        const dur = Number.isFinite(player.duration) ? player.duration : duration;
+        // Safely get duration from player state
+        const dur = playerRef.current?.state?.duration ?? playerRef.current?.duration ?? duration;
 
         setCurrentTime(time);
 
@@ -542,7 +545,10 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
             const prog = (time / dur) * 100;
             setProgress(prog);
 
-            const bufferedRanges = player.buffered;
+            const player = playerRef.current;
+            // Get buffered ranges safely
+            const bufferedRanges = player?.state?.buffered ?? player?.buffered;
+            
             if (bufferedRanges && bufferedRanges.length > 0) {
                 const bufferedEnd = bufferedRanges.end(bufferedRanges.length - 1);
                 const bufferedPercent = (bufferedEnd / dur) * 100;
@@ -567,9 +573,13 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
     }, [duration, seeking, contentType, mediaId]);
 
     const handleDurationChange = useCallback((event: any) => {
-        const player = event.target;
-        if (player && Number.isFinite(player.duration)) {
-            setDuration(player.duration);
+        // Vidstack passes duration in event.detail
+        const newDuration = typeof event?.detail === 'number' 
+            ? event.detail 
+            : event?.target?.duration ?? playerRef.current?.duration;
+
+        if (Number.isFinite(newDuration) && newDuration > 0) {
+            setDuration(newDuration);
         }
     }, []);
 
