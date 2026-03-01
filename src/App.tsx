@@ -26,6 +26,7 @@ import TvChannelList from '@/components/organisms/TvChannelList';
 import ConfirmationModal from '@/components/molecules/ConfirmationModal';
 import { useSocket } from '@/context/useSocket';
 import { Header } from '@/components/organisms/Header';
+import ContinueWatching from '@/components/organisms/ContinueWatching';
 
 const PREFERRED_CONTENT_TYPE_KEY = 'preferredContentType';
 
@@ -77,8 +78,9 @@ export default function App() {
   const [totalItemsCount, setTotalItemsCount] = useState<number>(0);
   const [contentType, setContentType] = useState<'movie' | 'series' | 'tv'>(
     initialType
-  ); // 'movie' or 'series'
+  );
   const [showAdmin, setShowAdmin] = useState(false);
+  const [cwRefreshKey, setCwRefreshKey] = useState(0);
 
   // Confirmation Modal State
   const [confirmModal, setConfirmModal] = useState<{
@@ -136,6 +138,11 @@ export default function App() {
     muted?: boolean;
     subtitleTrackIndex?: number;
     audioTrackIndex?: number;
+  } | undefined>(undefined);
+
+  // Stores resume position when clicking a Continue Watching item
+  const [resumePlaybackState, setResumePlaybackState] = useState<{
+    currentTime?: number;
   } | undefined>(undefined);
 
   const isFetchingMore = useRef(false);
@@ -324,14 +331,69 @@ export default function App() {
       ]);
       const displayTitle = item.title || item.name || '';
 
+      // If this is a Continue Watching item, read saved progress
+      let savedResumeTime: number | undefined;
+      if (item.is_continue_watching) {
+      try {
+        const raw = localStorage.getItem(`video-in-progress-${item.id}`);
+        if (raw) {
+          const entry = JSON.parse(raw);
+          if (entry.currentTime && entry.currentTime > 2) {
+            savedResumeTime = entry.currentTime;
+          }
+        }
+      } catch (_) { /* ignore */ }
+      }
 
+
+      // ---------- CONTINUE WATCHING FAST-PATH ----------
+      // CW items already have the episode file id and cmd stored.
+      // We can play directly without re-fetching season/episode lists.
+      if (item.is_continue_watching) {
+        setCurrentItem(item);
+        if (!isPortal && item.cmd) {
+          // Xtream: play directly from the stored cmd
+          setRawStreamUrl(item.cmd);
+          setStreamUrl(`${BASE_URL}/proxy?url=${btoa(item.cmd)}`);
+          if (savedResumeTime) setResumePlaybackState({ currentTime: savedResumeTime });
+          else setResumePlaybackState(undefined);
+        } else {
+          // Stalker: item.id is the episode file id stored at save time
+        setLoading(true);
+        try {
+            const urlParams: Record<string, string | number | undefined> = { id: item.id };
+          if (item.series_number !== undefined) urlParams.series = item.series_number;
+          const linkData = await getMovieUrl(urlParams);
+          const cmd = (linkData?.js?.cmd) || (linkData?.cmd);
+          if (typeof cmd === 'string') {
+            setRawStreamUrl(cmd);
+            setStreamUrl(`${BASE_URL}/proxy?url=${btoa(cmd)}`);
+            if (savedResumeTime) setResumePlaybackState({ currentTime: savedResumeTime });
+            else setResumePlaybackState(undefined);
+          } else {
+            throw new Error('Continue Watching: stream URL not found.');
+          }
+        } catch (err) {
+          console.error(err);
+          toast.error('Could not resume playback. Please find it in the library.');
+          setCurrentItem(null);
+          setHistory((prev) => prev.slice(0, -1));
+        } finally {
+          setLoading(false);
+          }
+        }
+        return; // Always skip normal routing for CW items
+      }
+      // ---------- END CONTINUE WATCHING FAST-PATH ----------
 
       const isInsideMovieCategory =
         contentType === 'movie' && context.category !== null;
 
 
+      // Resume time for episode — set if is_continue_watching
       if (item.is_series == 1) {
         setCurrentSeriesItem(item);
+        setResumePlaybackState(undefined); // series drill-down, not a direct play
 
         fetchData({
           ...initialContext,
@@ -376,12 +438,11 @@ export default function App() {
           if (episodeFiles && episodeFiles.length > 0) {
             const episodeFile = episodeFiles[0];
             if (episodeFile.id !== undefined) {
-              // SIMPLIFIED LOGIC:
-              // If Xtream (!isPortal), use the direct URL (cmd) via proxy.
-              // If Stalker (isPortal), fetch the secure link via API.
               if (!isPortal && episodeFile.cmd) {
                 setRawStreamUrl(episodeFile.cmd);
                 setStreamUrl(`${BASE_URL}/proxy?url=${btoa(episodeFile.cmd)}`);
+                if (savedResumeTime) setResumePlaybackState({ currentTime: savedResumeTime });
+                else setResumePlaybackState(undefined);
               } else {
                 const urlParams: Record<string, string | number | undefined> = {
                   id: episodeFile.id,
@@ -397,8 +458,9 @@ export default function App() {
 
                 if (typeof cmd === 'string') {
                   setRawStreamUrl(cmd);
-                  // User requested to use /api/proxy for VOD Stalker portal
                   setStreamUrl(`${BASE_URL}/proxy?url=${btoa(cmd)}`);
+                  if (savedResumeTime) setResumePlaybackState({ currentTime: savedResumeTime });
+                  else setResumePlaybackState(undefined);
                 } else {
                   throw new Error('Episode stream URL (cmd) not found.');
                 }
@@ -424,9 +486,9 @@ export default function App() {
           setLoading(true);
           setCurrentItem(item);
           setRawStreamUrl(item.cmd);
-          // We set streamUrl to raw cmd. VideoPlayer will handle proxying if enabled.
-          // We avoid the old /proxy route to prevent confusion.
           setStreamUrl(item.cmd);
+          if (savedResumeTime) setResumePlaybackState({ currentTime: savedResumeTime });
+          else setResumePlaybackState(undefined);
           setLoading(false);
           return;
         }
@@ -450,6 +512,8 @@ export default function App() {
             if (!isPortal && movieFile.cmd) {
               setRawStreamUrl(movieFile.cmd);
               setStreamUrl(`${BASE_URL}/proxy?url=${btoa(movieFile.cmd)}`);
+              if (savedResumeTime) setResumePlaybackState({ currentTime: savedResumeTime });
+              else setResumePlaybackState(undefined);
             } else {
               const linkData = await getMovieUrl({ id: movieFile.id });
 
@@ -460,8 +524,9 @@ export default function App() {
               ) {
                 const rawUrl = linkData.js.cmd;
                 setRawStreamUrl(rawUrl);
-                // User requested to use /api/proxy for VOD Stalker portal
                 setStreamUrl(`${BASE_URL}/proxy?url=${btoa(rawUrl)}`);
+                if (savedResumeTime) setResumePlaybackState({ currentTime: savedResumeTime });
+                else setResumePlaybackState(undefined);
               } else {
                 throw new Error('Movie stream URL not found.');
               }
@@ -577,6 +642,9 @@ export default function App() {
       setRawStreamUrl(null);
       if (contentType !== 'tv') {
         setCurrentItem(null);
+        setResumePlaybackState(undefined);
+        // Refresh Continue Watching row after watching
+        setCwRefreshKey((k) => k + 1);
       }
       return;
     }
@@ -611,6 +679,9 @@ export default function App() {
       setRawStreamUrl(null);
       if (contentType !== 'tv') {
         setCurrentItem(null);
+        setResumePlaybackState(undefined);
+        // Refresh Continue Watching row after watching
+        setCwRefreshKey((k) => k + 1);
       }
       return;
     }
@@ -1241,8 +1312,9 @@ export default function App() {
           onChannelSelect={handleChannelSelect}
           epgData={epgData}
           channelGroups={channelGroups}
-          favorites={favorites} // <-- ADD THIS
+          favorites={favorites}
           toggleFavorite={toggleFavorite}
+          initialPlaybackState={resumePlaybackState || pendingPlaybackState || undefined}
         />
       ) : (
         <div className="min-h-screen font-sans text-gray-200">
@@ -1321,7 +1393,7 @@ export default function App() {
                           favorites={favorites}
                           recentChannels={recentChannels} // <-- PASS RECENT CHANNELS
                           toggleFavorite={toggleFavorite}
-                          initialPlaybackState={pendingPlaybackState || undefined}
+                          initialPlaybackState={resumePlaybackState || pendingPlaybackState || undefined}
                         />
                       );
                     })()
@@ -1345,42 +1417,54 @@ export default function App() {
                             />
                           </div>
                         ) : (
-                          <div
-                            className={` ${contentType === 'tv' // TV List (Tizen)
-                              ? 'channel-list flex flex-col gap-1'
-                              : isEpisodeList && !isTizen // Episode List (Web)
-                                ? 'flex flex-col gap-4'
-                                : isEpisodeList // Episode List (Tizen)
-                                  ? 'grid grid-cols-1 gap-4 md:grid-cols-2'
-                                  : 'grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 md:gap-6 lg:grid-cols-5 xl:grid-cols-6' // Movie/Series Grid
-                              } ${loading && items.length > 0 && context.page === 1
-                                ? 'pointer-events-none opacity-50 transition-opacity duration-300'
-                                : 'opacity-100'
-                              } `}
-                          >
-                            {items?.map((item) =>
-                              contentType === 'tv' ? (
-                                <TvChannelListCard
-                                  key={item.id}
-                                  item={item}
+                          <>
+                            {/* --- Continue Watching Row (home page only, not TV) --- */}
+                            {contentType !== 'tv' &&
+                              !context.search &&
+                              context.category === null && (
+                                <ContinueWatching
                                   onClick={handleItemClick}
-                                  isFocused={false} // Focus is handled by App.tsx's useEffect
+                                  refreshKey={cwRefreshKey}
                                 />
-                              ) : isEpisodeList ? (
-                                <EpisodeCard
-                                  key={item.id}
-                                  item={item}
-                                  onClick={handleItemClick}
-                                />
-                              ) : (
-                                <MediaCard
-                                  key={item.id}
-                                  item={item}
-                                  onClick={handleItemClick}
-                                />
-                              )
-                            )}
-                          </div>
+                              )}
+
+                            <div
+                              className={` ${contentType === 'tv' // TV List (Tizen)
+                                ? 'channel-list flex flex-col gap-1'
+                                : isEpisodeList && !isTizen // Episode List (Web)
+                                  ? 'flex flex-col gap-4'
+                                  : isEpisodeList // Episode List (Tizen)
+                                    ? 'grid grid-cols-1 gap-4 md:grid-cols-2'
+                                    : 'grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 md:gap-6 lg:grid-cols-5 xl:grid-cols-6' // Movie/Series Grid
+                                } ${loading && items.length > 0 && context.page === 1
+                                  ? 'pointer-events-none opacity-50 transition-opacity duration-300'
+                                  : 'opacity-100'
+                                } `}
+                            >
+                              {items?.map((item) =>
+                                contentType === 'tv' ? (
+                                  <TvChannelListCard
+                                    key={item.id}
+                                    item={item}
+                                    onClick={handleItemClick}
+                                    isFocused={false} // Focus is handled by App.tsx's useEffect
+                                  />
+                                ) : isEpisodeList ? (
+                                  <EpisodeCard
+                                    key={item.id}
+                                    item={item}
+                                    onClick={handleItemClick}
+                                  />
+                                ) : (
+                                  <MediaCard
+                                    key={item.id}
+                                    item={item}
+                                    onClick={handleItemClick}
+                                  />
+                                )
+                              )}
+                            </div>
+                          </>
                         )}
 
                         {/* --- No content messages (now must check !loading) --- */}

@@ -19,6 +19,7 @@ export interface MediaItem {
   stream_id?: string | number;
   runtime?: number;
   duration?: number;
+  progressPercent?: number;
 }
 
 export interface ContextType {

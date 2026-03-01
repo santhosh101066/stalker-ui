@@ -5,14 +5,15 @@ import type { MediaItem } from '@/types';
 interface MediaCardProps {
   item: MediaItem;
   onClick: (item: MediaItem) => void;
+  progressPercent?: number;
 }
 
-const MediaCard: React.FC<MediaCardProps> = ({ item, onClick }) => {
+const MediaCard: React.FC<MediaCardProps> = ({ item, onClick, progressPercent }) => {
   const [imageError, setImageError] = useState(false);
   const [isCompleted, setIsCompleted] = useState(false);
 
-  const [isVisible, setIsVisible] = useState(false); // Lazy loading state
-  const cardRef = React.useRef<HTMLDivElement>(null); // Ref for intersection observer
+  const [isVisible, setIsVisible] = useState(false);
+  const cardRef = React.useRef<HTMLDivElement>(null);
 
   const displayTitle = item.title || item.name;
   const initials = displayTitle
@@ -35,12 +36,12 @@ const MediaCard: React.FC<MediaCardProps> = ({ item, onClick }) => {
         entries.forEach((entry) => {
           if (entry.isIntersecting) {
             setIsVisible(true);
-            observer.disconnect(); // Stop observing once visible
+            observer.disconnect();
           }
         });
       },
       {
-        rootMargin: '100px', // Load images slightly before they appear
+        rootMargin: '100px',
         threshold: 0.1,
       }
     );
@@ -74,6 +75,9 @@ const MediaCard: React.FC<MediaCardProps> = ({ item, onClick }) => {
     }
   }, [item.id]);
 
+  // Use prop progress if passed (CW row), otherwise fall back to item field
+  const displayProgress = progressPercent ?? item.progressPercent;
+
   return (
     <div
       ref={cardRef}
@@ -100,6 +104,15 @@ const MediaCard: React.FC<MediaCardProps> = ({ item, onClick }) => {
             <span className="select-none text-2xl font-bold text-gray-400 md:text-4xl">
               {initials}
             </span>
+          </div>
+        )}
+        {/* Progress bar overlay at bottom of thumbnail */}
+        {displayProgress !== undefined && displayProgress > 0 && (
+          <div className="absolute bottom-0 left-0 w-full h-1 bg-gray-600/80">
+            <div
+              className="h-full bg-blue-500 transition-all duration-300"
+              style={{ width: `${Math.min(100, displayProgress)}%` }}
+            />
           </div>
         )}
       </div>

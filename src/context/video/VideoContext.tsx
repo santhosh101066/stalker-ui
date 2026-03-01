@@ -82,6 +82,7 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
     const seekRunDirection = useRef<number>(0);
     const hasRestoredProgress = useRef(false);
     const isRetrying = useRef(false);
+    const lastSavedTime = useRef(0);
 
     const SEEK_LEVELS = useMemo(() => [10, 30, 60, 180], []);
 
@@ -552,6 +553,20 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
         if (dur > 0 && !seeking) {
             const prog = (time / dur) * 100;
             setProgress(prog);
+
+            // 3. Mark as completed if ≥ 90%
+            if (contentType !== 'tv' && prog >= 90 && mediaId) {
+                localStorage.removeItem(`video-in-progress-${mediaId}`);
+                if (itemId && itemId !== mediaId) {
+                    localStorage.removeItem(`video-in-progress-${itemId}`);
+                }
+                const completedData = {
+                    mediaId, itemId, type: contentType,
+                    title: item?.name || item?.title || '',
+                    timestamp: Date.now()
+                };
+                localStorage.setItem(`video-completed-${mediaId}`, JSON.stringify(completedData));
+            }
         }
     }, [duration, seeking, contentType, mediaId, itemId, item, initialPlaybackState]);
 
@@ -628,8 +643,53 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
         }
     }, [retryCount, contentType]);
 
-    const handleEnded = useCallback(() => {
+    // Save progress helper
+    const saveProgress = useCallback(() => {
+        if (contentType === 'tv') return;
+        const player = playerRef.current;
+        const currentDur = player?.duration ?? duration;
+        const time = player?.currentTime ?? 0;
+        if (!mediaId || !currentDur || currentDur <= 0 || time <= 2) return;
 
+        // If ≥ 90% watched, treat as completed — remove in-progress
+        if (time / currentDur >= 0.9) {
+            localStorage.removeItem(`video-in-progress-${mediaId}`);
+            if (itemId && itemId !== mediaId) {
+                localStorage.removeItem(`video-in-progress-${itemId}`);
+            }
+            return;
+        }
+
+        const progressData = {
+            mediaId,
+            itemId,
+            type: contentType,
+            title: seriesItem?.name || seriesItem?.title || item?.name || item?.title || '',
+            name: seriesItem?.name || seriesItem?.title || item?.name || item?.title || '',
+            episodeTitle: item?.name || item?.title || '',
+            screenshot_uri: seriesItem?.screenshot_uri || item?.screenshot_uri || '',
+            is_series: seriesItem ? 1 : 0,
+            cmd: item?.cmd || '',
+            series_number: item?.series_number,
+            currentTime: time,
+            duration: currentDur,
+            progressPercent: Math.round((time / currentDur) * 100),
+            timestamp: Date.now(),
+        };
+
+        const key = `video-in-progress-${itemId && itemId !== mediaId ? itemId : mediaId}`;
+        localStorage.setItem(key, JSON.stringify(progressData));
+        // Also store under mediaId for lookup by series/movie id
+        if (mediaId) {
+            localStorage.setItem(`video-in-progress-${mediaId}`, JSON.stringify(progressData));
+        }
+        lastSavedTime.current = time;
+    }, [contentType, mediaId, itemId, item, seriesItem, duration]);
+
+    const handleEnded = useCallback(() => {
+        // Remove in-progress entry
+        if (mediaId) localStorage.removeItem(`video-in-progress-${mediaId}`);
+        if (itemId && itemId !== mediaId) localStorage.removeItem(`video-in-progress-${itemId}`);
 
         const completedData = {
             mediaId,
@@ -644,6 +704,36 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
             localStorage.setItem(`video-completed-${itemId}`, JSON.stringify(completedData));
         }
     }, [contentType, mediaId, itemId, item]);
+
+    // Periodic progress save (every 30s)
+    useEffect(() => {
+        if (contentType === 'tv') return;
+        const interval = setInterval(() => {
+            saveProgress();
+        }, 30000);
+        return () => clearInterval(interval);
+    }, [contentType, saveProgress]);
+
+    // Save on unmount (back button / close) AND page refresh
+    // We use a ref so the listeners always call the *latest* saveProgress,
+    // avoiding the stale closure problem of an empty-dep useEffect.
+    const saveProgressRef = useRef(saveProgress);
+    useEffect(() => {
+        saveProgressRef.current = saveProgress;
+    }, [saveProgress]);
+
+    useEffect(() => {
+        const handleBeforeUnload = () => {
+            saveProgressRef.current();
+        };
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        return () => {
+            // Called on Back (unmount) — also save progress here
+            saveProgressRef.current();
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+        };
+    }, []); // Empty deps is safe because we go through the ref
+
 
     // EPG updates for TV
     useEffect(() => {
