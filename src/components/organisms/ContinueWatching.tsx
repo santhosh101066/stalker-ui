@@ -14,37 +14,47 @@ const ContinueWatching: React.FC<ContinueWatchingProps> = ({ onClick, contentTyp
     const inProgressKeys = Object.keys(localStorage).filter((key) =>
       key.startsWith('video-in-progress-')
     );
+    
     const items: MediaItem[] = [];
     const addedIds = new Set<string>();
 
-    for (const key of inProgressKeys) {
+    const sortedKeys = inProgressKeys.sort((a, b) => {
+        const dataA = JSON.parse(localStorage.getItem(a) || '{}');
+        const dataB = JSON.parse(localStorage.getItem(b) || '{}');
+        return (dataB.timestamp || 0) - (dataA.timestamp || 0);
+    });
+
+    for (const key of sortedKeys) {
       const progressData = localStorage.getItem(key);
       if (progressData) {
         try {
           const itemData = JSON.parse(progressData);
+          
           if (itemData.type !== contentType) {
-            continue; // Skip if it's not the right content type
+            continue; 
           }
-          if (!addedIds.has(itemData.mediaId)) {
+
+          const targetId = itemData.type === 'movie' ? itemData.mediaId : (itemData.itemId || itemData.mediaId);
+
+          if (!addedIds.has(targetId)) {
             items.push({
-              id: itemData.mediaId,
+              id: targetId, 
+              series_id: itemData.is_series ? itemData.mediaId : undefined,
               title: itemData.title,
-              name: itemData.name,
+              name: itemData.name || itemData.title,
               screenshot_uri: itemData.screenshot_uri,
               is_series: itemData.is_series,
               is_season: 0,
-              is_episode: 0,
-              is_playable_movie:
-                itemData.type === 'movie' && itemData.is_series != 1,
-              cmd: itemData.cmd, // Restore the cmd
+              is_episode: itemData.is_series ? 1 : 0, 
+              is_playable_movie: !itemData.is_series,
+              is_continue_watching: true,
+              cmd: itemData.cmd, 
+              series_number: itemData.series_number,
             });
-            addedIds.add(itemData.mediaId);
+            addedIds.add(targetId);
           }
         } catch (error) {
-          console.error(
-            `Failed to parse in-progress item for key ${key}`,
-            error
-          );
+          console.error(`Failed to parse in-progress item for key ${key}`, error);
         }
       }
     }

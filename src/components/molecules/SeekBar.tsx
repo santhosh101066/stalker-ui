@@ -11,7 +11,6 @@ export const SeekBar = React.memo(() => {
         hoverPosition,
         handleSeekMouseDown,
         handleSeekMouseUp,
-        handleSeekTouchEnd,
         handleSeekChange,
         handleSeekBarHover,
         setIsTooltipVisible,
@@ -36,14 +35,20 @@ export const SeekBar = React.memo(() => {
         handleSeekChange(e); // Context-a update pannum
     };
 
-    const onMouseDragEnd = (e: React.MouseEvent<HTMLInputElement>) => {
+    const commitSeek = (e: React.SyntheticEvent<HTMLInputElement>) => {
         setLocalProgress(null); // Drag mudinjadhum local state-a clear panni video kaila kuduthudrom
-        handleSeekMouseUp(e);
+        // Pass to mouse up handler to commit seek (it expects an event with currentTarget.value)
+        handleSeekMouseUp(e as any);
     };
 
-    const onTouchDragEnd = (e: React.TouchEvent<HTMLInputElement>) => {
-        setLocalProgress(null);
-        handleSeekTouchEnd(e);
+    const onPointerUp = (e: React.PointerEvent<HTMLInputElement>) => {
+        commitSeek(e);
+    };
+
+    const onKeyUp = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+            commitSeek(e);
+        }
     };
 
     return (
@@ -55,7 +60,7 @@ export const SeekBar = React.memo(() => {
                     className="absolute top-0 left-0 h-full bg-gray-400/50 transition-all duration-200"
                     style={{ width: `${safeBuffered}%` }}
                 ></div>
-                
+
                 {/* Progress Bar (Blue Line) - Ippo idhu lag aagama unga koodave varum! */}
                 <div
                     className="absolute top-0 left-0 h-full bg-blue-500"
@@ -90,10 +95,13 @@ export const SeekBar = React.memo(() => {
                 step="0.01"
                 value={displayProgress}
                 onMouseDown={handleSeekMouseDown}
-                onMouseUp={onMouseDragEnd}
+                onMouseUp={commitSeek}
                 onTouchStart={handleSeekMouseDown}
-                onTouchEnd={onTouchDragEnd}
+                onTouchEnd={commitSeek}
                 onChange={onDragChange}
+                onPointerUp={onPointerUp}
+                onPointerCancel={onPointerUp}
+                onKeyUp={onKeyUp}
                 onMouseMove={handleSeekBarHover}
                 onMouseEnter={() => setIsTooltipVisible(true)}
                 onMouseLeave={() => setIsTooltipVisible(false)}

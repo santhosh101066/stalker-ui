@@ -10,7 +10,7 @@ interface EpisodeCardProps {
 const EpisodeCard: React.FC<EpisodeCardProps> = ({ item, onClick }) => {
   const [imageError, setImageError] = useState(false);
   const [isCompleted, setIsCompleted] = useState(false);
-  const [isInProgress, setIsInProgress] = useState(false);
+
   const displayTitle = item.title || item.name;
   const initials = displayTitle
     ? displayTitle.substring(0, 2).toUpperCase()
@@ -28,11 +28,6 @@ const EpisodeCard: React.FC<EpisodeCardProps> = ({ item, onClick }) => {
   useEffect(() => {
     const completed = localStorage.getItem(`video-completed-${item.id}`);
     setIsCompleted(!!completed);
-
-    if (!completed) {
-      const progress = localStorage.getItem(`video-in-progress-${item.id}`);
-      setIsInProgress(!!progress);
-    }
   }, [item.id]);
 
   return (
@@ -45,9 +40,7 @@ const EpisodeCard: React.FC<EpisodeCardProps> = ({ item, onClick }) => {
       {isCompleted && (
         <div className="absolute right-2 top-2 z-10 h-3 w-3 rounded-full bg-green-500"></div>
       )}
-      {!isCompleted && isInProgress && (
-        <div className="absolute right-2 top-2 z-10 h-3 w-3 rounded-full bg-yellow-500"></div>
-      )}
+
       <div className="relative flex h-14 w-20 shrink-0 items-center justify-center overflow-hidden bg-gray-700 sm:h-16 sm:w-24">
         {imageUrl && !imageError ? (
           <img

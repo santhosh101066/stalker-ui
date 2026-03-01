@@ -10,7 +10,7 @@ interface MediaCardProps {
 const MediaCard: React.FC<MediaCardProps> = ({ item, onClick }) => {
   const [imageError, setImageError] = useState(false);
   const [isCompleted, setIsCompleted] = useState(false);
-  const [isInProgress, setIsInProgress] = useState(false);
+
   const [isVisible, setIsVisible] = useState(false); // Lazy loading state
   const cardRef = React.useRef<HTMLDivElement>(null); // Ref for intersection observer
 
@@ -71,28 +71,6 @@ const MediaCard: React.FC<MediaCardProps> = ({ item, onClick }) => {
         }
         console.error(error);
       }
-    } else {
-      const progress = localStorage.getItem(`video-in-progress-${item.id}`);
-      if (progress) {
-        try {
-          const progressData = JSON.parse(progress);
-          if (progressData && progressData.mediaId === item.id) {
-            setIsInProgress(true);
-          } else {
-            setIsInProgress(false);
-          }
-        } catch (error) {
-          // For backward compatibility
-          if (progress === 'true') {
-            setIsInProgress(true);
-          } else {
-            setIsInProgress(false);
-          }
-          console.error(error);
-        }
-      } else {
-        setIsInProgress(false);
-      }
     }
   }, [item.id]);
 
@@ -108,9 +86,7 @@ const MediaCard: React.FC<MediaCardProps> = ({ item, onClick }) => {
       {isCompleted && (
         <div className="absolute right-2 top-2 z-10 h-3 w-3 rounded-full bg-green-500"></div>
       )}
-      {!isCompleted && isInProgress && (
-        <div className="absolute right-2 top-2 z-10 h-3 w-3 rounded-full bg-yellow-500"></div>
-      )}
+
       <div className="relative flex h-32 w-full items-center justify-center overflow-hidden bg-gray-700 sm:h-40 md:h-56">
         {isVisible && imageUrl && !imageError ? (
           <img

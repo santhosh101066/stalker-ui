@@ -3,7 +3,7 @@ import { FaChromecast } from 'react-icons/fa';
 import {
     PlayIcon, PauseIcon, ListIcon, SettingsIcon,
     HeartSolidIcon, HeartOutlineIcon, VolumeMutedIcon,
-    VolumeUpIcon, FullscreenExitIcon, FullscreenIcon, TrashIcon
+    VolumeUpIcon, FullscreenExitIcon, FullscreenIcon
 } from '@/components/atoms/Icons';
 import { URL_PATHS } from '@/services/api';
 import { SettingsMenu } from '@/components/molecules/SettingsMenu';
@@ -46,14 +46,8 @@ export const TVControls = React.memo(() => {
         isMuted,
         volume,
         isFullscreen,
+        refreshReceivers,
     } = useVideoContext();
-
-    const handleClearCache = React.useCallback(() => {
-        if (window.confirm('Are you sure you want to clear local storage? This will reset recent channels, favorites, and watch history.')) {
-            localStorage.clear();
-            window.location.reload();
-        }
-    }, []);
 
     return (
         <div className="pointer-events-auto absolute bottom-1 left-1 right-1 p-1 text-white md:bottom-4 md:left-4 md:right-4 md:p-2.5">
@@ -162,6 +156,7 @@ export const TVControls = React.memo(() => {
                                 <button
                                     data-focusable="true"
                                     onClick={() => {
+                                        refreshReceivers();
                                         if (isSettingsMenuOpen && activeSettingsMenu === 'cast') {
                                             onSetIsSettingsMenuOpen(false);
                                         } else {
@@ -189,14 +184,6 @@ export const TVControls = React.memo(() => {
                                     <SettingsIcon className="h-4 w-4 md:h-6 md:w-6" />
                                 </button>
                             )}
-                            <button
-                                data-focusable="true"
-                                onClick={handleClearCache}
-                                className="ml-1 text-white hover:text-red-400 md:ml-2"
-                                title="Clear Cache"
-                            >
-                                <TrashIcon className="h-4 w-4 md:h-6 md:w-6" />
-                            </button>
                             {/* Settings Menu */}
                             <SettingsMenu />
                         </div>

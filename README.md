@@ -66,6 +66,12 @@
     npm run dev
     ```
 
+5.  **Build for Production**
+    ```bash
+    npm run build
+    ```
+    This will compile TypeScript and bundle the application into the `dist/` directory. If you are building for a backend hosted elsewhere, you can prepend the command with your environment variable (e.g., `VITE_API_HOST=http://YOUR_SERVER_IP:3000 npm run build`).
+
 ## 🛠️ Deployment
 
 We use a consolidated `deploy.sh` script to handle builds for different environments.

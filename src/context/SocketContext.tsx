@@ -21,64 +21,54 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     const isReceiver = isTizen || searchParams.get('device') === 'receiver';
 
     useEffect(() => {
-        // Determine device ID
         let deviceId = localStorage.getItem('device_id');
         if (!deviceId) {
             deviceId = uuidv4();
             localStorage.setItem('device_id', deviceId);
         }
-        // Ensure separate variable for closure capture if needed, though const is fine
-        const currentDeviceId = deviceId as string;
+        const currentDeviceId = deviceId;
 
         const deviceName = isReceiver
             ? `TV (${currentDeviceId.substring(0, 4)})`
             : `Controller (${currentDeviceId.substring(0, 4)})`;
 
         const newSocket = io(SOCKET_URL, {
-            transports: ['polling', 'websocket'], // Allow polling fallback
+            transports: ['polling', 'websocket'],
             reconnection: true,
-            reconnectionDelay: 10000,     // 10 seconds initial delay
-            reconnectionDelayMax: 10000,  // 10 seconds max delay
-            reconnectionAttempts: Infinity, // Keep retrying forever
         });
 
-        newSocket.on('connect', () => {
-            console.log('Socket connected:', newSocket.id);
-            setIsConnected(true);
+        // Helper to handle list updates consistently
+        const handleListUpdate = (data: any) => {
+            const list = Array.isArray(data) ? data : (data.receivers || []);
+            const filtered = list.filter((r: Device) => r.id !== currentDeviceId);
+            setReceivers(filtered);
+        };
 
-            // Register device
+        newSocket.on('connect', () => {
+            setIsConnected(true);
             newSocket.emit('register', {
                 id: currentDeviceId,
                 name: deviceName,
                 type: isReceiver ? 'receiver' : 'controller',
             });
-
-            // If we are a controller, ask for receivers
-            if (!isReceiver) {
-                newSocket.emit('get_receivers');
-            }
+            // Request list immediately after register
+            newSocket.emit('get_receivers');
         });
 
-        newSocket.on('disconnect', () => {
-            console.log('Socket disconnected');
-            setIsConnected(false);
-        });
+        newSocket.on('receivers_updated', handleListUpdate);
+        newSocket.on('receivers_list', handleListUpdate);
 
-        newSocket.on('receivers_updated', (updatedReceivers: Device[]) => {
-            // Filter out self
-            setReceivers(updatedReceivers.filter(r => r.id !== currentDeviceId));
-        });
-
-        newSocket.on('receivers_list', (list: Device[]) => {
-            setReceivers(list.filter(r => r.id !== currentDeviceId));
-        });
+        newSocket.on('disconnect', () => setIsConnected(false));
 
         setSocket(newSocket);
 
         return () => {
+            // Cleanup: remove listeners and disconnect
+            newSocket.off('receivers_updated');
+            newSocket.off('receivers_list');
             newSocket.disconnect();
         };
-    }, [SOCKET_URL, isReceiver]);
+    }, [SOCKET_URL, isReceiver]); // isReceiver maaruna fresh socket setup aagum
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const castTo = (targetDeviceId: string, content: any, playbackInfo?: {
@@ -99,8 +89,14 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         });
     };
 
+    const refreshReceivers = () => {
+        if (socket && isConnected) {
+            socket.emit('get_receivers');
+        }
+    };
+
     return (
-        <SocketContext.Provider value={{ socket, isConnected, receivers, isReceiver, castTo }}>
+        <SocketContext.Provider value={{ socket, isConnected, receivers, isReceiver, castTo, refreshReceivers }}>
             {children}
         </SocketContext.Provider>
     );

@@ -358,13 +358,12 @@ const Admin = () => {
         setConfirmModal((prev) => ({ ...prev, isOpen: false }));
         Object.keys(localStorage).forEach((key) => {
           if (
-            key.startsWith('video-completed-') ||
-            key.startsWith('video-in-progress-')
+            key.startsWith('video-completed-')
           ) {
             localStorage.removeItem(key);
           }
         });
-        toast.success('All watched and in-progress statuses have been cleared.');
+        toast.success('All watched statuses have been cleared.');
       },
     });
   };

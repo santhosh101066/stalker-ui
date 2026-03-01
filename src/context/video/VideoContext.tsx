@@ -33,9 +33,10 @@ interface VideoProviderProps {
     initialPlaybackState?: any;
     onEnded?: () => void;
     onBack: () => void;
-    receivers: any[];
-    isReceiver: boolean;
-    castTo: (deviceId: string, media: any, state: any) => void;
+    receivers?: any[];
+    isReceiver?: boolean;
+    castTo?: (deviceId: string, media: any, state: any) => void;
+    refreshReceivers?: () => void;
 }
 
 // Provider Component
@@ -64,6 +65,7 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
     receivers,
     isReceiver,
     castTo,
+    refreshReceivers,
 }) => {
     const isTizen = isTizenDevice();
 
@@ -73,7 +75,6 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
     const seekBarRef = useRef<HTMLInputElement>(null);
     const playerRef = useRef<any | null>(null);
     const controlsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const lastSaveTime = useRef<number>(0);
     const cursorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const seekRunTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const seekRunStart = useRef<number | null>(null);
@@ -89,7 +90,7 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
     const [isMuted, setIsMuted] = useState(false);
     const [volume, setVolume] = useState(1);
     const [progress, setProgress] = useState(0);
-    const [buffered, setBuffered] = useState(0);
+    const [buffered] = useState(0);
     const [duration, setDuration] = useState(0);
     const [currentTime, setCurrentTime] = useState(0);
     const [seeking, setSeeking] = useState(false);
@@ -462,17 +463,19 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
             ? rawStreamUrl
             : rawStreamUrl ? `${baseUrl}${rawStreamUrl.startsWith('/') ? '' : '/'}${rawStreamUrl}` : undefined;
 
-        castTo(deviceId, {
-            media: mediaItem,
-            streamUrl: absoluteUrl,
-            rawStreamUrl: absoluteRawUrl
-        }, {
-            currentTime: playerRef.current?.currentTime || 0,
-            volume: 1,
-            muted: isMuted,
-            subtitleTrackIndex: currentSubtitleTrack,
-            audioTrackIndex: currentAudioTrack
-        });
+        if (castTo) {
+            castTo(deviceId, {
+                media: mediaItem,
+                streamUrl: absoluteUrl,
+                rawStreamUrl: absoluteRawUrl
+            }, {
+                currentTime: playerRef.current?.currentTime || 0,
+                volume: 1,
+                muted: isMuted,
+                subtitleTrackIndex: currentSubtitleTrack,
+                audioTrackIndex: currentAudioTrack
+            });
+        }
 
         toast.success('Casting started...');
         setIsSettingsMenuOpen(false);
@@ -514,65 +517,43 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
         setIsRecovering(false);
         isRetrying.current = false;
 
-        if (initialPlaybackState && !hasRestoredProgress.current) {
-            hasRestoredProgress.current = true;
-
-            if (initialPlaybackState.currentTime) {
-                player.currentTime = initialPlaybackState.currentTime;
-                console.log(`[Cast] Restored playback position: ${initialPlaybackState.currentTime}s`);
-            }
-
+        // Volume and Mute restoration
+        if (initialPlaybackState) {
             if (initialPlaybackState.volume !== undefined) {
                 player.volume = initialPlaybackState.volume;
+                setVolume(initialPlaybackState.volume);
             }
-
             if (initialPlaybackState.muted !== undefined) {
                 player.muted = initialPlaybackState.muted;
+                setIsMuted(initialPlaybackState.muted);
             }
         }
-    }, [initialPlaybackState]);
+    }, [initialPlaybackState, setVolume, setIsMuted, playerRef]);
 
     const handleTimeUpdate = useCallback((event: any) => {
-        // Vidstack gives the current time directly inside event.detail
         const time = typeof event?.detail === 'number'
             ? event.detail
             : event?.target?.currentTime ?? playerRef.current?.currentTime ?? 0;
 
-        // Safely get duration from player state
         const dur = playerRef.current?.state?.duration ?? playerRef.current?.duration ?? duration;
 
         setCurrentTime(time);
 
+        // 1. Restore Logic (Existing)
+        if (initialPlaybackState && !hasRestoredProgress.current && time >= 1) {
+            hasRestoredProgress.current = true;
+            const targetTime = initialPlaybackState.currentTime;
+            if (targetTime && targetTime > 2 && playerRef.current) {
+                playerRef.current.currentTime = targetTime;
+            }
+        }
+
+        // 2. Progress Update (UI)
         if (dur > 0 && !seeking) {
             const prog = (time / dur) * 100;
             setProgress(prog);
-
-            const player = playerRef.current;
-            // Get buffered ranges safely
-            const bufferedRanges = player?.state?.buffered ?? player?.buffered;
-
-            if (bufferedRanges && bufferedRanges.length > 0) {
-                const bufferedEnd = bufferedRanges.end(bufferedRanges.length - 1);
-                const bufferedPercent = (bufferedEnd / dur) * 100;
-                setBuffered(bufferedPercent);
-            }
         }
-
-        // Save progress
-        if (contentType !== 'tv' && mediaId && dur > 0) {
-            const now = Date.now();
-            if (now - lastSaveTime.current > 5000) {
-                lastSaveTime.current = now;
-                const progressData = {
-                    currentTime: time,
-                    duration: dur,
-                    progress: (time / dur) * 100,
-                    timestamp: now
-                };
-                localStorage.setItem(`video_progress_${mediaId}`, JSON.stringify(progressData));
-            }
-        }
-    }, [duration, seeking, contentType, mediaId]);
+    }, [duration, seeking, contentType, mediaId, itemId, item, initialPlaybackState]);
 
     const handleDurationChange = useCallback((event: any) => {
         // Vidstack passes duration in event.detail
@@ -645,7 +626,24 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
             isRetrying.current = false;
             setIsRecovering(false);
         }
-    }, [retryCount]);
+    }, [retryCount, contentType]);
+
+    const handleEnded = useCallback(() => {
+
+
+        const completedData = {
+            mediaId,
+            itemId,
+            type: contentType,
+            title: item?.name || item?.title || '',
+            timestamp: Date.now()
+        };
+
+        localStorage.setItem(`video-completed-${mediaId}`, JSON.stringify(completedData));
+        if (itemId && itemId !== mediaId) {
+            localStorage.setItem(`video-completed-${itemId}`, JSON.stringify(completedData));
+        }
+    }, [contentType, mediaId, itemId, item]);
 
     // EPG updates for TV
     useEffect(() => {
@@ -787,13 +785,15 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
         previewChannelInfo,
         epgData,
         channels,
+        initialPlaybackState,
         channelGroups,
         favorites,
         recentChannels,
 
         // Cast State
-        receivers, // Need to accept these in Provider props
-        isReceiver,
+        receivers: receivers || [], // Fallback if undefined
+        isReceiver: isReceiver || false, // Fallback if undefined
+        refreshReceivers: refreshReceivers || (() => { }), // Fallback if undefined
 
         // External Actions
         onBack,
@@ -839,6 +839,7 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
         handleWaiting,
         handlePlaying,
         handleError,
+        handleEnded,
         handleVideoClick,
         handleMouseMove,
         toggleChannelList,

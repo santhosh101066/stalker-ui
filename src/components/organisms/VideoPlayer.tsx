@@ -5,7 +5,7 @@ import type { VideoPlayerProps } from '@/types/video';
 import { useSocket } from '@/context/useSocket';
 
 const VideoPlayer: React.FC<VideoPlayerProps> = (props) => {
-    const { isReceiver, receivers, castTo } = useSocket();
+    const { isReceiver, receivers, castTo, refreshReceivers } = useSocket();
 
     return (
         <VideoProvider
@@ -13,6 +13,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = (props) => {
             isReceiver={isReceiver}
             receivers={receivers}
             castTo={castTo}
+            refreshReceivers={refreshReceivers}
         >
             <VideoPlayerContent />
         </VideoProvider>

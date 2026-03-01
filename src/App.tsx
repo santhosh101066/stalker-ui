@@ -13,8 +13,8 @@ import LoadingSpinner from '@/components/atoms/LoadingSpinner';
 import MediaCard from '@/components/molecules/MediaCard';
 import EpisodeCard from '@/components/molecules/EpisodeCard';
 import VideoPlayer from '@/components/organisms/VideoPlayer';
-import ContinueWatching from '@/components/organisms/ContinueWatching';
-import type { MediaItem, ContextType, EPG_List, ChannelGroup } from '@/types';
+
+import type { MediaItem, ContextType, EPG_List, ChannelGroup, HistoryState } from '@/types';
 import { BASE_URL, URL_PATHS } from '@/services/api';
 import { toast, ToastContainer } from 'react-toastify';
 import type { PaginatedResponse } from '@/services/services';
@@ -68,7 +68,7 @@ export default function App() {
 
   const [context, setContext] = useState<ContextType>(initialContext);
   const [items, setItems] = useState<MediaItem[]>([]);
-  const [history, setHistory] = useState<ContextType[]>([]);
+  const [history, setHistory] = useState<HistoryState[]>([]);
   const [streamUrl, setStreamUrl] = useState<string | null>(null);
   const [rawStreamUrl, setRawStreamUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -157,6 +157,8 @@ export default function App() {
       newContext: ContextType,
       typeOverride?: 'movie' | 'series' | 'tv'
     ) => {
+      console.log("CONTEXT", newContext);
+
       const currentContentType = typeOverride || contentType;
       setLoading(true);
       setError(null);
@@ -312,12 +314,21 @@ export default function App() {
       setPreviewChannel(null);
       setHistory((prev) => [
         ...prev,
-        { ...context, focusedIndex: focusedIndex ?? 0 },
+        {
+          context,
+          items,
+          totalItemsCount,
+          focusedIndex: focusedIndex ?? 0,
+          currentSeriesItem
+        },
       ]);
       const displayTitle = item.title || item.name || '';
 
+
+
       const isInsideMovieCategory =
         contentType === 'movie' && context.category !== null;
+
 
       if (item.is_series == 1) {
         setCurrentSeriesItem(item);
@@ -558,8 +569,9 @@ export default function App() {
       clearTimeout(channelChangeTimer.current);
       channelChangeTimer.current = null;
       setPreviewChannel(null);
-      return; // Just cancel the timer, don't go back
+      return;
     }
+
     if (streamUrl) {
       setStreamUrl(null);
       setRawStreamUrl(null);
@@ -569,19 +581,23 @@ export default function App() {
       return;
     }
 
+    // Instant Restore Magic ✨
     if (history.length > 0) {
-      const lastContext = history[history.length - 1]; // Get previous context
-      if (!lastContext.movieId) {
-        setCurrentSeriesItem(null);
-      }
+      const lastState = history[history.length - 1];
       setHistory((prev) => prev.slice(0, -1));
-      setContentType(lastContext.contentType); // Restore contentType
-      fetchData(lastContext); // Fetch data with old context
 
-      // --- FOCUS FIX: Restore old focused index ---
-      setFocusedIndex(lastContext.focusedIndex ?? 0);
+      // Restore everything perfectly without calling fetchData
+      setContentType(lastState.context.contentType);
+      setContext(lastState.context);
+      setItems(lastState.items);
+      setTotalItemsCount(lastState.totalItemsCount);
+      setFocusedIndex(lastState.focusedIndex);
+      setCurrentSeriesItem(lastState.currentSeriesItem);
+      setError(null);
+      setPaginationError(null);
+      setLoading(false);
     }
-  }, [streamUrl, history, fetchData]);
+  }, [streamUrl, history, contentType]);
 
   const closePlayer = useCallback(() => {
     if (channelChangeTimer.current) {
@@ -651,11 +667,9 @@ export default function App() {
       onConfirm: () => {
         setConfirmModal((prev) => ({ ...prev, isOpen: false }));
         Object.keys(localStorage).forEach((key) => {
-          // Clear completed, in-progress, AND resume time keys
+          // Clear completed logs
           if (
-            key.startsWith('video-completed-') ||
-            key.startsWith('video-in-progress-') ||
-            key.startsWith('video-progress-')
+            key.startsWith('video-completed-')
           ) {
             localStorage.removeItem(key);
           }
@@ -871,7 +885,13 @@ export default function App() {
     // Preserve history!
     setHistory((prev) => [
       ...prev,
-      { ...context, focusedIndex: focusedIndex ?? 0 },
+      {
+        context,
+        items,
+        totalItemsCount,
+        focusedIndex: focusedIndex ?? 0,
+        currentSeriesItem
+      },
     ]);
 
     const newTitle = search
@@ -1191,6 +1211,7 @@ export default function App() {
   const currentTitle = streamUrl
     ? 'Now Playing'
     : context.parentTitle || 'Browse';
+  console.log(currentItem);
 
   return (
     <>
@@ -1300,7 +1321,7 @@ export default function App() {
                           favorites={favorites}
                           recentChannels={recentChannels} // <-- PASS RECENT CHANNELS
                           toggleFavorite={toggleFavorite}
-                          initialPlaybackState={pendingPlaybackState}
+                          initialPlaybackState={pendingPlaybackState || undefined}
                         />
                       );
                     })()
@@ -1308,15 +1329,6 @@ export default function App() {
                     // --- Content Grid (now visible during load, if !error) ---
                     !error && (
                       <>
-                        {contentType !== 'tv' &&
-                          context.category === null &&
-                          !context.search && (
-                            <ContinueWatching
-                              onClick={handleItemClick}
-                              contentType={contentType}
-                            />
-                          )}
-
                         {/* --- NEW: Render TvChannelList for Mobile/Web TV View --- */}
                         {!isTizen && contentType === 'tv' ? (
                           <div className="relative h-[calc(100vh-100px)] w-full overflow-hidden rounded-xl border border-gray-700 bg-gray-900/50">

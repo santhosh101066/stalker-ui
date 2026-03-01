@@ -20,4 +20,5 @@ export interface SocketContextProps {
         subtitleTrackIndex?: number;
         audioTrackIndex?: number;
     }) => void;
+    refreshReceivers: () => void;
 }

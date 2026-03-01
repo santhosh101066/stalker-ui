@@ -63,6 +63,7 @@ const VideoPlayerContent: React.FC = () => {
         handleWaiting,
         handlePlaying,
         handleError,
+        handleEnded,
         handleVideoClick,
         handleMouseMove,
         toggleChannelList,
@@ -478,7 +479,7 @@ const VideoPlayerContent: React.FC = () => {
                         onWaiting={handleWaiting}
                         onPlaying={handlePlaying}
                         onError={handleError}
-                        onEnded={() => { }}
+                        onEnded={handleEnded}
                         onClick={handleVideoClick}
                         onDoubleClick={toggleFullscreen}
                     >

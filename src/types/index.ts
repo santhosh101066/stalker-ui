@@ -12,6 +12,8 @@ export interface MediaItem {
   cmd?: string;
   number?: number;
   tv_genre_id?: string;
+  series_id?: string;
+  is_continue_watching?: boolean;
   stream_icon?: string;
   num?: string | number;
   stream_id?: string | number;
@@ -43,5 +45,13 @@ export interface ChannelGroup {
   id: string;
   title: string;
 }
+
+export type HistoryState = {
+  context: ContextType;
+  items: MediaItem[];
+  totalItemsCount: number;
+  focusedIndex: number;
+  currentSeriesItem: MediaItem | null;
+};
 
 export * from './video';

@@ -21,6 +21,7 @@ export const SettingsMenu = React.memo(() => {
         isReceiver,
         settingsMenuRef,
         contentType,
+        refreshReceivers,
     } = useVideoContext();
 
     if (!isOpen) return null;
@@ -104,7 +105,10 @@ export const SettingsMenu = React.memo(() => {
                     )}
                     {isVOD && !isReceiver && (
                         <button
-                            onClick={() => onMenuChange('cast')}
+                            onClick={() => {
+                                refreshReceivers();
+                                onMenuChange('cast');
+                            }}
                             className="flex items-center w-full px-4 py-3 hover:bg-gray-800 transition-colors"
                             data-focusable="true"
                         >

@@ -81,10 +81,12 @@ export interface VideoContextState {
     channelGroups?: any[];
     favorites?: string[];
     recentChannels?: string[];
+    initialPlaybackState?: any;
 
     // Cast State
     receivers: any[];
     isReceiver: boolean;
+    refreshReceivers: () => void;
 
     // External Actions
     onBack: () => void;
@@ -147,6 +149,7 @@ export interface VideoContextActions {
     handleWaiting: () => void;
     handlePlaying: () => void;
     handleError: (event: any) => void;
+    handleEnded: () => void;
     handleVideoClick: () => void;
     handleMouseMove: () => void;
     toggleChannelList: () => void;
