@@ -164,7 +164,6 @@ export default function App() {
       newContext: ContextType,
       typeOverride?: 'movie' | 'series' | 'tv'
     ) => {
-      console.log("CONTEXT", newContext);
 
       const currentContentType = typeOverride || contentType;
       setLoading(true);
@@ -319,30 +318,34 @@ export default function App() {
         channelChangeTimer.current = null;
       }
       setPreviewChannel(null);
-      setHistory((prev) => [
-        ...prev,
-        {
-          context,
-          items,
-          totalItemsCount,
-          focusedIndex: focusedIndex ?? 0,
-          currentSeriesItem
-        },
-      ]);
+
+      const pushHistory = () => {
+        setHistory((prev) => [
+          ...prev,
+          {
+            context,
+            items,
+            totalItemsCount,
+            focusedIndex: focusedIndex ?? 0,
+            currentSeriesItem
+          },
+        ]);
+      };
+
       const displayTitle = item.title || item.name || '';
 
       // If this is a Continue Watching item, read saved progress
       let savedResumeTime: number | undefined;
       if (item.is_continue_watching) {
-      try {
-        const raw = localStorage.getItem(`video-in-progress-${item.id}`);
-        if (raw) {
-          const entry = JSON.parse(raw);
-          if (entry.currentTime && entry.currentTime > 2) {
-            savedResumeTime = entry.currentTime;
+        try {
+          const raw = localStorage.getItem(`video-in-progress-${item.id}`);
+          if (raw) {
+            const entry = JSON.parse(raw);
+            if (entry.currentTime && entry.currentTime > 2) {
+              savedResumeTime = entry.currentTime;
+            }
           }
-        }
-      } catch (_) { /* ignore */ }
+        } catch (_) { /* ignore */ }
       }
 
 
@@ -359,27 +362,27 @@ export default function App() {
           else setResumePlaybackState(undefined);
         } else {
           // Stalker: item.id is the episode file id stored at save time
-        setLoading(true);
-        try {
+          setLoading(true);
+          try {
             const urlParams: Record<string, string | number | undefined> = { id: item.id };
-          if (item.series_number !== undefined) urlParams.series = item.series_number;
-          const linkData = await getMovieUrl(urlParams);
-          const cmd = (linkData?.js?.cmd) || (linkData?.cmd);
-          if (typeof cmd === 'string') {
-            setRawStreamUrl(cmd);
-            setStreamUrl(`${BASE_URL}/proxy?url=${btoa(cmd)}`);
-            if (savedResumeTime) setResumePlaybackState({ currentTime: savedResumeTime });
-            else setResumePlaybackState(undefined);
-          } else {
-            throw new Error('Continue Watching: stream URL not found.');
-          }
-        } catch (err) {
-          console.error(err);
-          toast.error('Could not resume playback. Please find it in the library.');
-          setCurrentItem(null);
-          setHistory((prev) => prev.slice(0, -1));
-        } finally {
-          setLoading(false);
+            if (item.series_number !== undefined) urlParams.series = item.series_number;
+            const linkData = await getMovieUrl(urlParams);
+            const cmd = (linkData?.js?.cmd) || (linkData?.cmd);
+            if (typeof cmd === 'string') {
+              setRawStreamUrl(cmd);
+              setStreamUrl(`${BASE_URL}/proxy?url=${btoa(cmd)}`);
+              if (savedResumeTime) setResumePlaybackState({ currentTime: savedResumeTime });
+              else setResumePlaybackState(undefined);
+            } else {
+              throw new Error('Continue Watching: stream URL not found.');
+            }
+          } catch (err) {
+            console.error(err);
+            toast.error('Could not resume playback. Please find it in the library.');
+            setCurrentItem(null);
+            setHistory((prev) => prev.slice(0, -1));
+          } finally {
+            setLoading(false);
           }
         }
         return; // Always skip normal routing for CW items
@@ -392,6 +395,7 @@ export default function App() {
 
       // Resume time for episode — set if is_continue_watching
       if (item.is_series == 1) {
+        pushHistory();
         setCurrentSeriesItem(item);
         setResumePlaybackState(undefined); // series drill-down, not a direct play
 
@@ -402,7 +406,16 @@ export default function App() {
           parentTitle: displayTitle,
           contentType,
         });
+      } else if (!isInsideMovieCategory && contentType === 'movie') {
+        pushHistory();
+        fetchData({
+          ...initialContext,
+          category: item.id.toString(),
+          parentTitle: displayTitle,
+          contentType,
+        });
       } else if (item.is_season) {
+        pushHistory(); // Season drill-down
         fetchData({
           ...initialContext,
           category: context.category,
@@ -556,7 +569,8 @@ export default function App() {
         }
 
         // This is the correct, proxied URL your backend provides
-        const channelUrl = `${URL_PATHS.HOST}/live.m3u8?cmd=${item.cmd}&id=${item.id}&proxy=1`;
+        const baseUrl = URL_PATHS.HOST === '/' ? '' : URL_PATHS.HOST;
+        const channelUrl = `${baseUrl}/live.m3u8?cmd=${item.cmd}&id=${item.id}&proxy=1`;
 
         localStorage.setItem('lastPlayedTvChannelId', item.id);
         setCurrentItem(item);
@@ -687,6 +701,43 @@ export default function App() {
     }
   }, [streamUrl, contentType]);
 
+  // --- Browser History Synchronization (Back Button) ---
+  const handleBackRef = useRef(handleBack);
+  useEffect(() => {
+    handleBackRef.current = handleBack;
+  }, [handleBack]);
+
+  const navDepth = history.length + (streamUrl ? 1 : 0);
+  const prevNavDepth = useRef(navDepth);
+  const ignoreNextPopState = useRef(false);
+
+  useEffect(() => {
+    if (navDepth > prevNavDepth.current) {
+      window.history.pushState({ depth: navDepth }, '');
+    } else if (navDepth < prevNavDepth.current) {
+      const currentState = window.history.state;
+      if (currentState && currentState.depth > navDepth) {
+        ignoreNextPopState.current = true;
+        window.history.back();
+      }
+    }
+    prevNavDepth.current = navDepth;
+  }, [navDepth]);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      if (ignoreNextPopState.current) {
+        ignoreNextPopState.current = false;
+        return;
+      }
+      // Trigger internal back logic
+      handleBackRef.current();
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+  // --- End Browser History Sync ---
+
   const handlePageChange = useCallback(
     (direction: number) => {
       if (direction <= 0) return;
@@ -740,7 +791,7 @@ export default function App() {
         Object.keys(localStorage).forEach((key) => {
           // Clear completed logs
           if (
-            key.startsWith('video-completed-')
+            key.startsWith('video-completed-') || key.startsWith('video-in-progress-')
           ) {
             localStorage.removeItem(key);
           }
@@ -1282,7 +1333,6 @@ export default function App() {
   const currentTitle = streamUrl
     ? 'Now Playing'
     : context.parentTitle || 'Browse';
-  console.log(currentItem);
 
   return (
     <>
@@ -1409,8 +1459,8 @@ export default function App() {
                               channelGroups={channelGroups}
                               onChannelSelect={handleItemClick}
                               onBack={() => {
-                                // Optional: Handle back to exit TV mode or similar
-                                handleContentTypeChange('movie');
+                                // If they hit Back/Close on the inline TV List via touch/mouse
+                                handleBack();
                               }}
                               currentItemId={null} // No current item selected yet in this view
                               showCloseButton={false}

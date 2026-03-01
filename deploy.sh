@@ -1,13 +1,18 @@
 #!/bin/bash
 
 # --- Configuration ---
-# Load environment variables from .env if present
+# Load environment variables from .env if present safely (ignoring comments)
 if [ -f .env ]; then
-  export $(cat .env | xargs)
+  export $(grep -v '^#' .env | xargs)
 fi
 
-# Default Paths (Loaded from .env)
-# TIZEN_DIR and SERVER_DIR should be set in .env
+# Load .env.production variables specifically since this is a build
+if [ -f .env.production ]; then
+  export $(grep -v '^#' .env.production | xargs)
+fi
+
+# Default Paths (Loaded from .env / .env.production)
+# TIZEN_DIR and SERVER_DIR should be set in .env files
 SOURCE_DIR="dist/"
 
 # --- Argument Parsing ---
@@ -21,7 +26,7 @@ if [[ "$1" == "--tizen" ]]; then
     echo "    Dest: $DEST_DIR"
 else
     # Default Mode -> Deploy to Node.js Server with Relative Path
-    API_HOST=""
+    API_HOST="/"
     DEST_DIR="${SERVER_DIR}"
     echo "ℹ️  Mode: Server / Relative Path"
     echo "    Host: (Relative)"
@@ -32,9 +37,9 @@ fi
 echo "Starting consolidated deployment script..."
 echo "Target: $DEST_DIR"
 
-# 1. Build the Vite project
+# 1. Build the Vite project using production mode
 echo "Building Vite project..."
-VITE_API_HOST="$API_HOST" npm run build
+VITE_API_HOST="$API_HOST" npm run build -- --mode production
 
 # Check if the build command was successful
 if [ $? -ne 0 ]; then

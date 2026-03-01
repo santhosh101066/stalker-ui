@@ -2,7 +2,7 @@ export const URL_PATHS = {
   HOST: import.meta.env.VITE_API_HOST || 'http://localhost:3000',
 };
 
-export const BASE_URL = `${URL_PATHS.HOST}/api`;
+export const BASE_URL = URL_PATHS.HOST === '/' ? '/api' : `${URL_PATHS.HOST}/api`;
 
 export interface ApiResponse<T = any> {
   data: T;
@@ -36,7 +36,7 @@ export const api: Api = {
   ): Promise<ApiResponse<T>> => {
     const fullUrl = `${BASE_URL}${path}`;
     const url =
-      URL_PATHS.HOST === ''
+      URL_PATHS.HOST === '' || URL_PATHS.HOST === '/'
         ? new URL(fullUrl, window.location.origin)
         : new URL(fullUrl);
     if (params) {
@@ -72,7 +72,7 @@ export const api: Api = {
   ): Promise<ApiResponse<T>> => {
     const fullUrl = `${BASE_URL}${path}`;
     const url =
-      URL_PATHS.HOST === ''
+      URL_PATHS.HOST === '' || URL_PATHS.HOST === '/'
         ? new URL(fullUrl, window.location.origin)
         : new URL(fullUrl);
     try {
@@ -107,7 +107,7 @@ export const api: Api = {
   ): Promise<ApiResponse<T>> => {
     const fullUrl = `${BASE_URL}${path}`;
     const url =
-      URL_PATHS.HOST === ''
+      URL_PATHS.HOST === '' || URL_PATHS.HOST === '/'
         ? new URL(fullUrl, window.location.origin)
         : new URL(fullUrl);
     try {
@@ -141,7 +141,7 @@ export const api: Api = {
   ): Promise<ApiResponse<T>> => {
     const fullUrl = `${BASE_URL}${path}`;
     const url =
-      URL_PATHS.HOST === ''
+      URL_PATHS.HOST === '' || URL_PATHS.HOST === '/'
         ? new URL(fullUrl, window.location.origin)
         : new URL(fullUrl);
     try {
