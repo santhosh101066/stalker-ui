@@ -32,6 +32,8 @@ type Group = {
 
 const Admin = () => {
   const { socket } = useSocket(); // Use socket
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [passwordInput, setPasswordInput] = useState('');
   const [activeTab, setActiveTab] = useState<'profiles' | 'config' | 'logs'>('profiles'); // Add 'logs'
   const [serverLogs, setServerLogs] = useState<{ level: string; message: string; timestamp: string }[]>([]);
   const logsEndRef = useRef<HTMLDivElement>(null);
@@ -368,39 +370,92 @@ const Admin = () => {
     });
   };
 
+  const handlePasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const response = await api.post('/auth/admin', { password: passwordInput });
+      if (response.data?.success) {
+        setIsAuthenticated(true);
+      }
+    } catch (error: any) {
+      toast.error('Incorrect password');
+      setPasswordInput('');
+    }
+  };
+
+  if (!isAuthenticated) {
+    return (
+      <div className="flex h-[50vh] flex-col items-center justify-center p-4">
+        <div className="w-full max-w-sm rounded-xl border border-gray-700 bg-gray-800 p-6 shadow-xl">
+          <h2 className="mb-6 text-center text-xl font-bold text-white">Admin Access</h2>
+          <form onSubmit={handlePasswordSubmit} className="space-y-4">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-400">Password</label>
+              <input
+                type="password"
+                value={passwordInput}
+                onChange={(e) => setPasswordInput(e.target.value)}
+                className="w-full rounded-lg border border-gray-600 bg-gray-900/50 p-3 text-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                placeholder="Enter admin password"
+                autoFocus
+                data-focusable="true"
+              />
+            </div>
+            <button
+              type="submit"
+              className="w-full rounded-lg bg-blue-600 py-3 font-bold text-white transition-colors hover:bg-blue-500"
+              data-focusable="true"
+            >
+              Login
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto mt-2 mb-6 max-w-7xl px-2 sm:px-4">
       {/* Tab Navigation */}
-      <div className="mb-6 flex border-b border-gray-700">
+      <div className="mb-6 flex border-b border-gray-700 items-center justify-between">
+        <div className="flex">
+          <button
+            onClick={() => setActiveTab('profiles')}
+            className={`px-2 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm font-bold transition-colors ${activeTab === 'profiles'
+              ? 'border-b-2 border-blue-500 text-blue-400'
+              : 'text-gray-400 hover:text-white'
+              }`}
+            data-focusable="true"
+          >
+            Profiles
+          </button>
+          <button
+            onClick={() => setActiveTab('config')}
+            className={`px-2 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm font-bold transition-colors ${activeTab === 'config'
+              ? 'border-b-2 border-blue-500 text-blue-400'
+              : 'text-gray-400 hover:text-white'
+              }`}
+            data-focusable="true"
+          >
+            Current Configuration
+          </button>
+          <button
+            onClick={() => setActiveTab('logs')}
+            className={`px-2 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm font-bold transition-colors ${activeTab === 'logs'
+              ? 'border-b-2 border-blue-500 text-blue-400'
+              : 'text-gray-400 hover:text-white'
+              }`}
+            data-focusable="true"
+          >
+            Server Logs
+          </button>
+        </div>
         <button
-          onClick={() => setActiveTab('profiles')}
-          className={`px-2 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm font-bold transition-colors ${activeTab === 'profiles'
-            ? 'border-b-2 border-blue-500 text-blue-400'
-            : 'text-gray-400 hover:text-white'
-            }`}
+          onClick={handleClearWatched}
           data-focusable="true"
+          className="rounded-lg bg-red-900/30 text-red-400 px-3 py-1.5 text-xs font-bold hover:bg-red-900/50"
         >
-          Profiles
-        </button>
-        <button
-          onClick={() => setActiveTab('config')}
-          className={`px-2 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm font-bold transition-colors ${activeTab === 'config'
-            ? 'border-b-2 border-blue-500 text-blue-400'
-            : 'text-gray-400 hover:text-white'
-            }`}
-          data-focusable="true"
-        >
-          Current Configuration
-        </button>
-        <button
-          onClick={() => setActiveTab('logs')}
-          className={`px-2 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm font-bold transition-colors ${activeTab === 'logs'
-            ? 'border-b-2 border-blue-500 text-blue-400'
-            : 'text-gray-400 hover:text-white'
-            }`}
-          data-focusable="true"
-        >
-          Server Logs
+          Clear History
         </button>
       </div>
 
@@ -727,7 +782,6 @@ const Admin = () => {
                     {loadingSeries && <div className="h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent"></div>}
                     Refresh Series
                   </button>
-                  <button type="button" onClick={handleClearWatched} data-focusable="true" className="rounded-lg bg-red-900/30 text-red-400 px-3 py-2 text-xs font-bold hover:bg-red-900/50">Clear History</button>
                   <button type="button" data-focusable="true" onClick={async () => {
                     try {
                       const { getExpiry } = await import('@/services/services');

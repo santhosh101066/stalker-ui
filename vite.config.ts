@@ -11,7 +11,24 @@ export default defineConfig({
       registerType: 'autoUpdate',
       injectRegister: 'auto',
       workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg}']
+        globPatterns: ['**/*.{ico,png,svg}'],
+        cleanupOutdatedCaches: true,
+        runtimeCaching: [
+          {
+            urlPattern: () => true, // Ella request-kum network-a check pannu
+            handler: 'NetworkFirst', // Network irunthaa fresh content-a edu
+            options: {
+              cacheName: 'api-cache',
+              expiration: {
+                maxEntries: 0, // Cache-la ethuvum store pannaatha
+                maxAgeSeconds: 0,
+              },
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          },
+        ],
       },
       manifest: {
         name: 'Stalker VOD',

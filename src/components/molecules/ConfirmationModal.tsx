@@ -32,10 +32,14 @@ const ConfirmationModal: React.FC<ConfirmationModalProps & {
 }) => {
         if (!isOpen) return null;
 
-        // Handle Enter key for submission
+        // Handle Enter key for submission (only if in input) or Escape to cancel
         const handleKeyDown = (e: React.KeyboardEvent) => {
             if (e.key === 'Enter') {
-                onConfirm();
+                // Only auto-confirm on Enter if they are focused on the input field
+                // Otherwise let the natural button focus 'onClick' take over
+                if (showInput && (e.target as HTMLElement).tagName === 'INPUT') {
+                    onConfirm();
+                }
             } else if (e.key === 'Escape') {
                 onCancel();
             }

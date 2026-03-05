@@ -815,8 +815,13 @@ export default function App() {
   useEffect(() => {
     if (streamUrl) return; // Do not manage focus from App.tsx when video player is active
     if (isTizen && isSearchActive) return;
+    let queryStr = '[data-focusable="true"]';
+    if (confirmModal.isOpen) {
+      queryStr = '[role="dialog"] [data-focusable="true"]';
+    }
+
     const focusable = Array.from(
-      document.querySelectorAll('[data-focusable="true"]')
+      document.querySelectorAll(queryStr)
     ) as HTMLElement[];
     if (focusable.length === 0) return;
 
@@ -838,7 +843,7 @@ export default function App() {
         el.classList.remove('focused');
       }
     });
-  }, [focusedIndex, isSearchActive, isTizen, items, showAdmin, streamUrl]);
+  }, [focusedIndex, isSearchActive, isTizen, items, showAdmin, streamUrl, confirmModal.isOpen]);
 
   const checkAndFetchNextPage = useCallback(
     (newIndex: number, totalItems: number) => {
@@ -1114,8 +1119,13 @@ export default function App() {
         // But since we will set readOnly={!isSearchTyping}, we don't need to preventDefault all.
       }
 
+      let queryStr = '[data-focusable="true"]';
+      if (confirmModal.isOpen) {
+        queryStr = '[role="dialog"] [data-focusable="true"]';
+      }
+
       const focusable = Array.from(
-        document.querySelectorAll('[data-focusable="true"]')
+        document.querySelectorAll(queryStr)
       ) as HTMLElement[];
       if (focusable.length === 0) return;
 
@@ -1268,12 +1278,11 @@ export default function App() {
     handlePageChange,
     checkAndFetchNextPage,
     handleClearWatched,
-    checkAndFetchNextPage,
-    handleClearWatched,
     handleContentTypeChange,
     cycleSort,
     isSearchTyping,
     handleSearch,
+    confirmModal.isOpen,
   ]);
 
 
