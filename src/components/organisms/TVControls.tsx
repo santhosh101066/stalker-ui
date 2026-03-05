@@ -48,6 +48,7 @@ export const TVControls = React.memo(() => {
         isFullscreen,
         refreshReceivers,
     } = useVideoContext();
+     const baseUrl = URL_PATHS.HOST === '/' ? '' : URL_PATHS.HOST;
 
     return (
         <div className="pointer-events-auto absolute bottom-1 left-1 right-1 p-1 text-white md:bottom-4 md:left-4 md:right-4 md:p-2.5">
@@ -60,7 +61,7 @@ export const TVControls = React.memo(() => {
                                 src={
                                     (previewChannelInfo || channelInfo)!.screenshot_uri?.startsWith('http')
                                         ? (previewChannelInfo || channelInfo)!.screenshot_uri
-                                        : `${URL_PATHS.HOST}/api/images${(previewChannelInfo || channelInfo)!.screenshot_uri}`
+                                        : `${baseUrl}/api/images${(previewChannelInfo || channelInfo)!.screenshot_uri}`
                                 }
                                 alt={(previewChannelInfo || channelInfo)!.name}
                                 className="mr-1.5 h-4 w-6 flex-shrink-0 rounded-sm bg-black object-contain p-px md:mr-3 md:h-10 md:w-12"

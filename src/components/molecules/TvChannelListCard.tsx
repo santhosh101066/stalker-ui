@@ -14,15 +14,16 @@ const TvChannelListCard: React.FC<TvChannelListCardProps> = ({
   isFocused,
 }) => {
   const displayTitle = item.name || item.title || 'Unknown Channel';
+  const baseUrl = URL_PATHS.HOST === '/' ? '' : URL_PATHS.HOST;
   const imageUrl = item.screenshot_uri
     ? item.screenshot_uri.startsWith('http')
       ? item.screenshot_uri
-      : `${URL_PATHS.HOST}/api/images${item.screenshot_uri}`
+      : `${baseUrl}/api/images${item.screenshot_uri}`
     : null;
 
   return (
     <div
-      className={`group flex items-center py-1.5 px-2 sm:py-2 sm:px-3 my-0.5 transition-all duration-200 rounded-lg cursor-pointer ${isFocused
+      className={`group flex items-center py-1.5 px-2 sm:py-2 sm:px-3 my-0.5 rounded-lg cursor-pointer ${isFocused
         ? 'bg-blue-600/80 shadow-md shadow-blue-900/30 scale-[1.01] border border-blue-400/50 z-10' // Solid blue + scale + shadow when focused on TV
         : 'bg-transparent hover:bg-white/10 hover:scale-[1.01] border border-transparent' // Transparent, with a slight highlight and scale on hover desktop
         }`}

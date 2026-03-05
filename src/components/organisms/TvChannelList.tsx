@@ -223,29 +223,63 @@ const TvChannelList = forwardRef<TvChannelListRef, TvChannelListProps>(({
     handleKeyDown
   }), [handleKeyDown]);
 
-  // Scroll groups
   useEffect(() => {
+  const timer = setTimeout(() => {
     if (groupListRef.current) {
-      const focusedItem = groupListRef.current.children[
-        focusedGroupIndex
-      ] as HTMLElement;
+      // Data-focusable attribute irukkura elements-ah correct-ah fetch panrom
+      const items = groupListRef.current.querySelectorAll('[data-focusable="true"]');
+      const focusedItem = items[focusedGroupIndex] as HTMLElement;
+      
       if (focusedItem) {
-        focusedItem.scrollIntoView({ behavior: 'instant', block: 'nearest' });
+        // Tizen-ku 'instant' thaan correct, 'center' block focus-ah munnadi kondivarum
+        focusedItem.scrollIntoView({ behavior: 'instant', block: 'center' });
       }
     }
-  }, [focusedGroupIndex]);
+  }, 10); // Very low delay for faster response
+  return () => clearTimeout(timer);
+}, [focusedGroupIndex, focusedColumn]);
 
-  // Scroll channels
-  useEffect(() => {
+// Scroll channels - Tizen compatible
+useEffect(() => {
+  const timer = setTimeout(() => {
     if (channelListRef.current) {
-      const focusedItem = channelListRef.current.children[
-        focusedChannelIndex
-      ] as HTMLElement;
+      // Card selection logic-ah double check pannunga
+      const items = channelListRef.current.querySelectorAll('[data-focusable="true"]');
+      const focusedItem = items[focusedChannelIndex] as HTMLElement;
+      
       if (focusedItem) {
-        focusedItem.scrollIntoView({ behavior: 'instant', block: 'nearest' });
+        focusedItem.scrollIntoView({ 
+          behavior: 'instant', 
+          block: 'center' 
+        });
       }
     }
-  }, [focusedChannelIndex, filteredChannels]); // Add filteredChannels as dependency
+  }, 10);
+  return () => clearTimeout(timer);
+}, [focusedChannelIndex, filteredChannels, focusedColumn]);
+  // Scroll groups
+  // useEffect(() => {
+  //   if (groupListRef.current) {
+  //     const focusedItem = groupListRef.current.children[
+  //       focusedGroupIndex
+  //     ] as HTMLElement;
+  //     if (focusedItem) {
+  //       focusedItem.scrollIntoView({ behavior: 'instant', block: 'center' });
+  //     }
+  //   }
+  // }, [focusedGroupIndex]);
+
+  // // Scroll channels
+  // useEffect(() => {
+  //   if (channelListRef.current) {
+  //     const focusedItem = channelListRef.current.children[
+  //       focusedChannelIndex
+  //     ] as HTMLElement;
+  //     if (focusedItem) {
+  //       focusedItem.scrollIntoView({ behavior: 'instant', block: 'center' });
+  //     }
+  //   }
+  // }, [focusedChannelIndex, filteredChannels]); // Add filteredChannels as dependency
 
   return (
     <div

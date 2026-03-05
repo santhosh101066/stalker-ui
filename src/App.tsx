@@ -1329,6 +1329,27 @@ export default function App() {
     };
   }, [contentType, handlePageChange]);
 
+  // --- NEW: Auto-fetch next page if content doesn't fill the screen ---
+  useEffect(() => {
+    // Don't run this logic on Tizen
+    const isTizen = !!(window as any).tizen;
+    if (isTizen || contentType === 'tv' || loading || isFetchingMore.current) return;
+
+    // Make sure we have items but haven't fetched all of them
+    if (items.length === 0 || (totalItemsCount > 0 && items.length >= totalItemsCount)) return;
+
+    // Use a small timeout to allow the browser to render the current items and update layout.
+    const timer = setTimeout(() => {
+      // If the entire page content is shorter than or equal to the window height + a small buffer (e.g. 50px),
+      // there is no scrollbar (or barely one), so the user cannot scroll to fetch more.
+      if (document.documentElement.scrollHeight <= window.innerHeight + 50) {
+        handlePageChange(1);
+      }
+    }, 100);
+
+    return () => clearTimeout(timer);
+  }, [items, loading, contentType, totalItemsCount, handlePageChange]);
+
   const isEpisodeList = items && items.length > 0 && items[0].is_episode;
   const currentTitle = streamUrl
     ? 'Now Playing'

@@ -12,13 +12,14 @@ const EpisodeCard: React.FC<EpisodeCardProps> = ({ item, onClick }) => {
   const [isCompleted, setIsCompleted] = useState(false);
 
   const displayTitle = item.title || item.name;
+  const baseUrl = URL_PATHS.HOST === '/' ? '' : URL_PATHS.HOST;
   const initials = displayTitle
     ? displayTitle.substring(0, 2).toUpperCase()
     : '??';
   const imageUrl = item.screenshot_uri
     ? item.screenshot_uri.startsWith('http')
       ? item.screenshot_uri
-      : `${URL_PATHS.HOST}/api/images${item.screenshot_uri}`
+      : `${baseUrl}/api/images${item.screenshot_uri}`
     : null;
 
   useEffect(() => {
