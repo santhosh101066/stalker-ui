@@ -644,6 +644,7 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
     }, [retryCount, contentType]);
 
     // Save progress helper
+    // Save progress helper (Original format)
     const saveProgress = useCallback(() => {
         if (contentType === 'tv') return;
         const player = playerRef.current;
@@ -660,7 +661,11 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
             return;
         }
 
+        // Exact original target ID logic
+        const targetKeyId = itemId && itemId !== mediaId ? itemId : mediaId;
+
         const progressData = {
+            id: targetKeyId, // App.tsx safe-a read panna ithu mattum irukkattum
             mediaId,
             itemId,
             type: contentType,
@@ -669,7 +674,7 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
             episodeTitle: item?.name || item?.title || '',
             screenshot_uri: seriesItem?.screenshot_uri || item?.screenshot_uri || '',
             is_series: seriesItem ? 1 : 0,
-            cmd: item?.cmd || '',
+            cmd: item?.cmd || rawStreamUrl || '', 
             series_number: item?.series_number,
             currentTime: time,
             duration: currentDur,
@@ -677,14 +682,15 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
             timestamp: Date.now(),
         };
 
-        const key = `video-in-progress-${itemId && itemId !== mediaId ? itemId : mediaId}`;
+        const key = `video-in-progress-${targetKeyId}`;
         localStorage.setItem(key, JSON.stringify(progressData));
-        // Also store under mediaId for lookup by series/movie id
+        // Also store under mediaId for lookup by series/movie id (Unga original logic)
         if (mediaId) {
             localStorage.setItem(`video-in-progress-${mediaId}`, JSON.stringify(progressData));
         }
+        
         lastSavedTime.current = time;
-    }, [contentType, mediaId, itemId, item, seriesItem, duration]);
+    }, [contentType, mediaId, itemId, item, seriesItem, duration, rawStreamUrl]);
 
     const handleEnded = useCallback(() => {
         // Remove in-progress entry

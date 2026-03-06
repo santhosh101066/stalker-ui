@@ -11,22 +11,24 @@ export default defineConfig({
       registerType: 'autoUpdate',
       injectRegister: 'auto',
       workbox: {
-        globPatterns: ['**/*.{ico,png,svg}'],
+        // App-oda UI files (js, css, html, images) mattum cache pannu
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         cleanupOutdatedCaches: true,
+        // API & Media paths-a service worker bypass pannida sollurom
+        navigateFallbackDenylist: [/^\/api/, /^\/proxy/, /^\/live\.m3u8/, /^\/player/],
         runtimeCaching: [
           {
-            urlPattern: () => true, // Ella request-kum network-a check pannu
-            handler: 'NetworkFirst', // Network irunthaa fresh content-a edu
-            options: {
-              cacheName: 'api-cache',
-              expiration: {
-                maxEntries: 0, // Cache-la ethuvum store pannaatha
-                maxAgeSeconds: 0,
-              },
-              cacheableResponse: {
-                statuses: [0, 200],
-              },
+            // Intha URL path lam vantha Cache pakkame poga koodathu, direct Network thaan!
+            urlPattern: ({ url }) => {
+              return (
+                url.pathname.startsWith('/api') ||
+                url.pathname.startsWith('/proxy') ||
+                url.pathname.startsWith('/player') ||
+                url.pathname.includes('.m3u8') ||
+                url.pathname.includes('.ts')
+              );
             },
+            handler: 'NetworkOnly', // Network iruntha mattum thaan work aaganum, cache theva illa
           },
         ],
       },
@@ -87,7 +89,6 @@ export default defineConfig({
         target: 'http://localhost:3000',
         changeOrigin: true,
       },
-
     },
   },
 });

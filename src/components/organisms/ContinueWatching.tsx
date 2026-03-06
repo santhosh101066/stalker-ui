@@ -5,14 +5,14 @@ import type { MediaItem } from '@/types';
 
 interface ContinueWatchingProps {
   onClick: (item: MediaItem) => void;
-  /** Refresh trigger — pass a counter that increments to force the list to reload */
   refreshKey?: number;
 }
 
 interface ProgressEntry {
+  id?: string; // ID fix kaga ithu mattum add aagirukku
   mediaId: string;
   itemId?: string;
-  type: string;   // keep as string so 'tv' guard compiles without overlap error
+  type: string;
   title: string;
   name?: string;
   episodeTitle?: string;
@@ -37,7 +37,6 @@ const ContinueWatching: React.FC<ContinueWatchingProps> = ({ onClick, refreshKey
     const items: MediaItem[] = [];
     const addedIds = new Set<string>();
 
-    // Sort by most recently watched
     const sortedKeys = inProgressKeys.sort((a, b) => {
       const dataA = JSON.parse(localStorage.getItem(a) || '{}');
       const dataB = JSON.parse(localStorage.getItem(b) || '{}');
@@ -50,34 +49,30 @@ const ContinueWatching: React.FC<ContinueWatchingProps> = ({ onClick, refreshKey
       try {
         const entry: ProgressEntry = JSON.parse(raw);
 
-        // Skip TV items
         if (entry.type === 'tv') continue;
 
-        // Determine the display id: series episode uses itemId, movie uses mediaId
-        const displayId = entry.itemId && entry.itemId !== entry.mediaId
-          ? entry.itemId
-          : entry.mediaId;
+        // ID problem varama irukka intha line mattum update aagirukku
+        const displayId = entry.id || entry.itemId || entry.mediaId;
 
-        if (!displayId || addedIds.has(displayId)) continue;
-
-        // Skip if also marked as completed
+        if (!displayId || addedIds.has(displayId.toString())) continue;
         if (localStorage.getItem(`video-completed-${displayId}`)) continue;
 
         const isSeries = (entry.is_series ?? 0) === 1;
 
         items.push({
-          id: displayId,
-          // series_id helps handleItemClick recognise it as a series episode
+          id: displayId.toString(),
           series_id: isSeries ? entry.mediaId : undefined,
+          // Pazhaiya title & name logic apdiye irukku
           title: isSeries
             ? `${entry.title}${entry.episodeTitle ? ' – ' + entry.episodeTitle : ''}`
             : entry.title,
           name: isSeries
             ? `${entry.name || entry.title}${entry.episodeTitle ? ' – ' + entry.episodeTitle : ''}`
             : (entry.name || entry.title),
+          // Pazhaiya screenshot_uri apdiye irukku
           screenshot_uri: entry.screenshot_uri,
-          // Reconstruct flags so handleItemClick routes correctly
-          is_series: 0,         // Don't drill into series list again
+          
+          is_series: 0,
           is_season: 0,
           is_episode: isSeries ? 1 : 0,
           is_playable_movie: !isSeries,
@@ -86,7 +81,7 @@ const ContinueWatching: React.FC<ContinueWatchingProps> = ({ onClick, refreshKey
           series_number: entry.series_number,
           progressPercent: entry.progressPercent,
         });
-        addedIds.add(displayId);
+        addedIds.add(displayId.toString());
       } catch (err) {
         console.error(`Failed to parse CW entry for key ${key}`, err);
       }
@@ -98,17 +93,14 @@ const ContinueWatching: React.FC<ContinueWatchingProps> = ({ onClick, refreshKey
     loadItems();
   }, [loadItems, refreshKey]);
 
-  const handleDismiss = useCallback((e: React.MouseEvent, itemId: string) => {
+  const handleDismiss = useCallback((e: React.MouseEvent, targetId: string) => {
     e.stopPropagation();
-    // Remove all keys for this item
-    localStorage.removeItem(`video-in-progress-${itemId}`);
-    // Also try to remove the mediaId key (they can differ for series)
-    // Scan all CW keys to find any that reference this itemId
+    localStorage.removeItem(`video-in-progress-${targetId}`);
     Object.keys(localStorage).forEach((key) => {
       if (key.startsWith('video-in-progress-')) {
         try {
           const entry: ProgressEntry = JSON.parse(localStorage.getItem(key) || '{}');
-          if (entry.itemId === itemId || entry.mediaId === itemId) {
+          if (entry.id === targetId || entry.itemId === targetId || entry.mediaId === targetId) {
             localStorage.removeItem(key);
           }
         } catch (_) { /* ignore */ }
@@ -126,14 +118,14 @@ const ContinueWatching: React.FC<ContinueWatchingProps> = ({ onClick, refreshKey
       <h2 className="mb-4 text-xl font-bold text-white sm:text-2xl">Continue Watching</h2>
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 md:gap-6 lg:grid-cols-5 xl:grid-cols-6">
         {inProgressItems.map((item) => (
-          <div key={item.id} className="relative">
-            {/* Dismiss button */}
+          <div key={item.id} className="relative group">
             <button
               className="absolute right-1 top-1 z-20 flex h-6 w-6 items-center justify-center rounded-full bg-black/70 text-white opacity-0 transition-opacity duration-200 hover:bg-red-600 group-hover:opacity-100 focus:opacity-100"
               style={{ lineHeight: 1 }}
               onClick={(e) => handleDismiss(e, item.id)}
               title="Remove from Continue Watching"
               aria-label="Remove"
+              data-focusable="true"
             >
               ×
             </button>
