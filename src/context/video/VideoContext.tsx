@@ -606,7 +606,6 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
         if (Number.isFinite(newDuration) && newDuration > 0) {
             setDuration(newDuration);
         }
-        console.log(newDuration);
 
     }, [playerRef]);
 
