@@ -14,21 +14,36 @@ export default defineConfig({
         // App-oda UI files (js, css, html, images) mattum cache pannu
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         cleanupOutdatedCaches: true,
+        skipWaiting: true,
+        clientsClaim: true,
         // API & Media paths-a service worker bypass pannida sollurom
         navigateFallbackDenylist: [/^\/api/, /^\/proxy/, /^\/live\.m3u8/, /^\/player/],
         runtimeCaching: [
           {
-            // Intha URL path lam vantha Cache pakkame poga koodathu, direct Network thaan!
+            // Strict Network Only for everything except UI assets
             urlPattern: ({ url }) => {
               return (
                 url.pathname.startsWith('/api') ||
                 url.pathname.startsWith('/proxy') ||
                 url.pathname.startsWith('/player') ||
                 url.pathname.includes('.m3u8') ||
-                url.pathname.includes('.ts')
+                url.pathname.includes('.ts') ||
+                url.pathname.includes('.mp4') // Added mp4 safety
               );
             },
-            handler: 'NetworkOnly', // Network iruntha mattum thaan work aaganum, cache theva illa
+            handler: 'NetworkOnly', 
+          },
+          {
+            // For other assets, use NetworkFirst so it always checks for new versions
+            urlPattern: ({ request }) => request.destination === 'script' || request.destination === 'style',
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'assets-cache',
+              expiration: {
+                maxEntries: 0,
+                maxAgeSeconds: 0,
+              },
+            },
           },
         ],
       },

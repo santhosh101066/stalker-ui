@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import React, { useEffect } from 'react';
-import { MediaPlayer, MediaProvider } from '@vidstack/react';
+import React, { useEffect, useMemo } from 'react';
+import { MediaPlayer, MediaProvider, type PlayerSrc } from '@vidstack/react';
 import '@vidstack/react/player/styles/base.css';
 
 import TvChannelList, { type TvChannelListRef } from '@/components/organisms/TvChannelList';
@@ -25,6 +25,7 @@ const VideoPlayerContent: React.FC = () => {
         controlsVisible,
         cursorVisible,
         isBuffering,
+        useProxy,
         focusedIndex,
         showChannelList,
         seekOverlay,
@@ -372,6 +373,24 @@ const VideoPlayerContent: React.FC = () => {
         });
     }, [focusedIndex, isSettingsMenuOpen, activeSettingsMenu, showChannelList]);
 
+    const videoSrc = useMemo<PlayerSrc>(() => {
+        // 1. Calculate active URL
+        const activeUrl = (useProxy ? (streamUrl || rawStreamUrl) : (rawStreamUrl || streamUrl)) || '';
+
+        if (!activeUrl) return '';
+
+        // 2. Identify if it's HLS
+        const isHls = activeUrl.toLowerCase().includes('m3u8');
+
+        // 🎯 Use the exact structure Vidstack expects for an object source
+        return {
+            src: activeUrl,
+            type: isHls ? 'application/x-mpegurl' : 'video/mp4',
+        } as PlayerSrc; // <--- This 'as' cast is the magic fix for TS
+    }, [useProxy, streamUrl, rawStreamUrl]);
+
+
+
     return (
         <div
             className="h-[100dvh] w-full bg-black"
@@ -449,42 +468,36 @@ const VideoPlayerContent: React.FC = () => {
                             </div>
                         </div>
                     </div>
-                ) : (
-                    <MediaPlayer
-                        key={reloadTrigger}
-                        className="h-full w-full media-provider"
-                        title={item?.title || seriesItem?.title || channelInfo?.name || 'Video'}
-                        src={
-                            (() => {
-                                const url = (streamUrl ?? rawStreamUrl) || '';
-                                const isHls = url.includes('.m3u8') || url.includes('m3u8');
-                                return isHls ? { src: url, type: 'application/x-mpegurl' } : url;
-                            })()
-                        }
-                        viewType="video"
-                        streamType={contentType === 'tv' ? 'live' : 'on-demand'}
-                        logLevel="warn"
-                        crossOrigin
-                        playsInline
-                        autoplay
-                        load="eager"
-                        ref={playerRef}
-                        onProviderChange={onProviderChange}
-                        onCanPlay={handleCanPlay}
-                        onTimeUpdate={handleTimeUpdate}
-                        onDurationChange={handleDurationChange}
-                        onPlay={handlePlay}
-                        onPause={handlePause}
-                        onVolumeChange={handlePlayerVolumeChange}
-                        onWaiting={handleWaiting}
-                        onPlaying={handlePlaying}
-                        onError={handleError}
-                        onEnded={handleEnded}
-                        onClick={handleVideoClick}
-                        onDoubleClick={toggleFullscreen}
-                    >
-                        <MediaProvider />
-                    </MediaPlayer>
+                ) : (<MediaPlayer key={`${reloadTrigger}-${useProxy ? 'proxied' : 'direct'}`}
+                    className="h-full w-full media-provider"
+                    title={item?.title || seriesItem?.title || channelInfo?.name || 'Video'}
+                    src={videoSrc}
+                    viewType="video"
+                    streamType={contentType === 'tv' ? 'live' : 'on-demand'}
+                    logLevel="warn"
+                    crossOrigin
+                    playsInline
+                    autoplay
+                    load="eager"
+                    ref={playerRef}
+                    onProviderChange={onProviderChange}
+                    onCanPlay={handleCanPlay}
+                    onTimeUpdate={handleTimeUpdate}
+                    onDurationChange={(e) => {
+                        handleDurationChange(e); console.log(e);
+                    }}
+                    onPlay={handlePlay}
+                    onPause={handlePause}
+                    onVolumeChange={handlePlayerVolumeChange}
+                    onWaiting={handleWaiting}
+                    onPlaying={handlePlaying}
+                    onError={handleError}
+                    onEnded={handleEnded}
+                    onClick={handleVideoClick}
+                    onDoubleClick={toggleFullscreen}
+                >
+                    <MediaProvider />
+                </MediaPlayer>
                 )}
 
                 {previewChannelInfo && (
@@ -517,7 +530,7 @@ const VideoPlayerContent: React.FC = () => {
                     )}
                 </div>
             </div>
-        </div>
+        </div >
     );
 };
 

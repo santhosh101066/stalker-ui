@@ -4,7 +4,7 @@ import { useVideoContext } from '@/context/video';
 export const BufferingOverlay = React.memo(() => {
     const { isBuffering, isRecovering } = useVideoContext();
 
-    if (!isBuffering || isRecovering) return null;
+    if (!isBuffering ) return null;
 
     return (
         <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">

@@ -13,6 +13,8 @@ export interface VideoPlayerProps {
     rawStreamUrl: string | null;
     onBack: () => void;
     itemId: string | null;
+    seasonId?: string | null;
+    categoryId?: string | null;
     context: ContextType;
     contentType: 'movie' | 'series' | 'tv';
     mediaId: string | null;

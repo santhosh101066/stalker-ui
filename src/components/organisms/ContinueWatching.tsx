@@ -62,6 +62,7 @@ const ContinueWatching: React.FC<ContinueWatchingProps> = ({ onClick, refreshKey
         items.push({
           id: displayId.toString(),
           series_id: isSeries ? entry.mediaId : undefined,
+          season_id: isSeries ? (entry as any).seasonId || undefined : undefined,
           // Pazhaiya title & name logic apdiye irukku
           title: isSeries
             ? `${entry.title}${entry.episodeTitle ? ' – ' + entry.episodeTitle : ''}`
@@ -71,7 +72,7 @@ const ContinueWatching: React.FC<ContinueWatchingProps> = ({ onClick, refreshKey
             : (entry.name || entry.title),
           // Pazhaiya screenshot_uri apdiye irukku
           screenshot_uri: entry.screenshot_uri,
-          
+
           is_series: 0,
           is_season: 0,
           is_episode: isSeries ? 1 : 0,
@@ -80,7 +81,14 @@ const ContinueWatching: React.FC<ContinueWatchingProps> = ({ onClick, refreshKey
           cmd: entry.cmd,
           series_number: entry.series_number,
           progressPercent: entry.progressPercent,
-        });
+          // Carry the exact file ID used for getMovieUrl so CW resume plays the correct video
+          playbackFileId: (entry as any).playbackFileId || entry.itemId || entry.mediaId,
+          // Preserve original contentType and category for correct back-nav context in movie-section series
+          cw_content_type: entry.type,
+          cw_category_id: (entry as any).categoryId || null,
+          // Episode card ID: used to re-fetch the episode file during CW resume (avoids stale file IDs)
+          cw_episode_card_id: (entry as any).episodeCardId || entry.itemId || null,
+        } as any);
         addedIds.add(displayId.toString());
       } catch (err) {
         console.error(`Failed to parse CW entry for key ${key}`, err);

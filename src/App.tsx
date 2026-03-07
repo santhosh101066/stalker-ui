@@ -48,7 +48,9 @@ export default function App() {
     addToRecentChannels,
     playLastTvChannel,
     setPlayLastTvChannel,
-    setLoading
+    setLoading,
+    setItems,
+    setContext
   } = useMediaLibrary();
 
   // Hook 2: Manages navigation history, Back button, and Stream URLs
@@ -66,8 +68,18 @@ export default function App() {
     handleNextChannel,
     handlePrevChannel,
     playCastedMedia
-  } = useAppNavigation(context, items, contentType, fetchData, isPortal, addToRecentChannels, playLastTvChannel,
-    setPlayLastTvChannel);
+  } = useAppNavigation(
+    context,
+    items,
+    contentType,
+    fetchData,
+    isPortal,
+    addToRecentChannels,
+    playLastTvChannel,
+    setPlayLastTvChannel,
+    setItems,
+    setContext
+  );
 
   const onClearWatched = () => handleClearWatched(setConfirmModal);
   // Hook 3: Handles Tizen/Web Keyboard spatial focus logic
@@ -103,9 +115,11 @@ export default function App() {
           rawStreamUrl={rawStreamUrl}
           onBack={closePlayer}
           itemId={currentItem?.id || null}
+          seasonId={context.seasonId}
+          categoryId={context.category}
           context={context}
           contentType={contentType}
-          mediaId={contentType === 'series' ? context.movieId : contentType === 'movie' && currentItem ? currentItem.id : null}
+          mediaId={context.movieId ?? (contentType === 'movie' && currentItem ? currentItem.id : null)}
           item={currentItem}
           seriesItem={currentSeriesItem}
           channels={contentType === 'tv' ? items : undefined}

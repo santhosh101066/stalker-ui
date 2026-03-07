@@ -13,6 +13,7 @@ export interface MediaItem {
   number?: number;
   tv_genre_id?: string;
   series_id?: string;
+  season_id?: string;
   is_continue_watching?: boolean;
   stream_icon?: string;
   num?: string | number;

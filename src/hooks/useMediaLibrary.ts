@@ -266,6 +266,7 @@ export function useMediaLibrary() {
         context, items, loading, error, paginationError, totalItemsCount, contentType,
         epgData, channelGroups, favorites, recentChannels, isPortal, cwRefreshKey,
         fetchData, handlePageChange, toggleFavorite, handleContentTypeChange, cycleSort,
-        handleSearch, handleClearWatched, setCwRefreshKey, addToRecentChannels, playLastTvChannel, setPlayLastTvChannel, setLoading
+        handleSearch, handleClearWatched, setCwRefreshKey, addToRecentChannels, playLastTvChannel, setPlayLastTvChannel, setLoading,
+        setItems, setContext
     };
 }

@@ -15,6 +15,8 @@ interface VideoProviderProps {
     streamUrl?: string | null;
     rawStreamUrl?: string | null;
     itemId?: string | null;
+    seasonId?: string | null;
+    categoryId?: string | null;
     contentType: 'movie' | 'series' | 'tv';
     mediaId?: string | null;
     item?: any;
@@ -49,6 +51,8 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
     item,
     seriesItem,
     itemId,
+    seasonId,
+    categoryId,
     channelInfo,
     previewChannelInfo,
     epgData,
@@ -103,6 +107,13 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [isBuffering, setIsBuffering] = useState(false);
     const [useProxy, setUseProxy] = useState(isTizenDevice() ? false : true);
+
+    // Recovery / Reload state
+    const [retryCount, setRetryCount] = useState(0);
+    const [reloadTrigger, setReloadTrigger] = useState(0);
+    const [isRecovering, setIsRecovering] = useState(false);
+    const [seekOffset] = useState(0);
+
     const [hoverTime, setHoverTime] = useState(0);
     const [hoverPosition, setHoverPosition] = useState(0);
     const [isTooltipVisible, setIsTooltipVisible] = useState(false);
@@ -132,12 +143,6 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
     const [nextProgram, setNextProgram] = useState<any | null>(null);
     const [programProgress, setProgramProgress] = useState(0);
     const [liveTime, setLiveTime] = useState('');
-
-    // Recovery state
-    const [retryCount, setRetryCount] = useState(0);
-    const [reloadTrigger, setReloadTrigger] = useState(0);
-    const [isRecovering, setIsRecovering] = useState(false);
-    const [seekOffset] = useState(0);
 
     const isFavorite = channelInfo ? favorites.includes(channelInfo.id) : false;
     const showSettingsButton =
@@ -539,11 +544,33 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
         const dur = playerRef.current?.state?.duration ?? playerRef.current?.duration ?? duration;
 
         setCurrentTime(time);
+        if (Number.isFinite(dur) && dur > 0 && dur !== duration) {
+            setDuration(dur);
+        }
 
-        // 1. Restore Logic (Existing)
-        if (initialPlaybackState && !hasRestoredProgress.current && time >= 1) {
+        // 1. Restore Logic (Existing + Proxy Reload Support)
+        if (!hasRestoredProgress.current && time >= 1) {
             hasRestoredProgress.current = true;
-            const targetTime = initialPlaybackState.currentTime;
+
+            let targetTime = initialPlaybackState?.currentTime || 0;
+
+            // If we don't have an initialPlaybackState (or if we're aggressively reloading due to proxy toggle)
+            // fallback to checking the absolute latest time from localStorage.
+            const targetKeyId = itemId && itemId !== mediaId ? itemId : mediaId;
+            const key = `video-in-progress-${targetKeyId}`;
+            try {
+                const storedProgress = localStorage.getItem(key);
+                if (storedProgress) {
+                    const parsed = JSON.parse(storedProgress);
+                    // Only use localStorage time if it's greater than what we already know, to prevent older states from regressing us
+                    if (parsed.currentTime > targetTime) {
+                        targetTime = parsed.currentTime;
+                    }
+                }
+            } catch (e) {
+                console.error("Failed to read progress on reload", e);
+            }
+
             if (targetTime && targetTime > 2 && playerRef.current) {
                 playerRef.current.currentTime = targetTime;
             }
@@ -579,7 +606,9 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
         if (Number.isFinite(newDuration) && newDuration > 0) {
             setDuration(newDuration);
         }
-    }, []);
+        console.log(newDuration);
+
+    }, [playerRef]);
 
     const handlePlayerVolumeChange = useCallback((event: any) => {
         const player = event.target;
@@ -641,15 +670,24 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
             isRetrying.current = false;
             setIsRecovering(false);
         }
-    }, [retryCount, contentType]);
+    }, [retryCount, contentType, useProxy]);
 
     // Save progress helper
     // Save progress helper (Original format)
     const saveProgress = useCallback(() => {
         if (contentType === 'tv') return;
         const player = playerRef.current;
-        const currentDur = player?.duration ?? duration;
-        const time = player?.currentTime ?? 0;
+        let currentDur = duration || 0;
+        let time = 0;
+        try {
+            if (player) {
+                currentDur = player.duration || duration || 0;
+                time = player.currentTime || 0;
+            }
+        } catch (e) {
+            // If the player is destroyed internally by Vidstack, getters might throw.
+            return;
+        }
         if (!mediaId || !currentDur || currentDur <= 0 || time <= 2) return;
 
         // If ≥ 90% watched, treat as completed — remove in-progress
@@ -665,16 +703,21 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
         const targetKeyId = itemId && itemId !== mediaId ? itemId : mediaId;
 
         const progressData = {
-            id: targetKeyId, // App.tsx safe-a read panna ithu mattum irukkattum
+            id: targetKeyId,
+            playbackFileId: itemId || mediaId,
             mediaId,
             itemId,
+            // Episode card ID (different from itemId which is the file ID) — used for re-fetching episode on CW resume
+            episodeCardId: (item as any)?._episodeCardId || null,
+            seasonId,
+            categoryId,
             type: contentType,
             title: seriesItem?.name || seriesItem?.title || item?.name || item?.title || '',
             name: seriesItem?.name || seriesItem?.title || item?.name || item?.title || '',
             episodeTitle: item?.name || item?.title || '',
             screenshot_uri: seriesItem?.screenshot_uri || item?.screenshot_uri || '',
             is_series: seriesItem ? 1 : 0,
-            cmd: item?.cmd || rawStreamUrl || '', 
+            cmd: item?.cmd || rawStreamUrl || '',
             series_number: item?.series_number,
             currentTime: time,
             duration: currentDur,
@@ -688,7 +731,7 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
         if (mediaId) {
             localStorage.setItem(`video-in-progress-${mediaId}`, JSON.stringify(progressData));
         }
-        
+
         lastSavedTime.current = time;
     }, [contentType, mediaId, itemId, item, seriesItem, duration, rawStreamUrl]);
 
@@ -726,6 +769,15 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
     const saveProgressRef = useRef(saveProgress);
     useEffect(() => {
         saveProgressRef.current = saveProgress;
+    }, [saveProgress]);
+
+    // Proxy Toggle with Time Preservation
+    const handleProxyToggle = useCallback((newProxyState: boolean) => {
+        saveProgress();
+        setUseProxy(newProxyState);
+        hasRestoredProgress.current = false; // Reset lock so new player inst restores time
+        setReloadTrigger(prev => prev + 1);
+        setIsRecovering(false);
     }, [saveProgress]);
 
     useEffect(() => {
@@ -925,7 +977,7 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
         handleSubtitleTrackChange,
         toggleFullscreen,
         handleCopyLink,
-        setUseProxy,
+        setUseProxy: handleProxyToggle,
         handleCast,
         onProviderChange,
         handleCanPlay,
