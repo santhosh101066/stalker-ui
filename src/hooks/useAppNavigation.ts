@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { toast } from 'react-toastify';
-import { getMedia, getSeries, getMovieUrl } from '@/services/services';
+import { getMedia, getMovieUrl } from '@/services/services';
 import { BASE_URL, URL_PATHS } from '@/services/api';
 import type { MediaItem, ContextType } from '@/types';
 import { isTizenDevice } from '@/utils/helpers';
@@ -39,7 +39,7 @@ async function resolveStreamUrl(
         urlParams.series = seriesNumber;
     }
 
-    const linkData = await getMovieUrl(urlParams);
+    const linkData = await getMovieUrl(urlParams) as Record<string, any>;
     const raw = linkData?.js?.cmd || linkData?.cmd;
     if (typeof raw !== 'string') throw new Error('Stream URL not found.');
     return { raw, proxied: buildProxiedUrl(raw) };
@@ -62,7 +62,7 @@ export function useAppNavigation(
     context: ContextType,
     items: MediaItem[],
     contentType: 'movie' | 'series' | 'tv',
-    fetchData: Function,
+    fetchData: (context: ContextType, typeOverride?: 'movie' | 'series' | 'tv') => void,
     isPortal: boolean,
     addToRecentChannels: (item: MediaItem) => void,
     playLastTvChannel: string | null,
@@ -116,7 +116,7 @@ export function useAppNavigation(
                 if (entry.currentTime && entry.currentTime > 2) savedResumeTime = entry.currentTime;
                 if (entry.playbackFileId) (item as any).playbackFileId = entry.playbackFileId;
             }
-        } catch (_) { }
+        } catch { /* ignore */ }
 
         const playbackId = (item as any).playbackFileId || (item as any).stream_id || (item as any).episode_id || (item as any).video_id || item.id;
         const mainSeriesId = (item as any).series_id || (item as any).show_id || (item as any).movie_id || item.id;
@@ -152,7 +152,7 @@ export function useAppNavigation(
             urlParams.series = item.series_number;
         }
 
-        const linkData = await getMovieUrl(urlParams);
+        const linkData = await getMovieUrl(urlParams) as Record<string, any>;
         const freshCmd = linkData?.js?.cmd || linkData?.cmd;
         if (typeof freshCmd !== 'string') throw new Error('Fresh stream URL not found.');
 
@@ -240,9 +240,9 @@ export function useAppNavigation(
 
                 const movieFile = res.data[0];
                 // Metadata missing-a avoid panna, current item details-a kooda merge pannikalam
-                const { id, cmd, ...filteredItem } = item
+                // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                const { id, cmd, ...filteredItem } = item;
                 const finalMovieItem = { ...movieFile, ...filteredItem };
-                console.log(movieFile, item, finalMovieItem);
 
 
                 const { raw, proxied } = await resolveStreamUrl(movieFile, isPortal);
@@ -274,7 +274,7 @@ export function useAppNavigation(
 
     }, [
         contentType, context, currentItem, fetchData, isPortal,
-        openPlayer, playContinueWatching, pushFrame, streamUrl, getResumeTime, resolveStreamUrl
+        openPlayer, playContinueWatching, pushFrame, streamUrl, addToRecentChannels
     ]);
 
     // ── Close player ──────────────────────────────────────────────────────────

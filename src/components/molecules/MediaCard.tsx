@@ -47,13 +47,14 @@ const MediaCard: React.FC<MediaCardProps> = ({ item, onClick, progressPercent })
       }
     );
 
-    if (cardRef.current) {
-      observer.observe(cardRef.current);
+    const currentCardRef = cardRef.current;
+    if (currentCardRef) {
+      observer.observe(currentCardRef);
     }
 
     return () => {
-      if (cardRef.current) {
-        observer.unobserve(cardRef.current);
+      if (currentCardRef) {
+        observer.unobserve(currentCardRef);
       }
     };
   }, []);

@@ -20,7 +20,7 @@ interface MainContentGridProps {
     channelGroups: ChannelGroup[];
     handleBack: () => void;
     cwRefreshKey: number;
-    fetchData: Function;
+    fetchData: (context: ContextType, contentType: 'movie' | 'series' | 'tv') => void;
 }
 
 export default function MainContentGrid({

@@ -486,7 +486,7 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
         toast.success('Casting started...');
         setIsSettingsMenuOpen(false);
         setActiveSettingsMenu('main');
-    }, [item, previewChannelInfo, channelInfo, streamUrl, rawStreamUrl, volume, isMuted, currentSubtitleTrack, currentAudioTrack, castTo]);
+    }, [item, previewChannelInfo, channelInfo, streamUrl, rawStreamUrl, isMuted, currentSubtitleTrack, currentAudioTrack, castTo]);
 
     const handleVideoClick = useCallback(() => {
         const wereControlsHidden = !controlsVisible;
@@ -669,7 +669,7 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
             isRetrying.current = false;
             setIsRecovering(false);
         }
-    }, [retryCount, contentType, useProxy]);
+    }, [retryCount, contentType]);
 
     // Save progress helper
     // Save progress helper (Original format)
@@ -684,6 +684,8 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
                 time = player.currentTime || 0;
             }
         } catch (e) {
+            console.error("Error while saving progress",e);
+            
             // If the player is destroyed internally by Vidstack, getters might throw.
             return;
         }
@@ -732,7 +734,7 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
         }
 
         lastSavedTime.current = time;
-    }, [contentType, mediaId, itemId, item, seriesItem, duration, rawStreamUrl]);
+    }, [contentType, mediaId, itemId, item, seriesItem, duration, rawStreamUrl, seasonId, categoryId]);
 
     const handleEnded = useCallback(() => {
         // Remove in-progress entry

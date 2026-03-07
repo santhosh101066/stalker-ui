@@ -2,7 +2,7 @@ import React from 'react';
 import { useVideoContext } from '@/context/video';
 
 export const BufferingOverlay = React.memo(() => {
-    const { isBuffering, isRecovering } = useVideoContext();
+    const { isBuffering } = useVideoContext();
 
     if (!isBuffering ) return null;
 

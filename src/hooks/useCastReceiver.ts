@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useSocket } from '@/context/useSocket';
 import { toast } from 'react-toastify';
 import type { MediaItem } from '@/types';
+import type { PlaybackInfo } from '@/context/SocketContextTypes';
 
 interface CastReceiverProps {
     playCastedMedia: (media: MediaItem, streamUrl?: string, rawStreamUrl?: string) => void;
@@ -10,12 +11,12 @@ interface CastReceiverProps {
 
 export function useCastReceiver({ playCastedMedia }: CastReceiverProps) {
     const { socket, isReceiver } = useSocket();
-    const [pendingPlaybackState, setPendingPlaybackState] = useState<any>(undefined);
+    const [pendingPlaybackState, setPendingPlaybackState] = useState<PlaybackInfo | undefined>(undefined);
 
     useEffect(() => {
         if (!socket || !isReceiver) return;
 
-        const handleCastCommand = (data: { command: string; payload: any; from: string }) => {
+        const handleCastCommand = (data: { command: string; payload: { media: MediaItem; streamUrl?: string; rawStreamUrl?: string; playbackInfo?: PlaybackInfo }; from: string }) => {
             if (data.command === 'play') {
                 const { media, streamUrl, rawStreamUrl, playbackInfo } = data.payload;
                 toast.info(`Casting from ${data.from}...`);

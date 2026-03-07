@@ -19,5 +19,5 @@ export const isTizenDevice = (): boolean => {
     return true;
   }
 
-  return !!(window as any).tizen;
+  return !!(window as Window & { tizen?: unknown }).tizen;
 };

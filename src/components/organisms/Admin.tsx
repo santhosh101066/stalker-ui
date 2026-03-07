@@ -86,8 +86,8 @@ const Admin = () => {
         await loadGroups(controller.signal);
         // Always load config on mount
         await loadConfig(controller.signal);
-      } catch (error: any) {
-        if (error.name !== 'AbortError') {
+      } catch (error) {
+        if (error instanceof Error && error.name !== 'AbortError') {
           console.error(error);
         }
       }
@@ -194,8 +194,8 @@ const Admin = () => {
       const response = await getChannelGroups(true, signal);
       const data = response.data;
       setGroups(data);
-    } catch (error: any) {
-      if (error.name !== 'AbortError') {
+    } catch (error) {
+      if (error instanceof Error && error.name !== 'AbortError') {
         toast.error('Error loading groups');
       }
     }
@@ -204,7 +204,7 @@ const Admin = () => {
   const loadConfig = async (signal?: AbortSignal) => {
     try {
       const response = await api.get('/config', { signal });
-      const data = response.data;
+      const data = response.data as Partial<Config>;
       setConfig((prev) => ({
         ...prev,
         ...data,
@@ -214,8 +214,8 @@ const Admin = () => {
         tokens: Array.isArray(data.tokens) ? data.tokens : [],
         providerType: data.providerType || 'stalker', // Default to stalker
       }));
-    } catch (error: any) {
-      if (error.name !== 'AbortError') {
+    } catch (error) {
+      if (error instanceof Error && error.name !== 'AbortError') {
         toast.error('Error loading configuration');
       }
     }
@@ -310,7 +310,7 @@ const Admin = () => {
   const handleAddToken = async () => {
     try {
       const response = await api.get('/v2/get-token');
-      const newToken = response.data.token;
+      const newToken = (response.data as Record<string, unknown>)?.token as string | undefined;
       if (newToken) {
         setConfig((prev) => ({
           ...prev,
@@ -374,10 +374,10 @@ const Admin = () => {
     e.preventDefault();
     try {
       const response = await api.post('/auth/admin', { password: passwordInput });
-      if (response.data?.success) {
+      if ((response.data as Record<string, unknown>)?.success) {
         setIsAuthenticated(true);
       }
-    } catch (error: any) {
+    } catch {
       toast.error('Incorrect password');
       setPasswordInput('');
     }

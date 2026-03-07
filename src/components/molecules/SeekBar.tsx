@@ -38,7 +38,7 @@ export const SeekBar = React.memo(() => {
     const commitSeek = (e: React.SyntheticEvent<HTMLInputElement>) => {
         setLocalProgress(null); // Drag mudinjadhum local state-a clear panni video kaila kuduthudrom
         // Pass to mouse up handler to commit seek (it expects an event with currentTarget.value)
-        handleSeekMouseUp(e as any);
+        handleSeekMouseUp(e as unknown as React.MouseEvent<HTMLInputElement, MouseEvent>);
     };
 
     const onPointerUp = (e: React.PointerEvent<HTMLInputElement>) => {

@@ -27,11 +27,11 @@ export function useTVFocus({
       const keysToRegister = ['MediaPlay', 'MediaPause', 'MediaPlayPause', 'MediaStop', 'MediaFastForward', 'MediaRewind', 'ChannelUp', 'ChannelDown', 'ColorF0Red', 'ColorF1Green', 'ColorF2Yellow', 'ColorF3Blue'];
       try {
         keysToRegister.forEach((key) => {
-          try { (window as any).tizen.tvinputdevice.registerKey(key); } catch (e) {}
+          try { (window as Window & { tizen?: { tvinputdevice: { registerKey: (k: string) => void, unregisterKey: (k: string) => void } } }).tizen?.tvinputdevice?.registerKey(key); } catch { /* ignore */ }
         });
-      } catch (e) {}
+      } catch { /* ignore */ }
       return () => {
-        try { keysToRegister.forEach((key) => { (window as any).tizen.tvinputdevice.unregisterKey(key); }); } catch (e) {}
+        try { keysToRegister.forEach((key) => { (window as Window & { tizen?: { tvinputdevice: { registerKey: (k: string) => void, unregisterKey: (k: string) => void } } }).tizen?.tvinputdevice?.unregisterKey(key); }); } catch { /* ignore */ }
       };
     }
   }, [isTizen]);
@@ -109,7 +109,7 @@ export function useTVFocus({
             checkAndFetchNextPage(newIndex, focusable.length);
           }
           break;
-        case 38: // UP
+        case 38: { // UP
           e.preventDefault();
           const gridUp = document.querySelector('.grid, .channel-list');
           if (gridUp) {
@@ -118,7 +118,8 @@ export function useTVFocus({
             if (currentIndex - parsedCols >= 0) setFocusedIndex(currentIndex - parsedCols);
           } else if (currentIndex > 0) setFocusedIndex(currentIndex - 1);
           break;
-        case 40: // DOWN
+        }
+        case 40: { // DOWN
           e.preventDefault();
           const gridDown = document.querySelector('.grid, .channel-list');
           let newIndexDown = currentIndex;
@@ -128,10 +129,10 @@ export function useTVFocus({
             const parsedCols = parseInt(cols.toString(), 10) || 1;
             
             if (currentIndex + parsedCols < focusable.length) {
-              newIndexDown = currentIndex + parsedCols;
-              setFocusedIndex(newIndexDown);
+               newIndexDown = currentIndex + parsedCols;
+               setFocusedIndex(newIndexDown);
             } else {
-              handlePageChange(1);
+               handlePageChange(1);
             }
           } else if (currentIndex < focusable.length - 1) {
             newIndexDown = currentIndex + 1;
@@ -142,12 +143,13 @@ export function useTVFocus({
             checkAndFetchNextPage(newIndexDown, focusable.length);
           }
           break;
+        }
         case 13: // OK
           e.preventDefault();
           if (focusedIndex !== null && focusable[focusedIndex]) {
             const el = focusable[focusedIndex];
             if (el.matches('input[type="search"]')) {
-              isTizen ? setIsSearchActive(true) : setIsSearchTyping(true);
+              if (isTizen) { setIsSearchActive(true); } else { setIsSearchTyping(true); }
               el.focus();
             } else if (el.getAttribute('data-control') === 'sort') {
               cycleSort();
@@ -179,7 +181,7 @@ export function useTVFocus({
 
     const newIndex = focusedIndex === null ? 0 : focusedIndex;
     focusable.forEach((el, i) => {
-      i === newIndex ? el.classList.add('focused') : el.classList.remove('focused');
+      if (i === newIndex) { el.classList.add('focused'); } else { el.classList.remove('focused'); }
       if (i === newIndex) el.focus();
     });
   }, [focusedIndex, items, streamUrl, isTizen, isSearchActive]);

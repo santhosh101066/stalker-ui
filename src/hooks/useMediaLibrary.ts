@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
+import type { Dispatch, SetStateAction } from 'react';
 import { toast } from 'react-toastify';
 import { getChannels, getMedia, getSeries, getEPG, getChannelGroups } from '@/services/services';
 import type { MediaItem, ContextType, EPG_List, ChannelGroup } from '@/types';
@@ -46,7 +47,7 @@ export function useMediaLibrary() {
         try {
             const storedFavorites = localStorage.getItem('favorite_channels');
             return storedFavorites ? JSON.parse(storedFavorites) : [];
-        } catch (e) {
+        } catch {
             return [];
         }
     });
@@ -55,7 +56,7 @@ export function useMediaLibrary() {
         try {
             const storedRecents = localStorage.getItem('recent_channels');
             return storedRecents ? JSON.parse(storedRecents) : [];
-        } catch (e) {
+        } catch {
             return [];
         }
     });
@@ -66,7 +67,7 @@ export function useMediaLibrary() {
         try {
             const response = await getEPG();
             if (response.data?.data) setEpgData(response.data.data);
-        } catch (err) {
+        } catch {
             toast.warn('Could not load program guide.');
         }
     }, []);
@@ -137,7 +138,7 @@ export function useMediaLibrary() {
                 ]);
             }
             setContext(newContext);
-        } catch (err) {
+        } catch {
             if (newContext.page > 1) setPaginationError('Could not load more content.');
             else setError('Could not load content. Please try again later.');
         } finally {
@@ -168,9 +169,11 @@ export function useMediaLibrary() {
 
         setFavorites(newFavs);
         localStorage.setItem('favorite_channels', JSON.stringify(newFavs));
-        favorites.includes(item.id)
-            ? toast.info(`Removed ${item.name || 'Channel'} from favorites`)
-            : toast.success(`Added ${item.name || 'Channel'} to favorites`);
+        if (favorites.includes(item.id)) {
+            toast.info(`Removed ${item.name || 'Channel'} from favorites`);
+        } else {
+            toast.success(`Added ${item.name || 'Channel'} to favorites`);
+        }
     }, [favorites]);
 
     const handleContentTypeChange = useCallback((type: 'movie' | 'series' | 'tv') => {
@@ -204,14 +207,14 @@ export function useMediaLibrary() {
         fetchData({ ...initialContext, search, category: search ? '*' : contentType === 'tv' ? null : '*', parentTitle: newTitle, contentType });
     };
 
-    const handleClearWatched = (setConfirmModal: Function) => {
+    const handleClearWatched = (setConfirmModal: Dispatch<SetStateAction<{ isOpen: boolean; title: string; message: string; onConfirm: () => void; isDestructive: boolean; }>>) => {
         setConfirmModal({
             isOpen: true,
             title: 'Clear History',
             message: 'Are you sure you want to clear all watched and in-progress statuses?',
             isDestructive: true,
             onConfirm: () => {
-                setConfirmModal((prev: any) => ({ ...prev, isOpen: false }));
+                setConfirmModal((prev) => ({ ...prev, isOpen: false }));
                 Object.keys(localStorage).forEach((key) => {
                     if (key.startsWith('video-completed-') || key.startsWith('video-in-progress-')) {
                         localStorage.removeItem(key);
@@ -234,7 +237,7 @@ export function useMediaLibrary() {
     }, []);
 
     useEffect(() => {
-        const isTizen = !!(window as any).tizen;
+        const isTizen = !!(window as Window & { tizen?: unknown }).tizen;
         if (isTizen || contentType === 'tv' || loading || isFetchingMore.current) return;
         if (items.length === 0 || (totalItemsCount > 0 && items.length >= totalItemsCount)) return;
 
@@ -249,7 +252,7 @@ export function useMediaLibrary() {
     // --- Web Scroll Pagination ---
     useEffect(() => {
         const handleScroll = () => {
-            const isTizen = !!(window as any).tizen;
+            const isTizen = !!(window as Window & { tizen?: unknown }).tizen;
             if (isTizen || contentType === 'tv') return;
 
             const buffer = 200;

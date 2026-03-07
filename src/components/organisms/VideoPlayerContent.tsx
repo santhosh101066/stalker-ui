@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useEffect, useMemo } from 'react';
 import { MediaPlayer, MediaProvider, type PlayerSrc } from '@vidstack/react';
 import '@vidstack/react/player/styles/base.css';
@@ -318,7 +317,11 @@ const VideoPlayerContent: React.FC = () => {
         channelInfo,
         toggleFavorite,
         onBack,
-        toggleFullscreen
+        toggleFullscreen,
+        playerContainerRef,
+        settingsMenuRef,
+        setFocusedIndex,
+        toggleChannelList
     ]);
 
     // Focus management - duplicated from VideoPlayer because it relies on useEffect local to the DOM output
@@ -347,7 +350,7 @@ const VideoPlayerContent: React.FC = () => {
                 el.classList.remove('focused');
             }
         });
-    }, [focusedIndex, isSettingsMenuOpen, showChannelList]);
+    }, [focusedIndex, isSettingsMenuOpen, showChannelList, playerContainerRef, setFocusedIndex]);
 
     useEffect(() => {
         if (!isSettingsMenuOpen || showChannelList) return;
@@ -371,7 +374,7 @@ const VideoPlayerContent: React.FC = () => {
                 el.classList.remove('focused');
             }
         });
-    }, [focusedIndex, isSettingsMenuOpen, activeSettingsMenu, showChannelList]);
+    }, [focusedIndex, isSettingsMenuOpen, activeSettingsMenu, showChannelList, settingsMenuRef, setFocusedIndex]);
 
     const videoSrc = useMemo<PlayerSrc>(() => {
         // 1. Calculate active URL
@@ -483,9 +486,9 @@ const VideoPlayerContent: React.FC = () => {
                     onProviderChange={onProviderChange}
                     onCanPlay={handleCanPlay}
                     onTimeUpdate={handleTimeUpdate}
-                    onDurationChange={(e) => {
-                        handleDurationChange(e); console.log(e);
-                    }}
+                    onDurationChange={
+                        handleDurationChange
+                    }
                     onPlay={handlePlay}
                     onPause={handlePause}
                     onVolumeChange={handlePlayerVolumeChange}

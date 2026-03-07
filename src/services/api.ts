@@ -4,35 +4,35 @@ export const URL_PATHS = {
 
 export const BASE_URL = URL_PATHS.HOST === '/' ? '/api' : `${URL_PATHS.HOST}/api`;
 
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
   data: T;
 }
 
 interface Api {
-  get<T = any>(
+  get<T = unknown>(
     path: string,
-    config?: { params?: Record<string, any>; signal?: AbortSignal }
+    config?: { params?: Record<string, unknown>; signal?: AbortSignal }
   ): Promise<ApiResponse<T>>;
-  post<T = any>(
+  post<T = unknown>(
     path: string,
-    body?: Record<string, any>,
+    body?: Record<string, unknown>,
     config?: { signal?: AbortSignal }
   ): Promise<ApiResponse<T>>;
-  put<T = any>(
+  put<T = unknown>(
     path: string,
-    body: Record<string, any>,
+    body: Record<string, unknown>,
     config?: { signal?: AbortSignal }
   ): Promise<ApiResponse<T>>;
-  delete<T = any>(
+  delete<T = unknown>(
     path: string,
     config?: { signal?: AbortSignal }
   ): Promise<ApiResponse<T>>;
 }
 
 export const api: Api = {
-  get: async <T = any>(
+  get: async <T = unknown>(
     path: string,
-    { params, signal }: { params?: Record<string, any>; signal?: AbortSignal } = {}
+    { params, signal }: { params?: Record<string, unknown>; signal?: AbortSignal } = {}
   ): Promise<ApiResponse<T>> => {
     const fullUrl = `${BASE_URL}${path}`;
     const url =
@@ -42,7 +42,7 @@ export const api: Api = {
     if (params) {
       Object.keys(params).forEach((key) => {
         if (params[key] !== null && params[key] !== undefined) {
-          url.searchParams.append(key, params[key]);
+          url.searchParams.append(key, String(params[key]));
         }
       });
     }
@@ -65,9 +65,9 @@ export const api: Api = {
       throw error;
     }
   },
-  post: async <T = any>(
+  post: async <T = unknown>(
     path: string,
-    body: Record<string, any> = {},
+    body: Record<string, unknown> = {},
     { signal }: { signal?: AbortSignal } = {}
   ): Promise<ApiResponse<T>> => {
     const fullUrl = `${BASE_URL}${path}`;
@@ -100,9 +100,9 @@ export const api: Api = {
       throw error;
     }
   },
-  put: async <T = any>(
+  put: async <T = unknown>(
     path: string,
-    body: Record<string, any>,
+    body: Record<string, unknown>,
     { signal }: { signal?: AbortSignal } = {}
   ): Promise<ApiResponse<T>> => {
     const fullUrl = `${BASE_URL}${path}`;
@@ -135,7 +135,7 @@ export const api: Api = {
       throw error;
     }
   },
-  delete: async <T = any>(
+  delete: async <T = unknown>(
     path: string,
     { signal }: { signal?: AbortSignal } = {}
   ): Promise<ApiResponse<T>> => {

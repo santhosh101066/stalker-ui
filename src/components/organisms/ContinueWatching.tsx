@@ -111,6 +111,7 @@ const ContinueWatching: React.FC<ContinueWatchingProps> = ({ onClick, refreshKey
           if (entry.id === targetId || entry.itemId === targetId || entry.mediaId === targetId) {
             localStorage.removeItem(key);
           }
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         } catch (_) { /* ignore */ }
       }
     });

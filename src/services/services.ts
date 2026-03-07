@@ -24,7 +24,7 @@ export const getMedia = async (
   params: Record<string, any>,
   signal?: AbortSignal
 ): Promise<PaginatedResponse<MediaItem>> => {
-  const response = (await api.get(API_PATHS.MOVIES, { params, signal })).data;
+  const response = (await api.get<PaginatedResponse<MediaItem>>(API_PATHS.MOVIES, { params, signal })).data;
   if (!response) {
     throw new Error('No response data received from media API.');
   }
@@ -35,7 +35,7 @@ export const getSeries = async (
   params: Record<string, any>,
   signal?: AbortSignal
 ): Promise<PaginatedResponse<MediaItem>> => {
-  const response = (await api.get(API_PATHS.SERIES, { params, signal })).data;
+  const response = (await api.get<PaginatedResponse<MediaItem>>(API_PATHS.SERIES, { params, signal })).data;
   if (!response) {
     throw new Error('No response data received from series API.');
   }
@@ -44,7 +44,7 @@ export const getSeries = async (
 };
 // Added getChannels function
 export const getChannels = async (signal?: AbortSignal): Promise<PaginatedResponse<MediaItem>> => {
-  const response = (await api.get(API_PATHS.CHANNELS, { signal })).data;
+  const response = (await api.get<MediaItem[]>(API_PATHS.CHANNELS, { signal })).data;
   if (!response || !Array.isArray(response)) {
     throw new Error('No response data received from channels API.');
   }
@@ -62,7 +62,7 @@ export const getChannelGroups = async (all: boolean = false, signal?: AbortSigna
     params.all = 'true';
   }
 
-  const response = (await api.get(API_PATHS.CHANNEL_GROUPS, { params, signal })).data;
+  const response = (await api.get<ChannelGroup[]>(API_PATHS.CHANNEL_GROUPS, { params, signal })).data;
   if (!response || !Array.isArray(response)) {
     throw new Error('No response data received from channel groups API.');
   }
@@ -85,4 +85,4 @@ export const getEPG = async (): Promise<ApiResponse<{
 }>> => await api.get(API_PATHS.EPG);
 
 export const getExpiry = async (): Promise<{ success: boolean; expiry: string | null }> =>
-  (await api.get(API_PATHS.EXPIRY)).data;
+  (await api.get<{ success: boolean; expiry: string | null }>(API_PATHS.EXPIRY)).data;

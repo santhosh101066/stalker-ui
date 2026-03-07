@@ -37,9 +37,8 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             reconnection: true,
         });
 
-        // Helper to handle list updates consistently
-        const handleListUpdate = (data: any) => {
-            const list = Array.isArray(data) ? data : (data.receivers || []);
+        const handleListUpdate = (data: unknown) => {
+            const list = (Array.isArray(data) ? data : ((data as Record<string, unknown>).receivers || [])) as Device[];
             const filtered = list.filter((r: Device) => r.id !== currentDeviceId);
             setReceivers(filtered);
         };

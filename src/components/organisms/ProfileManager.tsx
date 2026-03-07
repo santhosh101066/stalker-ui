@@ -150,7 +150,7 @@ const ProfileManager = () => {
     }
 
     try {
-      const configResponse = await api.get('/config');
+      const configResponse = await api.get<ConfigProfile['config']>('/config');
       const currentConfig = configResponse.data;
 
       // Override with new fields if set
