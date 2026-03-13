@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import '@/App.css';
@@ -20,7 +20,13 @@ import { isTizenDevice } from './utils/helpers';
 export default function App() {
   const isTizen = isTizenDevice();
   const [showAdmin, setShowAdmin] = useState(false);
-  const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: () => { }, isDestructive: false });
+  const [confirmModal, setConfirmModal] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+    isDestructive: false,
+  });
 
   // Hook 1: Manages API calls, Context, and Items
   const {
@@ -49,7 +55,9 @@ export default function App() {
     setPlayLastTvChannel,
     // setLoading,
     setItems,
-    setContext
+    setContext,
+    isRestoringFromHistory,
+    setTotalItemsCount,
   } = useMediaLibrary();
 
   // Hook 2: Manages navigation history, Back button, and Stream URLs
@@ -66,23 +74,37 @@ export default function App() {
     previewChannel,
     handleNextChannel,
     handlePrevChannel,
-    playCastedMedia
+    playCastedMedia,
+    pushFrame,
   } = useAppNavigation(
     context,
     items,
     contentType,
+    totalItemsCount,
     fetchData,
     isPortal,
     addToRecentChannels,
     playLastTvChannel,
     setPlayLastTvChannel,
     setItems,
-    setContext
+    setContext,
+    setTotalItemsCount,
+    isRestoringFromHistory
   );
 
-  const onClearWatched = () => handleClearWatched(setConfirmModal);
+  const onClearWatched = useCallback(
+    () => handleClearWatched(setConfirmModal),
+    [handleClearWatched]
+  );
   // Hook 3: Handles Tizen/Web Keyboard spatial focus logic
-  const { isSearchActive, setIsSearchActive, isSearchTyping, setIsSearchTyping, searchTerm, setSearchTerm } = useTVFocus({
+  const {
+    isSearchActive,
+    setIsSearchActive,
+    isSearchTyping,
+    setIsSearchTyping,
+    searchTerm,
+    setSearchTerm,
+  } = useTVFocus({
     streamUrl,
     items,
     contentType,
@@ -90,21 +112,46 @@ export default function App() {
     handlePageChange,
     cycleSort,
     handleContentTypeChange,
-    handleClearWatched: onClearWatched
+    handleClearWatched: onClearWatched,
   });
 
-  const onSearchSubmit = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    handleSearch(searchTerm);
-  };
+  const onSearchSubmit = useCallback(
+    (e?: React.FormEvent) => {
+      if (e) e.preventDefault();
+      if (searchTerm !== context.search) {
+        pushFrame();
+      }
+      handleSearch(searchTerm);
+    },
+    [searchTerm, context.search, pushFrame, handleSearch]
+  );
 
   // Hook 4: Handles Sockets for Casting
   const { pendingPlaybackState } = useCastReceiver({
-    playCastedMedia
+    playCastedMedia,
   });
 
+  const currentTitle = React.useMemo(() => {
+    if (streamUrl) return 'Now Playing';
 
-  const currentTitle = streamUrl ? 'Now Playing' : context.parentTitle || 'Browse';
+    // If we are at the root level (no category, search, or specific movie/season)
+    const isRoot =
+      (!context.category || context.category === '*') &&
+      !context.search &&
+      !context.movieId &&
+      !context.seasonId;
+
+    if (isRoot) {
+      return contentType === 'tv'
+        ? 'TV'
+        : contentType === 'series'
+          ? 'Series'
+          : 'Movies';
+    }
+
+    return context.parentTitle || 'Browse';
+  }, [streamUrl, context, contentType]);
+
 
   return (
     <>
@@ -118,7 +165,10 @@ export default function App() {
           categoryId={context.category}
           context={context}
           contentType={contentType}
-          mediaId={context.movieId ?? (contentType === 'movie' && currentItem ? currentItem.id : null)}
+          mediaId={
+            context.movieId ??
+            (contentType === 'movie' && currentItem ? currentItem.id : null)
+          }
           item={currentItem}
           seriesItem={currentSeriesItem}
           channels={contentType === 'tv' ? items : undefined}
@@ -132,11 +182,13 @@ export default function App() {
           favorites={favorites}
           recentChannels={recentChannels}
           toggleFavorite={toggleFavorite}
-          initialPlaybackState={resumePlaybackState || pendingPlaybackState || undefined}
+          initialPlaybackState={
+            resumePlaybackState || pendingPlaybackState || undefined
+          }
         />
       ) : (
         <div className="min-h-screen font-sans text-gray-200">
-          <div className="container mx-auto p-0 sm:p-6 pb-4">
+          <div className="container mx-auto p-0 pb-4 sm:p-6">
             <Header
               currentTitle={currentTitle}
               contentType={contentType}
@@ -177,6 +229,7 @@ export default function App() {
                   handleBack={handleBack}
                   cwRefreshKey={cwRefreshKey}
                   fetchData={fetchData}
+                  isRestoringFromHistory={isRestoringFromHistory.current}
                 />
               )}
             </main>

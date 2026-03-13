@@ -171,6 +171,13 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
         localStorage.setItem('videoFitMode', fitMode);
     }, [fitMode]);
 
+    // Reset recovery state when streamUrl changes
+    useEffect(() => {
+        setIsRecovering(false);
+        isRetrying.current = false;
+        setRetryCount(0);
+    }, [streamUrl, rawStreamUrl]);
+
     // Show controls and cursor
     const showControlsAndCursor = useCallback(() => {
         setControlsVisible(true);
@@ -191,6 +198,17 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
             setCursorVisible(false);
         }, 3000);
     }, []);
+
+    // Initial load auto-hide controls
+    useEffect(() => {
+        showControlsAndCursor();
+        
+        // Cleanup timers on unmount
+        return () => {
+            if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
+            if (cursorTimeoutRef.current) clearTimeout(cursorTimeoutRef.current);
+        };
+    }, [showControlsAndCursor]);
 
     // Playback actions
     const togglePlayPause = useCallback(() => {
@@ -663,6 +681,7 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
                 console.log(`[VideoPlayer] Retrying... (${retryCount + 1}/3)`);
                 setRetryCount(prev => prev + 1);
                 setReloadTrigger(prev => prev + 1);
+                setIsRecovering(false);
             }, delay);
         } else {
             toast.error('Failed to load stream after multiple attempts');

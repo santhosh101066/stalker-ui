@@ -123,11 +123,11 @@ const ContinueWatching: React.FC<ContinueWatchingProps> = ({ onClick, refreshKey
   }
 
   return (
-    <div className="mb-8">
-      <h2 className="mb-4 text-xl font-bold text-white sm:text-2xl">Continue Watching</h2>
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 md:gap-6 lg:grid-cols-5 xl:grid-cols-6">
-        {inProgressItems.map((item) => (
-          <div key={item.id} className="relative group">
+    <div className="mb-8 px-2 sm:px-0">
+      <h2 className="mb-4 text-xl font-bold text-center sm:text-left text-white sm:text-2xl">Continue Watching</h2>
+      <div className="grid grid-cols-3 gap-2 sm:gap-4 sm:grid-cols-4 md:grid-cols-5 md:gap-6 lg:grid-cols-6 xl:grid-cols-7">
+        {inProgressItems.map((item, index) => (
+          <div key={`${item.id}-${index}`} className="relative group">
             <button
               className="absolute right-1 top-1 z-20 flex h-6 w-6 items-center justify-center rounded-full bg-black/70 text-white opacity-0 transition-opacity duration-200 hover:bg-red-600 group-hover:opacity-100 focus:opacity-100"
               style={{ lineHeight: 1 }}

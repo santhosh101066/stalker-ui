@@ -24,14 +24,14 @@ const TvChannelListCard: React.FC<TvChannelListCardProps> = ({
   return (
     <div
       className={`group flex items-center py-1.5 px-2 sm:py-2 sm:px-3 my-0.5 rounded-lg cursor-pointer ${isFocused
-        ? 'bg-blue-600/80 shadow-md shadow-blue-900/30 scale-[1.01] border border-blue-400/50 z-10' // Solid blue + scale + shadow when focused on TV
+        ? 'bg-gradient-to-r from-stalker-light to-stalker-dark shadow-md shadow-stalker-dark/30 scale-[1.01] border border-stalker-light/50 z-10' // Solid stalker gradient + scale + shadow when focused on TV
         : 'bg-transparent hover:bg-white/10 hover:scale-[1.01] border border-transparent' // Transparent, with a slight highlight and scale on hover desktop
         }`}
       onClick={() => onClick(item)}
       data-focusable="true"
       tabIndex={-1}
     >
-      <span className={`w-8 pr-1.5 text-left text-xs sm:text-sm font-medium transition-colors sm:w-10 sm:pr-2 ${isFocused ? 'text-blue-100' : 'text-gray-400 group-hover:text-gray-300'}`}>
+      <span className={`w-8 pr-1.5 text-left text-xs sm:text-sm font-medium transition-colors sm:w-10 sm:pr-2 ${isFocused ? 'text-white' : 'text-gray-400 group-hover:text-gray-300'}`}>
         {item.number}
       </span>
       <div className={`mr-2 flex h-8 w-11 flex-shrink-0 items-center justify-center overflow-hidden rounded transition-colors sm:mr-3 sm:h-10 sm:w-14 ${isFocused ? 'bg-white/20' : 'bg-gray-800/80'}`}>

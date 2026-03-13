@@ -1,4 +1,5 @@
 import React from 'react';
+import { ArrowDownAZ, SortDesc, SortAsc } from 'lucide-react';
 
 export interface HeaderProps {
     currentTitle: string;
@@ -22,7 +23,7 @@ export interface HeaderProps {
     handleBack: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({
+export const Header: React.FC<HeaderProps> = React.memo(({
     currentTitle,
     isTizen,
     contentType,
@@ -44,7 +45,7 @@ export const Header: React.FC<HeaderProps> = ({
     handleBack,
 }) => {
     return (
-        <header className="sticky top-0 sm:top-4 z-20 mb-2 sm:mb-6 border-b sm:rounded-xl sm:border border-gray-700/80 bg-gray-800/90 sm:bg-gray-800/50 p-2 sm:p-4 backdrop-blur-lg">
+        <header className="sticky top-0 sm:top-4 z-20 mb-2 sm:mb-6 border-b sm:rounded-xl border-stalker-light/20 bg-[#0f1f3d]/90 sm:bg-[#0f1f3d]/80 p-2 sm:p-4 backdrop-blur-xl shadow-lg shadow-black/40">
             <div className="flex flex-col sm:flex-row items-center justify-between gap-2 sm:gap-4">
                 {/* Top Row on Mobile: Logo and Icons */}
                 <div className="flex w-full items-center justify-between sm:w-auto">
@@ -74,7 +75,7 @@ export const Header: React.FC<HeaderProps> = ({
                             <button
                                 onClick={handleClearWatched}
                                 title="Clear History"
-                                className="flex items-center justify-center rounded-full p-1.5 transition-colors duration-300 bg-gray-800 text-gray-300 hover:bg-gray-700"
+                                className="flex items-center justify-center rounded-full p-1.5 transition-colors duration-300 bg-white/5 text-gray-300 hover:bg-white/10 hover:text-white"
                                 data-focusable="true"
                                 tabIndex={-1}
                             >
@@ -85,7 +86,7 @@ export const Header: React.FC<HeaderProps> = ({
                             {!isTizen && (
                                 <button
                                     onClick={() => setShowAdmin(!showAdmin)}
-                                    className={`flex items-center justify-center rounded-full p-1.5 transition-colors duration-300 ${showAdmin ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}
+                                    className={`flex items-center justify-center rounded-full p-1.5 transition-colors duration-300 ${showAdmin ? 'bg-red-600/80 text-white hover:bg-red-600' : 'bg-white/5 text-gray-300 hover:bg-white/10 hover:text-white'}`}
                                     data-focusable="true"
                                     tabIndex={-1}
                                     title={showAdmin ? 'Close Admin' : 'Admin Settings'}
@@ -104,12 +105,12 @@ export const Header: React.FC<HeaderProps> = ({
 
                 {!streamUrl && (
                     <div className="flex w-full flex-col sm:w-auto sm:flex-row gap-2 sm:gap-4 items-center">
-                        <div className="flex w-full sm:w-auto justify-between space-x-1 sm:space-x-2 rounded-full border border-gray-700/50 bg-gray-900/70 p-1 backdrop-blur-md transition-all duration-300">
+                        <div className="flex w-full sm:w-auto justify-between space-x-1 sm:space-x-2 rounded-full border border-white/10 bg-[#0b1120]/60 p-1 backdrop-blur-md transition-all duration-300">
                             <button
                                 onClick={() => handleContentTypeChange('movie')}
                                 className={`flex flex-1 sm:flex-none justify-center items-center rounded-full px-2 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-semibold transition-all duration-300 active:scale-95 ${contentType === 'movie'
-                                    ? 'bg-blue-600 shadow-lg shadow-blue-900/50 text-white'
-                                    : 'text-gray-300 hover:bg-gray-700/50 hover:text-white'
+                                    ? 'bg-gradient-to-r from-stalker-light to-stalker-dark shadow-lg shadow-stalker-dark/50 text-white'
+                                    : 'text-gray-400 hover:bg-white/10 hover:text-white'
                                     }`}
                                 data-focusable="true"
                                 tabIndex={-1}
@@ -117,7 +118,7 @@ export const Header: React.FC<HeaderProps> = ({
                             >
                                 <span className="sm:hidden mr-1">
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z" />
                                     </svg>
                                 </span>
                                 <span>Movies</span>
@@ -125,8 +126,8 @@ export const Header: React.FC<HeaderProps> = ({
                             <button
                                 onClick={() => handleContentTypeChange('series')}
                                 className={`flex flex-1 sm:flex-none justify-center items-center rounded-full px-2 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-semibold transition-all duration-300 active:scale-95 ${contentType === 'series'
-                                    ? 'bg-blue-600 shadow-lg shadow-blue-900/50 text-white'
-                                    : 'text-gray-300 hover:bg-gray-700/50 hover:text-white'
+                                    ? 'bg-gradient-to-r from-stalker-light to-stalker-dark shadow-lg shadow-stalker-dark/50 text-white'
+                                    : 'text-gray-400 hover:bg-white/10 hover:text-white'
                                     }`}
                                 data-focusable="true"
                                 tabIndex={-1}
@@ -142,8 +143,8 @@ export const Header: React.FC<HeaderProps> = ({
                             <button
                                 onClick={() => handleContentTypeChange('tv')}
                                 className={`flex flex-1 sm:flex-none justify-center items-center rounded-full px-2 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-semibold transition-all duration-300 active:scale-95 ${contentType === 'tv'
-                                    ? 'bg-blue-600 shadow-lg shadow-blue-900/50 text-white'
-                                    : 'text-gray-300 hover:bg-gray-700/50 hover:text-white'
+                                    ? 'bg-gradient-to-r from-stalker-light to-stalker-dark shadow-lg shadow-stalker-dark/50 text-white'
+                                    : 'text-gray-400 hover:bg-white/10 hover:text-white'
                                     }`}
                                 data-focusable="true"
                                 tabIndex={-1}
@@ -163,7 +164,7 @@ export const Header: React.FC<HeaderProps> = ({
                                     <button
                                         onClick={handleClearWatched}
                                         title="Clear History"
-                                        className="flex items-center justify-center rounded-full p-2 transition-colors duration-300 bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white"
+                                        className="flex items-center justify-center rounded-full p-2 transition-colors duration-300 bg-white/5 text-gray-400 border border-transparent hover:border-white/10 hover:bg-white/10 hover:text-white"
                                         data-focusable="true"
                                         tabIndex={-1}
                                     >
@@ -175,8 +176,8 @@ export const Header: React.FC<HeaderProps> = ({
                                         <button
                                             onClick={() => setShowAdmin(!showAdmin)}
                                             className={`flex items-center justify-center rounded-full p-2 transition-colors duration-300 ${showAdmin
-                                                ? 'bg-red-600 text-white hover:bg-red-700'
-                                                : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                                                ? 'bg-red-600/80 text-white hover:bg-red-600'
+                                                : 'bg-white/5 text-gray-400 border border-transparent hover:border-white/10 hover:bg-white/10 hover:text-white'
                                                 }`}
                                             data-focusable="true"
                                             tabIndex={-1}
@@ -195,46 +196,50 @@ export const Header: React.FC<HeaderProps> = ({
                         {/* Search + Sort */}
                         <div className="flex w-full sm:w-auto gap-2 items-center">
                             <form onSubmit={handleSearch} className="flex-grow">
-                                <input
-                                    type="search"
-                                    name="search"
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                    placeholder="Search titles..."
-                                    className="w-full rounded-full border border-gray-700/50 bg-gray-900/70 px-4 py-2 text-sm sm:text-base text-white shadow-sm backdrop-blur-md transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-gray-800/90 sm:w-64"
-                                    data-focusable="true"
-                                    readOnly={isTizen ? !isSearchActive : !isSearchTyping}
-                                    onClick={() => {
-                                        if (isTizen) setIsSearchActive(true);
-                                        if (!isTizen) setIsSearchTyping(true);
-                                    }}
-                                    onBlur={() => {
-                                        if (isTizen) setIsSearchActive(false);
-                                        setIsSearchTyping(false);
-                                    }}
-                                />
+                                <div className="relative w-full">
+                                    <input
+                                        type="search"
+                                        name="search"
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                        placeholder="Search titles..."
+                                        className="w-full rounded-full border border-white/10 bg-[#0b1120]/60 px-4 py-2 pr-10 text-sm sm:text-base text-gray-200 placeholder-gray-500 shadow-sm backdrop-blur-md transition-all duration-300 focus:outline-none focus:ring-1 focus:ring-stalker-light focus:bg-white/5 sm:w-64"
+                                        data-focusable="true"
+                                        readOnly={isTizen ? !isSearchActive : !isSearchTyping}
+                                        onClick={() => {
+                                            if (isTizen) setIsSearchActive(true);
+                                            if (!isTizen) setIsSearchTyping(true);
+                                        }}
+                                        onBlur={() => {
+                                            if (isTizen) setIsSearchActive(false);
+                                            setIsSearchTyping(false);
+                                        }}
+                                    />
+                                    <button
+                                        type="submit"
+                                        className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-white transition-colors duration-200"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                        </svg>
+                                    </button>
+                                </div>
                             </form>
                             <button
                                 onClick={cycleSort}
-                                className="flex-shrink-0 flex items-center justify-center rounded-full border border-gray-700/50 bg-gray-900/70 p-2 text-white shadow-sm backdrop-blur-md transition-all duration-300 hover:bg-gray-800/90 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500 active:scale-95"
+                                className="flex-shrink-0 flex items-center justify-center p-2.5 rounded-full border border-white/10 bg-[#0b1120]/60 text-gray-300 shadow-sm backdrop-blur-md transition-all duration-300 hover:text-white hover:bg-white/10 focus:outline-none focus:ring-1 focus:ring-stalker-light active:scale-95"
                                 data-focusable="true"
                                 data-control="sort"
                                 title={`Sort: ${sort === 'alphabetic' ? 'A-Z' : sort === 'oldest' ? 'Oldest' : 'Latest'}`}
                             >
                                 {(!sort || sort === 'latest') && (
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9m-9 4h9m5-4v12m0 0l-4-4m4 4l4-4" />
-                                    </svg>
+                                    <SortDesc className="relative -top-0.5 sm:-top-[1px] h-[18px] w-[18px] sm:h-5 sm:w-5" strokeWidth={1.5} />
                                 )}
                                 {sort === 'oldest' && (
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
-                                    </svg>
+                                    <SortAsc className="relative -top-0.5 sm:-top-[1px] h-[18px] w-[18px] sm:h-5 sm:w-5" strokeWidth={1.5} />
                                 )}
                                 {sort === 'alphabetic' && (
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />
-                                    </svg>
+                                    <ArrowDownAZ className="relative -top-0.5 sm:-top-[1px] h-[18px] w-[18px] sm:h-5 sm:w-5" strokeWidth={1.5} />
                                 )}
                             </button>
                         </div>
@@ -243,4 +248,4 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
         </header>
     );
-};
+});

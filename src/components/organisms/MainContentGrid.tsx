@@ -1,3 +1,4 @@
+import React from 'react';
 import LoadingSpinner from '@/components/atoms/LoadingSpinner';
 import MediaCard from '@/components/molecules/MediaCard';
 import EpisodeCard from '@/components/molecules/EpisodeCard';
@@ -21,12 +22,13 @@ interface MainContentGridProps {
     handleBack: () => void;
     cwRefreshKey: number;
     fetchData: (context: ContextType, contentType: 'movie' | 'series' | 'tv') => void;
+    isRestoringFromHistory: boolean;
 }
 
-export default function MainContentGrid({
+const MainContentGrid = React.memo(({
     items, loading, error, paginationError, context, contentType, totalItemsCount,
     handleItemClick, handlePageChange, channelGroups, handleBack, cwRefreshKey, fetchData
-}: MainContentGridProps) {
+}: MainContentGridProps) => {
     const isTizen = isTizenDevice();
     const isEpisodeList = items && items.length > 0 && items[0].is_episode;
 
@@ -69,17 +71,17 @@ export default function MainContentGrid({
                     <div
                         className={`${contentType === 'tv' ? 'channel-list flex flex-col gap-1'
                                 : isEpisodeList && !isTizen ? 'flex flex-col gap-4'
-                                    : isEpisodeList ? 'grid grid-cols-1 gap-4 md:grid-cols-2'
-                                        : 'grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 md:gap-6 lg:grid-cols-5 xl:grid-cols-6'
+                                    : isEpisodeList ? 'grid grid-cols-1 gap-4 px-2 sm:px-0 md:grid-cols-2'
+                                        : 'grid grid-cols-3 gap-2 px-2 sm:px-0 sm:gap-4 sm:grid-cols-4 md:grid-cols-5 md:gap-6 lg:grid-cols-6 xl:grid-cols-7'
                             } ${loading && items.length > 0 && context.page === 1 ? 'pointer-events-none opacity-50 transition-opacity duration-300' : 'opacity-100'}`}
                     >
-                        {items?.map((item) =>
+                        {items?.map((item, index) =>
                             contentType === 'tv' ? (
-                                <TvChannelListCard key={item.id} item={item} onClick={handleItemClick} isFocused={false} />
+                                <TvChannelListCard key={`${item.id}-${index}`} item={item} onClick={handleItemClick} isFocused={false} />
                             ) : isEpisodeList ? (
-                                <EpisodeCard key={item.id} item={item} onClick={handleItemClick} />
+                                <EpisodeCard key={`${item.id}-${index}`} item={item} onClick={handleItemClick} />
                             ) : (
-                                <MediaCard key={item.id} item={item} onClick={handleItemClick} />
+                                <MediaCard key={`${item.id}-${index}`} item={item} onClick={handleItemClick} />
                             )
                         )}
                     </div>
@@ -108,4 +110,6 @@ export default function MainContentGrid({
             )}
         </>
     );
-}
+});
+
+export default MainContentGrid;

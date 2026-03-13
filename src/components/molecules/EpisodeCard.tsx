@@ -33,7 +33,7 @@ const EpisodeCard: React.FC<EpisodeCardProps> = ({ item, onClick }) => {
 
   return (
     <div
-      className="group relative flex w-full transform cursor-pointer items-center overflow-hidden rounded-lg border-2 border-transparent bg-gray-800 transition-all duration-300 hover:border-blue-500 hover:bg-gray-700 hover:shadow-lg"
+      className="group relative flex w-full transform cursor-pointer items-center overflow-hidden rounded-xl border border-stalker-light/20 bg-[#0f1f3d] transition-all duration-300 hover:border-stalker-light/50 hover:bg-[#0f1f3d] hover:-translate-y-0.5 hover:shadow-lg hover:shadow-stalker-dark/30"
       onClick={() => onClick(item)}
       data-focusable="true"
       tabIndex={-1}
@@ -42,24 +42,24 @@ const EpisodeCard: React.FC<EpisodeCardProps> = ({ item, onClick }) => {
         <div className="absolute right-2 top-2 z-10 h-3 w-3 rounded-full bg-green-500"></div>
       )}
 
-      <div className="relative flex h-14 w-20 shrink-0 items-center justify-center overflow-hidden bg-gray-700 sm:h-16 sm:w-24">
+      <div className="relative flex h-14 w-20 shrink-0 items-center justify-center overflow-hidden bg-black/20 sm:h-16 sm:w-24">
         {imageUrl && !imageError ? (
           <img
             src={imageUrl}
             alt={displayTitle}
-            className="h-full w-full object-contain transition-transform duration-300 group-hover:scale-110"
+            className="h-full w-full object-contain transition-transform duration-500 group-hover:scale-110"
             onError={() => setImageError(true)}
           />
         ) : (
-          <div className="bg-linear-to-br flex h-full w-full items-center justify-center from-gray-700 to-gray-800">
-            <span className="select-none text-lg font-bold text-gray-400 sm:text-xl">
+          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-white/10 to-transparent">
+            <span className="select-none text-lg font-bold text-white/30 sm:text-xl">
               {initials}
             </span>
           </div>
         )}
       </div>
-      <div className="overflow-hidden p-2 sm:p-4">
-        <h3 className="truncate text-sm font-semibold text-white transition-colors duration-300 group-hover:text-blue-400 sm:text-base">
+      <div className="overflow-hidden p-3 sm:p-4">
+        <h3 className="truncate text-sm font-semibold text-white transition-colors duration-300 group-hover:text-stalker-light sm:text-base">
           {displayTitle}
         </h3>
       </div>

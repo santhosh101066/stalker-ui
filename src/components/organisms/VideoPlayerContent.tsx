@@ -435,8 +435,8 @@ const VideoPlayerContent: React.FC = () => {
 
 
 
-                {isRecovering ? (
-                    <div className="flex h-full w-full flex-col items-center justify-center bg-gray-950/90 text-white backdrop-blur-md">
+                {isRecovering && (
+                    <div className="absolute z-50 flex h-full w-full flex-col items-center justify-center bg-gray-950/90 text-white backdrop-blur-md">
                         {/* Animated Rings Container */}
                         <div className="relative mb-8 h-20 w-20">
                             {/* Outer expanding ring for depth */}
@@ -471,8 +471,10 @@ const VideoPlayerContent: React.FC = () => {
                             </div>
                         </div>
                     </div>
-                ) : (<MediaPlayer key={`${reloadTrigger}-${useProxy ? 'proxied' : 'direct'}`}
-                    className="h-full w-full media-provider"
+                )}
+                
+                <MediaPlayer key={`${reloadTrigger}-${useProxy ? 'proxied' : 'direct'}`}
+                    className={`h-full w-full media-provider ${isRecovering ? 'invisible' : ''}`}
                     title={item?.title || seriesItem?.title || channelInfo?.name || 'Video'}
                     src={videoSrc}
                     viewType="video"
@@ -501,7 +503,6 @@ const VideoPlayerContent: React.FC = () => {
                 >
                     <MediaProvider />
                 </MediaPlayer>
-                )}
 
                 {previewChannelInfo && (
                     <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center">
