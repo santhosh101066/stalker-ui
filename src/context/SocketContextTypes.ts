@@ -20,7 +20,11 @@ export interface SocketContextProps {
   isConnected: boolean;
   receivers: Device[];
   isReceiver: boolean;
+  castTo: (
+    targetDeviceId: string,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    castTo: (targetDeviceId: string, media: any, playbackInfo?: PlaybackInfo) => void;
+    media: any,
+    playbackInfo?: PlaybackInfo
+  ) => void;
   refreshReceivers: () => void;
 }

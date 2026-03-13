@@ -58,9 +58,13 @@ export function useTVFocus({
                 };
               }
             ).tizen?.tvinputdevice?.registerKey(key);
-          } catch { /* ignore */ }
+          } catch {
+            /* ignore */
+          }
         });
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
       return () => {
         try {
           keysToRegister.forEach((key) => {
@@ -75,7 +79,9 @@ export function useTVFocus({
               }
             ).tizen?.tvinputdevice?.unregisterKey(key);
           });
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
       };
     }
   }, [isTizen]);

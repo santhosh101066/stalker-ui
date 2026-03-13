@@ -30,38 +30,45 @@
 ## 🚀 Quick Start
 
 ### Prerequisites
+
 - Node.js (v18+)
 - npm or yarn
 
 ### Installation
 
 1.  **Clone the repository**
+
     ```bash
     git clone https://github.com/yourusername/stalker-ui-v2.git
     cd stalker-ui-v2
     ```
 
 2.  **Install dependencies**
+
     ```bash
     npm install
     ```
 
 3.  **Configure Environment**
     Copy the example environment file and configure your backend IP.
+
     ```bash
     cp .env.example .env
     ```
+
     Edit `.env`:
+
     ```ini
     # Set this to your Stalker Server IP
     VITE_API_HOST=http://YOUR_SERVER_IP:3000
-    
+
     # Deployment Targets
     TIZEN_DIR=/path/to/tizen/project/public
     SERVER_DIR=../stalker-m3u-server/public
     ```
 
 4.  **Run Development Server**
+
     ```bash
     npm run dev
     ```
@@ -77,18 +84,23 @@
 We use a consolidated `deploy.sh` script to handle builds for different environments.
 
 ### Option 1: Deploy to Server (Default)
-Builds the app using relative API paths and deploys to the configured `SERVER_DIR`. Best when the app is served from the *same* origin as the API.
+
+Builds the app using relative API paths and deploys to the configured `SERVER_DIR`. Best when the app is served from the _same_ origin as the API.
+
 ```bash
 ./deploy.sh
 ```
 
 ### Option 2: Deploy to Tizen TV
+
 Builds the app with a hardcoded server IP (from your `.env`) and deploys to the configured `TIZEN_DIR`. Best for Tizen Studio or side-loading.
+
 ```bash
 ./deploy.sh --tizen
 ```
 
 This will:
+
 1.  Read your configuration.
 2.  Build the Vite project.
 3.  Deploy the `dist/` artifacts to your configured `DEPLOY_DIR` (default: `../stalker-m3u-server/public`).

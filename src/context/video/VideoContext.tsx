@@ -1,5 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import React, { useRef, useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
+import React, {
+  useRef,
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  type ReactNode,
+} from 'react';
 import { formatTime, isTizenDevice } from '@/utils/helpers';
 import { isHLSProvider, type MediaProviderAdapter } from '@vidstack/react';
 import { toast } from 'react-toastify';
@@ -445,7 +452,7 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
         try {
           await elem.requestFullscreen();
           if (screen.orientation && 'lock' in screen.orientation) {
-                        // @ts-expect-error - Screen Orientation API types not fully supported
+            // @ts-expect-error - Screen Orientation API types not fully supported
             screen.orientation.lock('landscape').catch((e) => {
               console.warn('Orientation lock failed:', e);
             });

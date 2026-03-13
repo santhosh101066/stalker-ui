@@ -124,8 +124,10 @@ const ContinueWatching: React.FC<ContinueWatchingProps> = ({
             ) {
               localStorage.removeItem(key);
             }
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        } catch (_) { /* ignore */ }
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          } catch (_) {
+            /* ignore */
+          }
         }
       });
       loadItems();

@@ -33,7 +33,7 @@ const EpisodeCard: React.FC<EpisodeCardProps> = ({ item, onClick }) => {
 
   return (
     <div
-      className="group relative flex w-full transform cursor-pointer items-center overflow-hidden rounded-xl border border-stalker-light/20 bg-[#0f1f3d] transition-all duration-300 hover:border-stalker-light/50 hover:bg-[#0f1f3d] hover:-translate-y-0.5 hover:shadow-lg hover:shadow-stalker-dark/30"
+      className="group relative flex w-full transform cursor-pointer items-center overflow-hidden rounded-xl border border-stalker-light/20 bg-[#0f1f3d] transition-all duration-300 hover:-translate-y-0.5 hover:border-stalker-light/50 hover:bg-[#0f1f3d] hover:shadow-lg hover:shadow-stalker-dark/30"
       onClick={() => onClick(item)}
       data-focusable="true"
       tabIndex={-1}

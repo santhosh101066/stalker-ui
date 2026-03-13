@@ -2,7 +2,8 @@ export const URL_PATHS = {
   HOST: import.meta.env.VITE_API_HOST || 'http://localhost:3000',
 };
 
-export const BASE_URL = URL_PATHS.HOST === '/' ? '/api' : `${URL_PATHS.HOST}/api`;
+export const BASE_URL =
+  URL_PATHS.HOST === '/' ? '/api' : `${URL_PATHS.HOST}/api`;
 
 export interface ApiResponse<T = unknown> {
   data: T;
@@ -32,7 +33,10 @@ interface Api {
 export const api: Api = {
   get: async <T = unknown>(
     path: string,
-    { params, signal }: { params?: Record<string, unknown>; signal?: AbortSignal } = {}
+    {
+      params,
+      signal,
+    }: { params?: Record<string, unknown>; signal?: AbortSignal } = {}
   ): Promise<ApiResponse<T>> => {
     const fullUrl = `${BASE_URL}${path}`;
     const url =
@@ -166,4 +170,3 @@ export const api: Api = {
     }
   },
 };
-

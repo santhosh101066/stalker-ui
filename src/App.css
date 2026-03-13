@@ -42,7 +42,7 @@
 }
 
 .focused {
-  outline: 2px solid #3b82f6; 
+  outline: 2px solid #3b82f6;
   outline-offset: 2px;
   border-color: #eef5ff !important;
 }
