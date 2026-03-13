@@ -8,8 +8,6 @@ import type { MediaItem, ContextType } from '@/types';
 import { isTizenDevice } from '@/utils/helpers';
 import { initialContext } from './useMediaLibrary';
 
-// ─── Types ───────────────────────────────────────────────────────────────────
-
 interface NavFrame {
   context: ContextType;
   items: MediaItem[];
@@ -17,8 +15,6 @@ interface NavFrame {
   currentSeriesItem: MediaItem | null;
   totalItemsCount: number;
 }
-
-// ─── Pure Helpers ─────────────────────────────────────────────────────────────
 
 function buildProxiedUrl(raw: string) {
   return `${BASE_URL}/proxy?url=${btoa(raw)}`;
@@ -35,7 +31,6 @@ async function resolveStreamUrl(
 
   const urlParams: Record<string, any> = { id: item.id };
 
-  // 🎯 Map series number exactly like original
   if (seriesNumber !== undefined) {
     urlParams.series = seriesNumber;
   }
@@ -57,8 +52,6 @@ function getResumeTime(item: MediaItem): number | undefined {
   }
 }
 
-// ─── Hook ─────────────────────────────────────────────────────────────────────
-
 export function useAppNavigation(
   context: ContextType,
   items: MediaItem[],
@@ -79,7 +72,6 @@ export function useAppNavigation(
 ) {
   const isTizen = isTizenDevice();
 
-  // ── State ─────────────────────────────────────────────────────────────────
   const [history, setHistory] = useState<NavFrame[]>([]);
   const [streamUrl, setStreamUrl] = useState<string | null>(null);
   const [rawStreamUrl, setRawStreamUrl] = useState<string | null>(null);
@@ -94,8 +86,6 @@ export function useAppNavigation(
   const [focusedIndex, setFocusedIndex] = useState<number>(0);
 
   const channelChangeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // ── Internal helpers ──────────────────────────────────────────────────────
 
   const pushFrame = useCallback(() => {
     setHistory((prev) => [
@@ -115,8 +105,6 @@ export function useAppNavigation(
     },
     []
   );
-
-  // ── Continue-watching resolution ──────────────────────────────────────────
 
   const playContinueWatching = useCallback(
     async (item: MediaItem, displayTitle: string) => {
@@ -160,6 +148,7 @@ export function useAppNavigation(
           items,
           focusedIndex,
           currentSeriesItem,
+          totalItemsCount,
         };
         const seasonContext: ContextType = {
           ...initialContext,
@@ -177,6 +166,7 @@ export function useAppNavigation(
             id: mainSeriesId,
             is_series: 1,
           } as MediaItem,
+          totalItemsCount: 0,
         };
 
         setHistory((prev) => [...prev, homeState, seasonState]);
@@ -198,7 +188,6 @@ export function useAppNavigation(
         name: item.name || item.title,
       } as MediaItem);
 
-      // 🎯 EXACTLY like original
       const urlParams: Record<string, any> = { id: playbackId };
       if (item.series_number !== undefined) {
         urlParams.series = item.series_number;
@@ -218,11 +207,8 @@ export function useAppNavigation(
     [context, currentSeriesItem, fetchData, focusedIndex, items]
   );
 
-  // ── Main click handler ────────────────────────────────────────────────────
-
   const handleItemClick = useCallback(
     async (item: MediaItem) => {
-      // 1. Basic Validation & UI Cleanup
       if (contentType === 'tv' && streamUrl && currentItem?.id === item.id)
         return;
 
@@ -234,7 +220,6 @@ export function useAppNavigation(
 
       const displayTitle = item.title || item.name || '';
 
-      // 2. Continue Watching Flow
       if (item.is_continue_watching) {
         try {
           await playContinueWatching(item, displayTitle);
@@ -248,9 +233,8 @@ export function useAppNavigation(
       const isInsideMovieCategory =
         contentType === 'movie' && context.category !== null;
 
-      // 3. Navigation Logic (Series/Seasons/Categories)
       if (item.is_series == 1) {
-        pushFrame(); // Old code used pushFrame for history
+        pushFrame();
         setCurrentSeriesItem(item);
         setResumePlaybackState(undefined);
         fetchData({
@@ -287,7 +271,6 @@ export function useAppNavigation(
         return;
       }
 
-      // 4. Playable Item: EPISODE
       if (item.is_episode) {
         try {
           const res = await getMedia({
@@ -302,7 +285,7 @@ export function useAppNavigation(
             throw new Error('No episode files returned.');
 
           const episodeFile = episodeFiles[0];
-          // Enriched item-la existing metadata (image, title) ellam irukkum
+
           const enrichedItem = {
             ...episodeFile,
             _episodeCardId: item.id,
@@ -315,7 +298,6 @@ export function useAppNavigation(
             item.series_number
           );
 
-          // Resume time-a eduthu player-kku anuprom
           openPlayer(enrichedItem as any, raw, proxied, getResumeTime(item));
         } catch (err) {
           console.error(err);
@@ -324,7 +306,6 @@ export function useAppNavigation(
         return;
       }
 
-      // 5. Playable Item: MOVIE
       if (isInsideMovieCategory || item.is_playable_movie) {
         try {
           const res = await getMedia({
@@ -334,7 +315,6 @@ export function useAppNavigation(
           if (!res.data?.length) throw new Error('No movie files returned.');
 
           const movieFile = res.data[0];
-          // Metadata missing-a avoid panna, current item details-a kooda merge pannikalam
           // eslint-disable-next-line @typescript-eslint/no-unused-vars
           const { id, cmd, ...filteredItem } = item;
           const finalMovieItem = { ...movieFile, ...filteredItem };
@@ -348,7 +328,6 @@ export function useAppNavigation(
         return;
       }
 
-      // 6. Live TV Flow
       if (contentType === 'tv') {
         if (!item.cmd) {
           toast.error('Channel has no command to play.');
@@ -363,7 +342,6 @@ export function useAppNavigation(
         return;
       }
 
-      // Default Fallback
       fetchData({
         ...initialContext,
         category: item.id,
@@ -385,8 +363,6 @@ export function useAppNavigation(
     ]
   );
 
-  // ── Close player ──────────────────────────────────────────────────────────
-
   const closePlayer = useCallback(() => {
     if (channelChangeTimer.current) {
       clearTimeout(channelChangeTimer.current);
@@ -400,7 +376,6 @@ export function useAppNavigation(
     setResumePlaybackState(undefined);
   }, []);
 
-  // Update handleBack to accept a parameter
   const handleBack = useCallback(() => {
     if (streamUrl) {
       closePlayer();
@@ -411,10 +386,8 @@ export function useAppNavigation(
       const previousFrame = history[history.length - 1];
       setHistory((prev) => prev.slice(0, -1));
 
-      // 1. Logic-ah lock panrom
       isRestoringFromHistory.current = true;
 
-      // 2. State-ah restore panrom
       setFocusedIndex(previousFrame.focusedIndex);
       setCurrentSeriesItem(previousFrame.currentSeriesItem);
       setItems(previousFrame.items);
@@ -423,11 +396,17 @@ export function useAppNavigation(
 
       setTimeout(() => {
         isRestoringFromHistory.current = false;
-      }, 500); 
+      }, 500);
     }
-  }, [streamUrl, history, closePlayer, isRestoringFromHistory, setItems, setContext, setTotalItemsCount]);
-
-  // ── Cast ──────────────────────────────────────────────────────────────────
+  }, [
+    streamUrl,
+    history,
+    closePlayer,
+    isRestoringFromHistory,
+    setItems,
+    setContext,
+    setTotalItemsCount,
+  ]);
 
   const playCastedMedia = useCallback(
     (media: MediaItem, castStreamUrl?: string, castRawStreamUrl?: string) => {
@@ -437,8 +416,6 @@ export function useAppNavigation(
     },
     []
   );
-
-  // ── Channel debounce ──────────────────────────────────────────────────────
 
   const debounceChannelChange = useCallback(
     (direction: 'next' | 'prev') => {
@@ -478,8 +455,6 @@ export function useAppNavigation(
     [debounceChannelChange]
   );
 
-  // ── Browser history sync ──────────────────────────────────────────────────
-
   const handleBackRef = useRef(handleBack);
   useEffect(() => {
     handleBackRef.current = handleBack;
@@ -497,13 +472,11 @@ export function useAppNavigation(
 
   useEffect(() => {
     const onPopState = () => {
-      handleBackRef.current(true); 
+      handleBackRef.current?.();
     };
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
   }, []);
-
-  // ── Auto-play last TV channel (Tizen) ─────────────────────────────────────
 
   useEffect(() => {
     if (
@@ -527,8 +500,6 @@ export function useAppNavigation(
     isTizen,
     setPlayLastTvChannel,
   ]);
-
-  // ── Public API ────────────────────────────────────────────────────────────
 
   return {
     history,

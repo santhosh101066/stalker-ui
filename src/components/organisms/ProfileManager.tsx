@@ -37,14 +37,14 @@ const ProfileManager = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newProfileName, setNewProfileName] = useState('');
   const [newProfileDescription, setNewProfileDescription] = useState('');
-  const [newProfileProviderType, setNewProfileProviderType] = useState<'stalker' | 'xtream'>('stalker');
+  const [newProfileProviderType, setNewProfileProviderType] = useState<
+    'stalker' | 'xtream'
+  >('stalker');
 
-  // Ref for duplicate name to avoid closure staleness in modal callback
   const duplicateNameRef = useRef('');
   const [newProfileUsername, setNewProfileUsername] = useState('');
   const [newProfilePassword, setNewProfilePassword] = useState('');
 
-  // Confirmation Modal State
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
     title: string;
@@ -59,7 +59,7 @@ const ProfileManager = () => {
     isOpen: false,
     title: '',
     message: '',
-    onConfirm: () => { },
+    onConfirm: () => {},
     showInput: false,
     inputValue: '',
   });
@@ -133,7 +133,9 @@ const ProfileManager = () => {
           toast.success('Profile deleted');
           loadProfiles();
         } catch (error: any) {
-          toast.error(error.response?.data?.error || 'Failed to delete profile');
+          toast.error(
+            error.response?.data?.error || 'Failed to delete profile'
+          );
           console.error('Error deleting profile:', error);
         }
       },
@@ -141,7 +143,6 @@ const ProfileManager = () => {
   };
 
   const handleCreateProfile = async () => {
-    // Fix: Trim whitespace to prevent "Name " duplicates
     const safeName = newProfileName.trim();
 
     if (!safeName) {
@@ -153,12 +154,17 @@ const ProfileManager = () => {
       const configResponse = await api.get<ConfigProfile['config']>('/config');
       const currentConfig = configResponse.data;
 
-      // Override with new fields if set
       const newConfig = {
         ...currentConfig,
         providerType: newProfileProviderType,
-        username: newProfileProviderType === 'xtream' ? newProfileUsername : currentConfig.username,
-        password: newProfileProviderType === 'xtream' ? newProfilePassword : currentConfig.password,
+        username:
+          newProfileProviderType === 'xtream'
+            ? newProfileUsername
+            : currentConfig.username,
+        password:
+          newProfileProviderType === 'xtream'
+            ? newProfilePassword
+            : currentConfig.password,
       };
 
       await api.post('/profiles', {
@@ -200,7 +206,6 @@ const ProfileManager = () => {
 
         setConfirmModal((prev) => ({ ...prev, isOpen: false }));
         try {
-          // Inherit config but use new name
           await api.post('/profiles', {
             name: safeName,
             description: profile.description,
@@ -209,7 +214,9 @@ const ProfileManager = () => {
           toast.success('Profile duplicated successfully');
           loadProfiles();
         } catch (error: any) {
-          toast.error(error.response?.data?.error || 'Failed to duplicate profile');
+          toast.error(
+            error.response?.data?.error || 'Failed to duplicate profile'
+          );
         }
       },
       isDestructive: false,
@@ -259,10 +266,11 @@ const ProfileManager = () => {
           <div
             key={profile.id}
             data-focusable="true"
-            className={`relative flex flex-col justify-between rounded-xl border p-5 shadow-lg backdrop-blur-md transition-all ${profile.isActive
-              ? 'border-green-500 bg-green-900/10 ring-1 ring-green-500/50'
-              : 'border-gray-700/50 bg-gray-800/40 hover:bg-gray-800/60'
-              } ${!profile.isEnabled ? 'opacity-75 grayscale' : ''}`}
+            className={`relative flex flex-col justify-between rounded-xl border p-5 shadow-lg backdrop-blur-md transition-all ${
+              profile.isActive
+                ? 'border-green-500 bg-green-900/10 ring-1 ring-green-500/50'
+                : 'border-gray-700/50 bg-gray-800/40 hover:bg-gray-800/60'
+            } ${!profile.isEnabled ? 'opacity-75 grayscale' : ''}`}
           >
             <div>
               <div className="flex items-start justify-between">
@@ -279,7 +287,7 @@ const ProfileManager = () => {
                 {profile.description || 'No description provided.'}
               </p>
 
-              {/* Mini Info Pills */}
+              {}
               <div className="mt-4 flex flex-wrap gap-2 text-xs">
                 <span className="rounded bg-gray-700/50 px-2 py-1 text-gray-300 backdrop-blur-sm">
                   Type:{' '}
@@ -316,7 +324,7 @@ const ProfileManager = () => {
                   <button
                     onClick={() => handleDeleteProfile(profile)}
                     data-focusable="true"
-                    className="rounded-lg bg-red-500/10 px-3 py-1.5 text-xs font-bold text-red-400 border border-red-500/20 hover:bg-red-500/20 active:scale-95"
+                    className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-1.5 text-xs font-bold text-red-400 hover:bg-red-500/20 active:scale-95"
                   >
                     Delete
                   </button>
@@ -326,17 +334,18 @@ const ProfileManager = () => {
                 onClick={() => handleToggleEnabled(profile)}
                 disabled={profile.isActive}
                 data-focusable="true"
-                className={`rounded-lg px-3 py-1.5 text-xs font-bold transition-all active:scale-95 ${profile.isActive
-                  ? 'invisible'
-                  : 'bg-gray-700/50 text-gray-300 hover:bg-gray-600/80 border border-gray-600/30'
-                  }`}
+                className={`rounded-lg px-3 py-1.5 text-xs font-bold transition-all active:scale-95 ${
+                  profile.isActive
+                    ? 'invisible'
+                    : 'border border-gray-600/30 bg-gray-700/50 text-gray-300 hover:bg-gray-600/80'
+                }`}
               >
                 {profile.isEnabled ? 'Disable' : 'Enable'}
               </button>
               <button
                 onClick={() => handleDuplicateProfile(profile)}
                 data-focusable="true"
-                className="rounded-lg bg-blue-500/10 px-3 py-1.5 text-xs font-bold text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 active:scale-95"
+                className="rounded-lg border border-blue-500/20 bg-blue-500/10 px-3 py-1.5 text-xs font-bold text-blue-400 hover:bg-blue-500/20 active:scale-95"
               >
                 Clone
               </button>
@@ -345,7 +354,7 @@ const ProfileManager = () => {
         ))}
       </div>
 
-      {/* Create Modal (Glassmorphic) */}
+      {}
       {showCreateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-2xl border border-gray-700/50 bg-gray-900/80 p-6 shadow-2xl backdrop-blur-md">
@@ -380,13 +389,13 @@ const ProfileManager = () => {
                 />
               </div>
 
-              {/* Provider Type Selection */}
+              {}
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-400">
                   Provider Type
                 </label>
                 <div className="flex gap-4">
-                  <label className="flex cursor-pointer items-center gap-2 group">
+                  <label className="group flex cursor-pointer items-center gap-2">
                     <input
                       type="radio"
                       name="newProfileProviderType"
@@ -394,11 +403,13 @@ const ProfileManager = () => {
                       data-focusable="true"
                       checked={newProfileProviderType === 'stalker'}
                       onChange={() => setNewProfileProviderType('stalker')}
-                      className="h-4 w-4 text-blue-600 bg-gray-700 border-gray-600 focus:ring-blue-500"
+                      className="h-4 w-4 border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"
                     />
-                    <span className="text-sm text-gray-300 group-hover:text-white transition-colors">Stalker</span>
+                    <span className="text-sm text-gray-300 transition-colors group-hover:text-white">
+                      Stalker
+                    </span>
                   </label>
-                  <label className="flex cursor-pointer items-center gap-2 group">
+                  <label className="group flex cursor-pointer items-center gap-2">
                     <input
                       type="radio"
                       name="newProfileProviderType"
@@ -406,14 +417,16 @@ const ProfileManager = () => {
                       data-focusable="true"
                       checked={newProfileProviderType === 'xtream'}
                       onChange={() => setNewProfileProviderType('xtream')}
-                      className="h-4 w-4 text-blue-600 bg-gray-700 border-gray-600 focus:ring-blue-500"
+                      className="h-4 w-4 border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"
                     />
-                    <span className="text-sm text-gray-300 group-hover:text-white transition-colors">Xtream Codes</span>
+                    <span className="text-sm text-gray-300 transition-colors group-hover:text-white">
+                      Xtream Codes
+                    </span>
                   </label>
                 </div>
               </div>
 
-              {/* Xtream Credentials (Conditional) */}
+              {}
               {newProfileProviderType === 'xtream' && (
                 <div className="space-y-3 rounded-xl border border-gray-700/50 bg-gray-800/30 p-4">
                   <div>
@@ -443,22 +456,23 @@ const ProfileManager = () => {
                 </div>
               )}
 
-              <div className="rounded-lg bg-blue-900/10 border border-blue-500/20 p-3 text-xs text-blue-300">
-                This profile will inherit other settings from your current configuration.
+              <div className="rounded-lg border border-blue-500/20 bg-blue-900/10 p-3 text-xs text-blue-300">
+                This profile will inherit other settings from your current
+                configuration.
               </div>
             </div>
             <div className="mt-6 flex justify-end gap-3">
               <button
                 onClick={() => setShowCreateModal(false)}
                 data-focusable="true"
-                className="rounded-lg px-4 py-2 text-sm font-semibold text-gray-400 hover:text-white hover:bg-white/5 transition-colors"
+                className="rounded-lg px-4 py-2 text-sm font-semibold text-gray-400 transition-colors hover:bg-white/5 hover:text-white"
               >
                 Cancel
               </button>
               <button
                 onClick={handleCreateProfile}
                 data-focusable="true"
-                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white shadow-lg shadow-blue-500/20 hover:bg-blue-500 active:scale-95 transition-all"
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white shadow-lg shadow-blue-500/20 transition-all hover:bg-blue-500 active:scale-95"
               >
                 Create
               </button>

@@ -7,96 +7,113 @@ import { isTizenDevice } from '@/utils/helpers';
 import { SocketContext } from '@/context/useSocket';
 import type { Device } from '@/context/SocketContextTypes';
 
-export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-    const [socket, setSocket] = useState<Socket | null>(null);
-    const [isConnected, setIsConnected] = useState(false);
-    const [receivers, setReceivers] = useState<Device[]>([]);
+export const SocketProvider: React.FC<{ children: ReactNode }> = ({
+  children,
+}) => {
+  const [socket, setSocket] = useState<Socket | null>(null);
+  const [isConnected, setIsConnected] = useState(false);
+  const [receivers, setReceivers] = useState<Device[]>([]);
 
-    // Use HOST directly
-    const SOCKET_URL = URL_PATHS.HOST;
+  const SOCKET_URL = URL_PATHS.HOST;
 
-    const isTizen = isTizenDevice();
-    // Allow manual override via query param for testing (e.g. ?device=receiver)
-    const searchParams = new URLSearchParams(window.location.search);
-    const isReceiver = isTizen || searchParams.get('device') === 'receiver';
+  const isTizen = isTizenDevice();
 
-    useEffect(() => {
-        let deviceId = localStorage.getItem('device_id');
-        if (!deviceId) {
-            deviceId = uuidv4();
-            localStorage.setItem('device_id', deviceId);
-        }
-        const currentDeviceId = deviceId;
+  const searchParams = new URLSearchParams(window.location.search);
+  const isReceiver = isTizen || searchParams.get('device') === 'receiver';
 
-        const deviceName = isReceiver
-            ? `TV (${currentDeviceId.substring(0, 4)})`
-            : `Controller (${currentDeviceId.substring(0, 4)})`;
+  useEffect(() => {
+    let deviceId = localStorage.getItem('device_id');
+    if (!deviceId) {
+      deviceId = uuidv4();
+      localStorage.setItem('device_id', deviceId);
+    }
+    const currentDeviceId = deviceId;
 
-        const newSocket = io(SOCKET_URL, {
-            transports: ['polling', 'websocket'],
-            reconnection: true,
-        });
+    const deviceName = isReceiver
+      ? `TV (${currentDeviceId.substring(0, 4)})`
+      : `Controller (${currentDeviceId.substring(0, 4)})`;
 
-        const handleListUpdate = (data: unknown) => {
-            const list = (Array.isArray(data) ? data : ((data as Record<string, unknown>).receivers || [])) as Device[];
-            const filtered = list.filter((r: Device) => r.id !== currentDeviceId);
-            setReceivers(filtered);
-        };
+    const newSocket = io(SOCKET_URL, {
+      transports: ['polling', 'websocket'],
+      reconnection: true,
+    });
 
-        newSocket.on('connect', () => {
-            setIsConnected(true);
-            newSocket.emit('register', {
-                id: currentDeviceId,
-                name: deviceName,
-                type: isReceiver ? 'receiver' : 'controller',
-            });
-            // Request list immediately after register
-            newSocket.emit('get_receivers');
-        });
+    const handleListUpdate = (data: unknown) => {
+      const list = (
+        Array.isArray(data)
+          ? data
+          : (data as Record<string, unknown>).receivers || []
+      ) as Device[];
+      const filtered = list.filter((r: Device) => r.id !== currentDeviceId);
+      setReceivers(filtered);
+    };
 
-        newSocket.on('receivers_updated', handleListUpdate);
-        newSocket.on('receivers_list', handleListUpdate);
+    newSocket.on('connect', () => {
+      setIsConnected(true);
+      newSocket.emit('register', {
+        id: currentDeviceId,
+        name: deviceName,
+        type: isReceiver ? 'receiver' : 'controller',
+      });
 
-        newSocket.on('disconnect', () => setIsConnected(false));
+      newSocket.emit('get_receivers');
+    });
 
-        setSocket(newSocket);
+    newSocket.on('receivers_updated', handleListUpdate);
+    newSocket.on('receivers_list', handleListUpdate);
 
-        return () => {
-            // Cleanup: remove listeners and disconnect
-            newSocket.off('receivers_updated');
-            newSocket.off('receivers_list');
-            newSocket.disconnect();
-        };
-    }, [SOCKET_URL, isReceiver]); // isReceiver maaruna fresh socket setup aagum
+    newSocket.on('disconnect', () => setIsConnected(false));
 
+    setSocket(newSocket);
+
+    return () => {
+      newSocket.off('receivers_updated');
+      newSocket.off('receivers_list');
+      newSocket.disconnect();
+    };
+  }, [SOCKET_URL, isReceiver]);
+
+  const castTo = (
+    targetDeviceId: string,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const castTo = (targetDeviceId: string, content: any, playbackInfo?: {
-        currentTime?: number;
-        volume?: number;
-        muted?: boolean;
-        subtitleTrackIndex?: number;
-        audioTrackIndex?: number;
-    }) => {
-        if (!socket) return;
-        socket.emit('cast_command', {
-            targetDeviceId,
-            command: 'play',
-            payload: {
-                ...content,
-                playbackInfo
-            }
-        });
-    };
+    content: any,
+    playbackInfo?: {
+      currentTime?: number;
+      volume?: number;
+      muted?: boolean;
+      subtitleTrackIndex?: number;
+      audioTrackIndex?: number;
+    }
+  ) => {
+    if (!socket) return;
+    socket.emit('cast_command', {
+      targetDeviceId,
+      command: 'play',
+      payload: {
+        ...content,
+        playbackInfo,
+      },
+    });
+  };
 
-    const refreshReceivers = () => {
-        if (socket && isConnected) {
-            socket.emit('get_receivers');
-        }
-    };
+  const refreshReceivers = () => {
+    if (socket && isConnected) {
+      socket.emit('get_receivers');
+    }
+  };
 
-    return (
-        <SocketContext.Provider value={{ socket, isConnected, receivers, isReceiver, castTo, refreshReceivers }}>
-            {children}
-        </SocketContext.Provider>
-    );
+  return (
+    <SocketContext.Provider
+      value={{
+        socket,
+        isConnected,
+        receivers,
+        isReceiver,
+        castTo,
+        refreshReceivers,
+      }}
+    >
+      {children}
+    </SocketContext.Provider>
+  );
 };

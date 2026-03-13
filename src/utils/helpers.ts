@@ -13,7 +13,7 @@ export const formatTime = (timeInSeconds: number): string => {
 
 export const isTizenDevice = (): boolean => {
   if (typeof window === 'undefined') return false;
-  // Check specifically for mock query param
+
   const urlParams = new URLSearchParams(window.location.search);
   if (urlParams.get('mock_tizen') === 'true') {
     return true;

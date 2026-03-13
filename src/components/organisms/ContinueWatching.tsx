@@ -9,7 +9,7 @@ interface ContinueWatchingProps {
 }
 
 interface ProgressEntry {
-  id?: string; // ID fix kaga ithu mattum add aagirukku
+  id?: string;
   mediaId: string;
   itemId?: string;
   type: string;
@@ -26,7 +26,10 @@ interface ProgressEntry {
   timestamp: number;
 }
 
-const ContinueWatching: React.FC<ContinueWatchingProps> = ({ onClick, refreshKey }) => {
+const ContinueWatching: React.FC<ContinueWatchingProps> = ({
+  onClick,
+  refreshKey,
+}) => {
   const [inProgressItems, setInProgressItems] = useState<MediaItem[]>([]);
 
   const loadItems = useCallback(() => {
@@ -51,7 +54,6 @@ const ContinueWatching: React.FC<ContinueWatchingProps> = ({ onClick, refreshKey
 
         if (entry.type === 'tv') continue;
 
-        // ID problem varama irukka intha line mattum update aagirukku
         const displayId = entry.id || entry.itemId || entry.mediaId;
 
         if (!displayId || addedIds.has(displayId.toString())) continue;
@@ -62,15 +64,17 @@ const ContinueWatching: React.FC<ContinueWatchingProps> = ({ onClick, refreshKey
         items.push({
           id: displayId.toString(),
           series_id: isSeries ? entry.mediaId : undefined,
-          season_id: isSeries ? (entry as any).seasonId || undefined : undefined,
-          // Pazhaiya title & name logic apdiye irukku
+          season_id: isSeries
+            ? (entry as any).seasonId || undefined
+            : undefined,
+
           title: isSeries
             ? `${entry.title}${entry.episodeTitle ? ' – ' + entry.episodeTitle : ''}`
             : entry.title,
           name: isSeries
             ? `${entry.name || entry.title}${entry.episodeTitle ? ' – ' + entry.episodeTitle : ''}`
-            : (entry.name || entry.title),
-          // Pazhaiya screenshot_uri apdiye irukku
+            : entry.name || entry.title,
+
           screenshot_uri: entry.screenshot_uri,
 
           is_series: 0,
@@ -81,13 +85,15 @@ const ContinueWatching: React.FC<ContinueWatchingProps> = ({ onClick, refreshKey
           cmd: entry.cmd,
           series_number: entry.series_number,
           progressPercent: entry.progressPercent,
-          // Carry the exact file ID used for getMovieUrl so CW resume plays the correct video
-          playbackFileId: (entry as any).playbackFileId || entry.itemId || entry.mediaId,
-          // Preserve original contentType and category for correct back-nav context in movie-section series
+
+          playbackFileId:
+            (entry as any).playbackFileId || entry.itemId || entry.mediaId,
+
           cw_content_type: entry.type,
           cw_category_id: (entry as any).categoryId || null,
-          // Episode card ID: used to re-fetch the episode file during CW resume (avoids stale file IDs)
-          cw_episode_card_id: (entry as any).episodeCardId || entry.itemId || null,
+
+          cw_episode_card_id:
+            (entry as any).episodeCardId || entry.itemId || null,
         } as any);
         addedIds.add(displayId.toString());
       } catch (err) {
@@ -101,22 +107,31 @@ const ContinueWatching: React.FC<ContinueWatchingProps> = ({ onClick, refreshKey
     loadItems();
   }, [loadItems, refreshKey]);
 
-  const handleDismiss = useCallback((e: React.MouseEvent, targetId: string) => {
-    e.stopPropagation();
-    localStorage.removeItem(`video-in-progress-${targetId}`);
-    Object.keys(localStorage).forEach((key) => {
-      if (key.startsWith('video-in-progress-')) {
-        try {
-          const entry: ProgressEntry = JSON.parse(localStorage.getItem(key) || '{}');
-          if (entry.id === targetId || entry.itemId === targetId || entry.mediaId === targetId) {
-            localStorage.removeItem(key);
-          }
+  const handleDismiss = useCallback(
+    (e: React.MouseEvent, targetId: string) => {
+      e.stopPropagation();
+      localStorage.removeItem(`video-in-progress-${targetId}`);
+      Object.keys(localStorage).forEach((key) => {
+        if (key.startsWith('video-in-progress-')) {
+          try {
+            const entry: ProgressEntry = JSON.parse(
+              localStorage.getItem(key) || '{}'
+            );
+            if (
+              entry.id === targetId ||
+              entry.itemId === targetId ||
+              entry.mediaId === targetId
+            ) {
+              localStorage.removeItem(key);
+            }
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         } catch (_) { /* ignore */ }
-      }
-    });
-    loadItems();
-  }, [loadItems]);
+        }
+      });
+      loadItems();
+    },
+    [loadItems]
+  );
 
   if (inProgressItems.length === 0) {
     return null;
@@ -124,12 +139,14 @@ const ContinueWatching: React.FC<ContinueWatchingProps> = ({ onClick, refreshKey
 
   return (
     <div className="mb-8 px-2 sm:px-0">
-      <h2 className="mb-4 text-xl font-bold text-center sm:text-left text-white sm:text-2xl">Continue Watching</h2>
-      <div className="grid grid-cols-3 gap-2 sm:gap-4 sm:grid-cols-4 md:grid-cols-5 md:gap-6 lg:grid-cols-6 xl:grid-cols-7">
+      <h2 className="mb-4 text-center text-xl font-bold text-white sm:text-left sm:text-2xl">
+        Continue Watching
+      </h2>
+      <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 sm:gap-4 md:grid-cols-5 md:gap-6 lg:grid-cols-6 xl:grid-cols-7">
         {inProgressItems.map((item, index) => (
-          <div key={`${item.id}-${index}`} className="relative group">
+          <div key={`${item.id}-${index}`} className="group relative">
             <button
-              className="absolute right-1 top-1 z-20 flex h-6 w-6 items-center justify-center rounded-full bg-black/70 text-white opacity-0 transition-opacity duration-200 hover:bg-red-600 group-hover:opacity-100 focus:opacity-100"
+              className="absolute right-1 top-1 z-20 flex h-6 w-6 items-center justify-center rounded-full bg-black/70 text-white opacity-0 transition-opacity duration-200 hover:bg-red-600 focus:opacity-100 group-hover:opacity-100"
               style={{ lineHeight: 1 }}
               onClick={(e) => handleDismiss(e, item.id)}
               title="Remove from Continue Watching"

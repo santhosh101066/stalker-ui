@@ -1,4 +1,4 @@
-/* Glassmorphism Panel */
+
 .glass-panel {
   background: rgba(17, 24, 39, 0.75);
   backdrop-filter: blur(20px);
@@ -6,7 +6,7 @@
   border-right: 1px solid rgba(255, 255, 255, 0.05);
 }
 
-/* Custom Scrollbar - Sleeker for Desktop/TV */
+
 .custom-scrollbar::-webkit-scrollbar {
     width: 6px;
 }
@@ -24,7 +24,7 @@
     background-color: rgba(255, 255, 255, 0.4);
 }
 
-/* Animations for Mobile Sliding */
+
 .slide-enter {
   transform: translateX(100%);
   opacity: 0;
@@ -47,7 +47,7 @@
   transition: transform 300ms cubic-bezier(0.4, 0, 0.2, 1), opacity 300ms ease-in-out;
 }
 
-/* Hide scrollbar for TV/Mobile to keep it clean, but allow scrolling */
+
 @media (max-width: 1024px) {
   .no-scrollbar-mobile::-webkit-scrollbar {
     display: none;

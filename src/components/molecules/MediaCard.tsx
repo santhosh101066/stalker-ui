@@ -8,7 +8,11 @@ interface MediaCardProps {
   progressPercent?: number;
 }
 
-const MediaCard: React.FC<MediaCardProps> = ({ item, onClick, progressPercent }) => {
+const MediaCard: React.FC<MediaCardProps> = ({
+  item,
+  onClick,
+  progressPercent,
+}) => {
   const [imageError, setImageError] = useState(false);
   const [isCompleted, setIsCompleted] = useState(false);
 
@@ -30,7 +34,6 @@ const MediaCard: React.FC<MediaCardProps> = ({ item, onClick, progressPercent })
     setImageError(false);
   }, [item.screenshot_uri]);
 
-  // Intersection Observer for Lazy Loading
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
@@ -68,7 +71,6 @@ const MediaCard: React.FC<MediaCardProps> = ({ item, onClick, progressPercent })
           setIsCompleted(true);
         }
       } catch (error) {
-        // For backward compatibility
         if (completed === 'true') {
           setIsCompleted(true);
         }
@@ -77,7 +79,6 @@ const MediaCard: React.FC<MediaCardProps> = ({ item, onClick, progressPercent })
     }
   }, [item.id]);
 
-  // Use prop progress if passed (CW row), otherwise fall back to item field
   const displayProgress = progressPercent ?? item.progressPercent;
 
   return (
@@ -93,7 +94,7 @@ const MediaCard: React.FC<MediaCardProps> = ({ item, onClick, progressPercent })
         <div className="absolute right-2 top-2 z-10 h-3 w-3 rounded-full bg-green-500"></div>
       )}
 
-      <div className="relative flex w-full aspect-[2/3] md:aspect-auto md:h-56 items-center justify-center overflow-hidden bg-black/20">
+      <div className="relative flex aspect-[2/3] w-full items-center justify-center overflow-hidden bg-black/20 md:aspect-auto md:h-56">
         {isVisible && imageUrl && !imageError ? (
           <img
             src={imageUrl}
@@ -108,9 +109,9 @@ const MediaCard: React.FC<MediaCardProps> = ({ item, onClick, progressPercent })
             </span>
           </div>
         )}
-        {/* Progress bar overlay at bottom of thumbnail */}
+        {}
         {displayProgress !== undefined && displayProgress > 0 && (
-          <div className="absolute bottom-0 left-0 w-full h-1 bg-gray-600/80">
+          <div className="absolute bottom-0 left-0 h-1 w-full bg-gray-600/80">
             <div
               className="h-full bg-gradient-to-r from-stalker-light to-stalker-dark transition-all duration-300"
               style={{ width: `${Math.min(100, displayProgress)}%` }}
@@ -118,8 +119,8 @@ const MediaCard: React.FC<MediaCardProps> = ({ item, onClick, progressPercent })
           </div>
         )}
       </div>
-      <div className="p-3 md:p-4 flex items-center justify-center">
-        <h3 className="truncate text-center text-sm font-bold text-white transition-colors duration-300 group-hover:text-stalker-light md:text-base w-full">
+      <div className="flex items-center justify-center p-3 md:p-4">
+        <h3 className="w-full truncate text-center text-sm font-bold text-white transition-colors duration-300 group-hover:text-stalker-light md:text-base">
           {displayTitle}
         </h3>
       </div>

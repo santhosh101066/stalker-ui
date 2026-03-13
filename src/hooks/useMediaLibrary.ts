@@ -130,7 +130,6 @@ export function useMediaLibrary() {
           setItems((prev) => {
             if (newContext.page === 1) return response.data;
 
-            // Duplicates-ah filter panrom
             const existingIds = new Set(prev.map((item) => item.id));
             const uniqueNew = response.data.filter(
               (item) => !existingIds.has(item.id)
@@ -345,7 +344,7 @@ export function useMediaLibrary() {
     if (!item?.id) return;
     setRecentChannels((prev) => {
       const filtered = prev.filter((id) => id !== item.id);
-      const updated = [item.id, ...filtered].slice(0, 20); // Top 20 mattum vachikkanum
+      const updated = [item.id, ...filtered].slice(0, 20);
       localStorage.setItem('recent_channels', JSON.stringify(updated));
       return updated;
     });
@@ -355,7 +354,7 @@ export function useMediaLibrary() {
     const isTizen = !!(window as Window & { tizen?: unknown }).tizen;
     if (isTizen || contentType === 'tv' || loading || isFetchingMore.current)
       return;
-    // Skip auto-pagination when restoring from navigation history
+
     if (isRestoringFromHistory.current) {
       return;
     }
@@ -373,7 +372,6 @@ export function useMediaLibrary() {
     return () => clearTimeout(timer);
   }, [items, loading, contentType, totalItemsCount, handlePageChange]);
 
-  // --- Web Scroll Pagination ---
   useEffect(() => {
     const handleScroll = () => {
       const isTizen = !!(window as Window & { tizen?: unknown }).tizen;

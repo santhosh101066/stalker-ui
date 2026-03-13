@@ -3,14 +3,12 @@ import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import '@/App.css';
 
-// Components
 import { Header } from '@/components/organisms/Header';
 import Admin from '@/components/organisms/Admin';
 import VideoPlayer from '@/components/organisms/VideoPlayer';
 import ConfirmationModal from '@/components/molecules/ConfirmationModal';
 import MainContentGrid from '@/components/organisms/MainContentGrid';
 
-// Custom Hooks
 import { useMediaLibrary } from '@/hooks/useMediaLibrary';
 import { useAppNavigation } from '@/hooks/useAppNavigation';
 import { useTVFocus } from '@/hooks/useTVFocus';
@@ -28,7 +26,6 @@ export default function App() {
     isDestructive: false,
   });
 
-  // Hook 1: Manages API calls, Context, and Items
   const {
     context,
     items,
@@ -53,14 +50,13 @@ export default function App() {
     addToRecentChannels,
     playLastTvChannel,
     setPlayLastTvChannel,
-    // setLoading,
+
     setItems,
     setContext,
     isRestoringFromHistory,
     setTotalItemsCount,
   } = useMediaLibrary();
 
-  // Hook 2: Manages navigation history, Back button, and Stream URLs
   const {
     history,
     streamUrl,
@@ -96,7 +92,7 @@ export default function App() {
     () => handleClearWatched(setConfirmModal),
     [handleClearWatched]
   );
-  // Hook 3: Handles Tizen/Web Keyboard spatial focus logic
+
   const {
     isSearchActive,
     setIsSearchActive,
@@ -126,7 +122,6 @@ export default function App() {
     [searchTerm, context.search, pushFrame, handleSearch]
   );
 
-  // Hook 4: Handles Sockets for Casting
   const { pendingPlaybackState } = useCastReceiver({
     playCastedMedia,
   });
@@ -134,7 +129,6 @@ export default function App() {
   const currentTitle = React.useMemo(() => {
     if (streamUrl) return 'Now Playing';
 
-    // If we are at the root level (no category, search, or specific movie/season)
     const isRoot =
       (!context.category || context.category === '*') &&
       !context.search &&
@@ -151,7 +145,6 @@ export default function App() {
 
     return context.parentTitle || 'Browse';
   }, [streamUrl, context, contentType]);
-
 
   return (
     <>
