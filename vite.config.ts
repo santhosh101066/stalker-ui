@@ -35,19 +35,6 @@ export default defineConfig({
             },
             handler: 'NetworkOnly',
           },
-          {
-            urlPattern: ({ request }) =>
-              request.destination === 'script' ||
-              request.destination === 'style',
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'assets-cache',
-              expiration: {
-                maxEntries: 0,
-                maxAgeSeconds: 0,
-              },
-            },
-          },
         ],
       },
       manifest: {

@@ -321,6 +321,12 @@ export const Header: React.FC<HeaderProps> = React.memo(
                         if (isTizen) setIsSearchActive(false);
                         setIsSearchTyping(false);
                       }}
+                      onKeyDown={(e) => {
+                        if (isSearchTyping && e.key === 'Enter') {
+                          handleSearch();
+                          (e.target as HTMLInputElement).blur();
+                        }
+                      }}
                     />
                     <button
                       type="submit"

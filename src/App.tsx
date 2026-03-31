@@ -109,6 +109,8 @@ export default function App() {
     cycleSort,
     handleContentTypeChange,
     handleClearWatched: onClearWatched,
+    isConfirmingDelete: confirmModal.isOpen,
+    showAdmin,
   });
 
   const onSearchSubmit = useCallback(

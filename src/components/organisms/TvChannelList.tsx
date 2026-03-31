@@ -357,7 +357,7 @@ const TvChannelList = forwardRef<TvChannelListRef, TvChannelListProps>(
             )}
           </div>
 
-          <div className="custom-scrollbar flex flex-col gap-1 overflow-y-auto pb-20">
+          <div className="custom-scrollbar flex flex-col gap-1 pb-20">
             {channelGroups?.map((group, index) => {
               if (!group) return null;
 

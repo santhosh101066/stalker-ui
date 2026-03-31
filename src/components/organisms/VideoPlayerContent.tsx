@@ -1,5 +1,19 @@
-import React, { useEffect, useMemo } from 'react';
-import { MediaPlayer, MediaProvider, type PlayerSrc } from '@vidstack/react';
+/* eslint-disable @typescript-eslint/no-unused-expressions */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import React, {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useCallback,
+} from 'react';
+import {
+  MediaPlayer,
+  MediaProvider,
+  Captions,
+  useMediaRemote,
+  type PlayerSrc,
+} from '@vidstack/react';
 import '@vidstack/react/player/styles/base.css';
 
 import TvChannelList, {
@@ -12,7 +26,7 @@ import { SeekOverlay } from '@/components/molecules/SeekOverlay';
 import { TopBar } from '@/components/organisms/TopBar';
 import { TVControls } from '@/components/organisms/TVControls';
 import { VODControls } from '@/components/organisms/VODControls';
-import { useVideoContext } from '@/context/video/useVideoContext';
+import { useVideoContext } from '@/context/video';
 
 const VideoPlayerContent: React.FC = () => {
   const {
@@ -22,7 +36,6 @@ const VideoPlayerContent: React.FC = () => {
 
     controlsVisible,
     cursorVisible,
-    isBuffering,
     useProxy,
     focusedIndex,
     showChannelList,
@@ -45,218 +58,106 @@ const VideoPlayerContent: React.FC = () => {
     reloadTrigger,
     isRecovering,
 
-    togglePlayPause,
-    handlePlay,
-    handlePause,
     toggleFavorite,
-    toggleFullscreen,
-
     onProviderChange,
     handleCanPlay,
     handleTimeUpdate,
-    handleDurationChange,
-    handlePlayerVolumeChange,
-    handleWaiting,
-    handlePlaying,
     handleError,
     handleEnded,
-    handleVideoClick,
     handleMouseMove,
     toggleChannelList,
-
     setControlsVisible,
     setCursorVisible,
     setIsTooltipVisible,
     setFocusedIndex,
     setShowChannelList,
     showControlsAndCursor,
-
     handleSkipButtonClick,
-
     onPrevChannel,
     onNextChannel,
     onChannelSelect,
     onBack,
+    setIsSettingsMenuOpen,
   } = useVideoContext();
 
-  const cursorTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(
-    null
-  );
-  const tvChannelListRef = React.useRef<TvChannelListRef>(null);
+  const remote = useMediaRemote();
+  const tvChannelListRef = useRef<TvChannelListRef>(null);
+  const [showExitToast, setShowExitToast] = useState(false);
+  const backPressRef = useRef<NodeJS.Timeout | null>(null);
 
+  // 🚀 FIX 1: Synchronous Navigation Ref (Prevents getting stuck on fast clicks)
+  const navRef = useRef({
+    index: focusedIndex ?? 0,
+    isSettingsOpen: isSettingsMenuOpen,
+    isControlsVisible: controlsVisible,
+  });
+
+  // Keep ref in sync with React state
   useEffect(() => {
-    const handlePlayerControlsKeyDown = (e: KeyboardEvent) => {
-      const focusable = Array.from(
-        playerContainerRef.current?.querySelectorAll(
-          '[data-focusable="true"]'
-        ) || []
-      ) as HTMLElement[];
-      if (focusable.length === 0) return;
+    navRef.current.isSettingsOpen = isSettingsMenuOpen;
+  }, [isSettingsMenuOpen]);
+  useEffect(() => {
+    navRef.current.isControlsVisible = controlsVisible;
+  }, [controlsVisible]);
+  useEffect(() => {
+    if (focusedIndex !== null) navRef.current.index = focusedIndex;
+  }, [focusedIndex]);
 
-      const currentIndex = focusedIndex === null ? 0 : focusedIndex;
-      const focusedElement = focusable[currentIndex];
+  const setFocusSync = useCallback(
+    (newIndex: number) => {
+      navRef.current.index = newIndex; // Update instantly for the next fast keypress
+      setFocusedIndex(newIndex); // Update UI
+    },
+    [setFocusedIndex]
+  );
 
-      switch (e.keyCode) {
-        case 37:
-          e.preventDefault();
-          if (
-            contentType === 'tv' &&
-            focusedElement &&
-            focusedElement.getAttribute('data-control') !== 'seekbar'
-          ) {
-            onPrevChannel?.();
-            showControlsAndCursor();
-          } else if (
-            focusedElement &&
-            focusedElement.getAttribute('data-control') === 'seekbar'
-          ) {
-            handleSkipButtonClick(-10);
-          } else if (currentIndex > 0) {
-            setFocusedIndex(currentIndex - 1);
-          }
-          break;
-        case 39:
-          e.preventDefault();
-          if (
-            contentType === 'tv' &&
-            focusedElement &&
-            focusedElement.getAttribute('data-control') !== 'seekbar'
-          ) {
-            onNextChannel?.();
-            showControlsAndCursor();
-          } else if (
-            focusedElement &&
-            focusedElement.getAttribute('data-control') === 'seekbar'
-          ) {
-            handleSkipButtonClick(10);
-          } else if (currentIndex < focusable.length - 1) {
-            setFocusedIndex(currentIndex + 1);
-          }
-          break;
-        case 38:
-          e.preventDefault();
-          if (currentIndex > 0) {
-            setFocusedIndex(currentIndex - 1);
-          }
-          break;
-        case 40:
-          e.preventDefault();
-          if (currentIndex < focusable.length - 1) {
-            setFocusedIndex(currentIndex + 1);
-          }
-          break;
-        case 13:
-          e.preventDefault();
-          if (focusedElement) {
-            focusedElement.click();
-          }
-          break;
-        case 415:
-        case 19:
-        case 10252:
-          e.preventDefault();
-          togglePlayPause();
-          break;
-        case 412:
-          e.preventDefault();
-          if (contentType === 'tv') {
-            onPrevChannel?.();
-          } else {
-            handleSkipButtonClick(-30);
-          }
-          break;
-        case 417:
-          e.preventDefault();
-          if (contentType === 'tv') {
-            onNextChannel?.();
-          } else {
-            handleSkipButtonClick(30);
-          }
-          break;
-        case 427:
-          e.preventDefault();
-          if (contentType === 'tv') {
-            onPrevChannel?.();
-          }
-          break;
-        case 428:
-          e.preventDefault();
-          if (contentType === 'tv') {
-            onNextChannel?.();
-          }
-          break;
-        case 405:
-          e.preventDefault();
-          if (contentType === 'tv' && channelInfo) {
-            toggleFavorite(channelInfo);
-          }
-          break;
-        case 10073:
-          e.preventDefault();
-          if (contentType === 'tv') {
-            toggleChannelList();
-          }
-          break;
-        case 0:
-        case 10009:
-        case 8:
-          e.preventDefault();
-          if (document.fullscreenElement) {
-            toggleFullscreen();
-          } else {
-            onBack();
-          }
-          break;
-        default:
-          break;
+  // 👻 FIX 2: Bulletproof Visibility Check (Kills invisible ghost menus)
+  const getVisibleFocusableElements = useCallback(() => {
+    const containerRef = navRef.current.isSettingsOpen
+      ? settingsMenuRef
+      : playerContainerRef;
+    if (!containerRef.current) return [];
+
+    const allFocusable = Array.from(
+      containerRef.current.querySelectorAll('[data-focusable="true"]')
+    ) as HTMLElement[];
+
+    return allFocusable.filter((el) => {
+      // 1. Must have physical dimensions
+      const rect = el.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return false;
+
+      // 2. Ignore elements inside closed Vidstack menus
+      const parentMenu = el.closest('[data-open]');
+      if (parentMenu && parentMenu.getAttribute('data-open') === 'false')
+        return false;
+
+      // 3. Ignore transparent or disabled elements
+      const style = window.getComputedStyle(el);
+      if (
+        style.opacity === '0' ||
+        style.visibility === 'hidden' ||
+        style.display === 'none' ||
+        style.pointerEvents === 'none'
+      ) {
+        return false;
       }
-    };
 
-    const handleSettingsMenuKeyDown = (e: KeyboardEvent) => {
-      const focusable = Array.from(
-        settingsMenuRef.current?.querySelectorAll('[data-focusable="true"]') ||
-          []
-      ) as HTMLElement[];
-      if (focusable.length === 0) return;
+      return true;
+    });
+  }, [playerContainerRef, settingsMenuRef]);
 
-      let currentIndex = focusedIndex === null ? 0 : focusedIndex;
-      if (currentIndex < 0) currentIndex = 0;
-
-      switch (e.keyCode) {
-        case 38:
-          e.preventDefault();
-          setFocusedIndex((prev) =>
-            prev !== null && prev > 0 ? prev - 1 : focusable.length - 1
-          );
-          break;
-        case 40:
-          e.preventDefault();
-          setFocusedIndex((prev) =>
-            prev !== null && prev < focusable.length - 1 ? prev + 1 : 0
-          );
-          break;
-        case 13:
-          e.preventDefault();
-          if (focusable[currentIndex]) {
-            focusable[currentIndex].click();
-          }
-          break;
-        case 0:
-        case 10009:
-        case 8:
-          e.preventDefault();
-          if (document.fullscreenElement) {
-            toggleFullscreen();
-          } else {
-            onBack();
-          }
-          break;
-        default:
-          break;
-      }
-    };
-
+  // TV Key Navigation Logic
+  useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' || (!e.isTrusted && e.keyCode === 0)) return;
+      const wereControlsHidden = !navRef.current.isControlsVisible;
+      showControlsAndCursor();
+      e.stopPropagation();
+
+      // If UI was hidden, only open it on 'OK' (Enter) without triggering action
+      if (wereControlsHidden && e.keyCode === 13) return;
+      // Direct Global TV Keys
       if (e.keyCode === 405 && contentType === 'tv' && channelInfo) {
         e.preventDefault();
         e.stopPropagation();
@@ -265,105 +166,227 @@ const VideoPlayerContent: React.FC = () => {
       } else if (e.keyCode === 10073) {
         e.preventDefault();
         e.stopPropagation();
-        if (contentType === 'tv') {
-          toggleChannelList();
-        }
+        if (contentType === 'tv') toggleChannelList();
         return;
       }
 
       if (showChannelList) {
         e.stopPropagation();
-        if (tvChannelListRef.current) {
-          tvChannelListRef.current.handleKeyDown(e);
+        tvChannelListRef.current?.handleKeyDown(e);
+        return;
+      }
+
+      const focusable = getVisibleFocusableElements();
+
+      if (focusable.length === 0) {
+        // Fallback Native Media Control Keys
+        if ([415, 19, 10252].includes(e.keyCode)) {
+          e.preventDefault();
+          remote.togglePaused();
+        }
+        if (e.keyCode === 412) {
+          e.preventDefault();
+          contentType === 'tv' ? onPrevChannel?.() : handleSkipButtonClick(-30);
+        }
+        if (e.keyCode === 417) {
+          e.preventDefault();
+          contentType === 'tv' ? onNextChannel?.() : handleSkipButtonClick(30);
+        }
+        if (e.keyCode === 427 && contentType === 'tv') {
+          e.preventDefault();
+          onPrevChannel?.();
+        }
+        if (e.keyCode === 428 && contentType === 'tv') {
+          e.preventDefault();
+          onNextChannel?.();
+        }
+        if ([0, 10009, 8].includes(e.keyCode)) {
+          e.preventDefault();
+          document.fullscreenElement ? remote.toggleFullscreen() : onBack();
         }
         return;
       }
 
-      const wereControlsHidden = !controlsVisible;
-      showControlsAndCursor();
-      e.stopPropagation();
-      if (wereControlsHidden) {
-        return;
-      }
-      if (isSettingsMenuOpen) {
-        handleSettingsMenuKeyDown(e);
-      } else {
-        handlePlayerControlsKeyDown(e);
+      // Read from the instant Ref, not the delayed React state
+      let currentIndex = navRef.current.index;
+      currentIndex = Math.max(0, Math.min(currentIndex, focusable.length - 1));
+
+      const focusedElement = focusable[currentIndex];
+      const isMenuOpen = navRef.current.isSettingsOpen;
+
+      switch (e.keyCode) {
+        case 37: // Left
+          e.preventDefault();
+          if (
+            !isMenuOpen &&
+            contentType === 'tv' &&
+            focusedElement?.getAttribute('data-control') !== 'seekbar'
+          ) {
+            onPrevChannel?.();
+            showControlsAndCursor();
+          } else if (
+            focusedElement?.getAttribute('data-control') === 'seekbar'
+          ) {
+            handleSkipButtonClick(-10);
+          } else {
+            const minIndex = contentType !== 'tv' && !isMenuOpen ? 1 : 0;
+            if (currentIndex > minIndex) setFocusSync(currentIndex - 1);
+          }
+          break;
+        case 39: // Right
+          e.preventDefault();
+          if (
+            !isMenuOpen &&
+            contentType === 'tv' &&
+            focusedElement?.getAttribute('data-control') !== 'seekbar'
+          ) {
+            onNextChannel?.();
+            showControlsAndCursor();
+          } else if (
+            focusedElement?.getAttribute('data-control') === 'seekbar'
+          ) {
+            handleSkipButtonClick(10);
+          } else if (currentIndex < focusable.length - 1) {
+            setFocusSync(currentIndex + 1);
+          }
+          break;
+        case 38: // Up
+          e.preventDefault();
+          e.stopPropagation();
+          setFocusSync(currentIndex > 0 ? currentIndex - 1 : 0);
+          break;
+        case 40: // Down
+          e.preventDefault();
+          e.stopPropagation();
+          setFocusSync(
+            currentIndex < focusable.length - 1
+              ? currentIndex + 1
+              : currentIndex
+          );
+          break;
+        case 13: // Enter
+          e.preventDefault();
+          if (focusedElement) {
+            focusedElement.focus();
+            focusedElement.dispatchEvent(
+              new PointerEvent('pointerdown', { bubbles: true })
+            );
+            focusedElement.dispatchEvent(
+              new PointerEvent('pointerup', { bubbles: true })
+            );
+            focusedElement.click();
+
+            if (
+              focusedElement.getAttribute('data-control') === 'settings-menu'
+            ) {
+              setIsSettingsMenuOpen(true);
+              setFocusSync(0);
+            }
+          }
+          break;
+        case 415:
+        case 19:
+        case 10252: // Play/Pause
+          e.preventDefault();
+          remote.togglePaused();
+          break;
+        case 412: // Rewind
+          e.preventDefault();
+          contentType === 'tv' ? onPrevChannel?.() : handleSkipButtonClick(-30);
+          break;
+        case 417: // Fast Forward
+          e.preventDefault();
+          contentType === 'tv' ? onNextChannel?.() : handleSkipButtonClick(30);
+          break;
+        case 427: // Channel Down
+          e.preventDefault();
+          if (contentType === 'tv') onPrevChannel?.();
+          break;
+        case 428: // Channel Up
+          e.preventDefault();
+          if (contentType === 'tv') onNextChannel?.();
+          break;
+        case 0:
+        case 10009:
+        case 8: // Back/Return
+          e.preventDefault();
+          e.stopPropagation();
+
+          if (isMenuOpen) {
+            const activeTarget =
+              document.activeElement ||
+              settingsMenuRef.current ||
+              document.body;
+            activeTarget.dispatchEvent(
+              new KeyboardEvent('keydown', {
+                key: 'Escape',
+                code: 'Escape',
+                bubbles: true,
+              })
+            );
+            setTimeout(() => {
+              const anyMenuOpen = document.querySelector('[data-open]');
+              if (!anyMenuOpen) {
+                setIsSettingsMenuOpen(false);
+                setFocusSync(0);
+              } else {
+                setFocusSync(0);
+              }
+            }, 150);
+            return;
+          }
+
+          if (document.fullscreenElement) {
+            remote.toggleFullscreen();
+            return;
+          }
+
+          if (backPressRef.current) {
+            clearTimeout(backPressRef.current);
+            backPressRef.current = null;
+            setShowExitToast(false);
+            onBack();
+          } else {
+            setShowExitToast(true);
+            backPressRef.current = setTimeout(() => {
+              backPressRef.current = null;
+              setShowExitToast(false);
+            }, 2000);
+          }
+          break;
       }
     };
 
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-    };
+    document.addEventListener('keydown', handleKeyDown, { capture: true });
+    return () =>
+      document.removeEventListener('keydown', handleKeyDown, { capture: true });
   }, [
-    focusedIndex,
-    isSettingsMenuOpen,
     showChannelList,
-    togglePlayPause,
-    showControlsAndCursor,
-    handleSkipButtonClick,
     contentType,
+    remote,
+    handleSkipButtonClick,
     onPrevChannel,
     onNextChannel,
-    controlsVisible,
     channelInfo,
     toggleFavorite,
     onBack,
-    toggleFullscreen,
-    playerContainerRef,
-    settingsMenuRef,
-    setFocusedIndex,
     toggleChannelList,
+    setIsSettingsMenuOpen,
+    showControlsAndCursor,
+    getVisibleFocusableElements,
+    setFocusSync,
+    settingsMenuRef,
   ]);
 
+  // Handle Focus CSS Classes
   useEffect(() => {
-    if (showChannelList || isSettingsMenuOpen) return;
-    const focusable = Array.from(
-      playerContainerRef.current?.querySelectorAll('[data-focusable="true"]') ||
-        []
-    ) as HTMLElement[];
+    if (showChannelList) return;
+    const focusable = getVisibleFocusableElements();
     if (focusable.length === 0) return;
 
-    const newIndex = focusedIndex === null ? 0 : focusedIndex;
-    if (newIndex >= focusable.length) {
-      setFocusedIndex(focusable.length - 1);
-      return;
-    }
-
-    if (focusedIndex === null) {
-      setFocusedIndex(0);
-    }
-
-    focusable.forEach((el, index) => {
-      if (index === newIndex) {
-        el.classList.add('focused');
-        el.focus();
-      } else {
-        el.classList.remove('focused');
-      }
-    });
-  }, [
-    focusedIndex,
-    isSettingsMenuOpen,
-    showChannelList,
-    playerContainerRef,
-    setFocusedIndex,
-  ]);
-
-  useEffect(() => {
-    if (!isSettingsMenuOpen || showChannelList) return;
-
-    const focusable = Array.from(
-      settingsMenuRef.current?.querySelectorAll('[data-focusable="true"]') || []
-    ) as HTMLElement[];
-    if (focusable.length === 0) return;
-
-    const newIndex = focusedIndex === null ? 0 : focusedIndex;
-    if (newIndex >= focusable.length) {
-      setFocusedIndex(focusable.length - 1);
-      return;
-    }
+    const newIndex =
+      focusedIndex === null ? 0 : Math.min(focusedIndex, focusable.length - 1);
+    if (focusedIndex !== newIndex) setFocusedIndex(newIndex);
 
     focusable.forEach((el, index) => {
       if (index === newIndex) {
@@ -378,21 +401,19 @@ const VideoPlayerContent: React.FC = () => {
     isSettingsMenuOpen,
     activeSettingsMenu,
     showChannelList,
-    settingsMenuRef,
+    getVisibleFocusableElements,
     setFocusedIndex,
   ]);
 
   const videoSrc = useMemo<PlayerSrc>(() => {
     const activeUrl =
       (useProxy ? streamUrl || rawStreamUrl : rawStreamUrl || streamUrl) || '';
-
     if (!activeUrl) return '';
-
-    const isHls = activeUrl.toLowerCase().includes('m3u8');
-
     return {
       src: activeUrl,
-      type: isHls ? 'application/x-mpegurl' : 'video/mp4',
+      type: activeUrl.toLowerCase().includes('m3u8')
+        ? 'application/x-mpegurl'
+        : 'video/mp4',
     } as PlayerSrc;
   }, [useProxy, streamUrl, rawStreamUrl]);
 
@@ -410,13 +431,9 @@ const VideoPlayerContent: React.FC = () => {
           setIsTooltipVisible(false);
           setControlsVisible(false);
           setCursorVisible(false);
-          if (cursorTimeoutRef.current) {
-            clearTimeout(cursorTimeoutRef.current);
-          }
         }}
         className={`group relative h-full w-full overflow-hidden ${!cursorVisible && !controlsVisible ? 'cursor-none' : ''}`}
       >
-        {}
         {showChannelList &&
           contentType === 'tv' &&
           channels &&
@@ -426,7 +443,7 @@ const VideoPlayerContent: React.FC = () => {
               channels={channels}
               channelGroups={channelGroups || []}
               onChannelSelect={(item) => {
-                if (onChannelSelect) onChannelSelect(item);
+                onChannelSelect(item);
                 setShowChannelList(false);
               }}
               onBack={() => setShowChannelList(false)}
@@ -437,27 +454,16 @@ const VideoPlayerContent: React.FC = () => {
 
         {isRecovering && (
           <div className="absolute z-50 flex h-full w-full flex-col items-center justify-center bg-gray-950/90 text-white backdrop-blur-md">
-            {}
             <div className="relative mb-8 h-20 w-20">
-              {}
               <div className="absolute inset-0 animate-ping rounded-full bg-blue-500/20"></div>
-
-              {}
               <div className="absolute inset-2 animate-pulse rounded-full bg-blue-500/30 blur-md"></div>
-
-              {}
               <div className="absolute inset-0 animate-spin rounded-full border-4 border-white/5 border-r-indigo-500 border-t-blue-500"></div>
-
-              {}
               <div className="absolute inset-0 m-auto h-2 w-2 rounded-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.8)]"></div>
             </div>
-
-            {}
             <div className="flex flex-col items-center space-y-2 text-center">
               <div className="bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-2xl font-bold tracking-wider text-transparent">
-                Connecting<span className="animate-pulse">...</span>
+                Connecting...
               </div>
-
               <div className="text-sm font-medium tracking-wide transition-colors duration-300">
                 {retryCount > 0 ? (
                   <span className="text-amber-400/90">
@@ -482,7 +488,6 @@ const VideoPlayerContent: React.FC = () => {
           src={videoSrc}
           viewType="video"
           streamType={contentType === 'tv' ? 'live' : 'on-demand'}
-          logLevel="warn"
           crossOrigin
           playsInline
           autoplay
@@ -491,18 +496,46 @@ const VideoPlayerContent: React.FC = () => {
           onProviderChange={onProviderChange}
           onCanPlay={handleCanPlay}
           onTimeUpdate={handleTimeUpdate}
-          onDurationChange={handleDurationChange}
-          onPlay={handlePlay}
-          onPause={handlePause}
-          onVolumeChange={handlePlayerVolumeChange}
-          onWaiting={handleWaiting}
-          onPlaying={handlePlaying}
           onError={handleError}
           onEnded={handleEnded}
-          onClick={handleVideoClick}
-          onDoubleClick={toggleFullscreen}
+          onDoubleClick={() => remote.toggleFullscreen()}
+          keyDisabled={true}
         >
-          <MediaProvider />
+          <MediaProvider>
+            {item?.subtitles?.map((sub: any, index: number) => (
+              <track
+                key={index}
+                src={sub.url}
+                kind="subtitles"
+                label={sub.language}
+                srcLang={sub.langCode}
+                default={index === 0}
+              />
+            ))}
+          </MediaProvider>
+
+          <Captions
+            className={`media-captions pointer-events-none absolute left-0 right-0 z-10 select-none break-words text-center transition-[bottom] duration-300 ease-in-out ${
+              controlsVisible
+                ? 'bottom-32 md:bottom-40'
+                : 'bottom-10 md:bottom-12'
+            }`}
+          />
+
+          <div
+            className={`pointer-events-none absolute inset-0 z-20 transition-opacity duration-300 ${controlsVisible ? 'opacity-100' : 'opacity-0'}`}
+          >
+            <TopBar onBack={onBack} />
+
+            {contentType === 'tv' ? (
+              <TVControls />
+            ) : (
+              <>
+                <SeekOverlay seekOverlay={seekOverlay} />
+                <VODControls />
+              </>
+            )}
+          </div>
         </MediaPlayer>
 
         {previewChannelInfo && (
@@ -518,22 +551,15 @@ const VideoPlayerContent: React.FC = () => {
           </div>
         )}
 
+        {showExitToast && (
+          <div className="pointer-events-none absolute bottom-20 left-1/2 z-[100] -translate-x-1/2 rounded-full border border-gray-700 bg-black/90 px-6 py-3 text-white shadow-xl backdrop-blur-md transition-all duration-300">
+            <span className="text-sm font-medium tracking-wide">
+              Press BACK again to exit
+            </span>
+          </div>
+        )}
+
         <BufferingOverlay />
-
-        <div
-          className={`pointer-events-none absolute inset-0 z-20 transition-opacity duration-300 ${controlsVisible || isBuffering ? 'opacity-100' : 'opacity-0'}`}
-        >
-          <TopBar onBack={onBack} />
-
-          {contentType === 'tv' ? (
-            <TVControls />
-          ) : (
-            <>
-              <SeekOverlay seekOverlay={seekOverlay} />
-              <VODControls />
-            </>
-          )}
-        </div>
       </div>
     </div>
   );

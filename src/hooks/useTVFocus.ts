@@ -11,6 +11,8 @@ interface TVFocusProps {
   cycleSort: () => void;
   handleContentTypeChange: (type: 'movie' | 'series' | 'tv') => void;
   handleClearWatched: () => void;
+  showAdmin: boolean;
+  isConfirmingDelete: boolean;
 }
 
 export function useTVFocus({
@@ -22,12 +24,30 @@ export function useTVFocus({
   cycleSort,
   handleContentTypeChange,
   handleClearWatched,
+  showAdmin,
+  isConfirmingDelete,
 }: TVFocusProps) {
   const isTizen = isTizenDevice();
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
   const [isSearchActive, setIsSearchActive] = useState(false);
   const [isSearchTyping, setIsSearchTyping] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+
+
+  useEffect(() => {
+  if (showAdmin || isConfirmingDelete) { 
+    // Modal open aana udane, antha modal-la irukka 
+    // first focusable element-oda index-ai set pannunga.
+    // Usually, modal elements array-oda last index-la irukkum.
+    
+    const focusable = Array.from(
+      document.querySelectorAll('[data-focusable="true"]')
+    ) as HTMLElement[];
+    
+    // Modal buttons list-oda end-la iruntha:
+    setFocusedIndex(focusable.length - 1); 
+  }
+}, [showAdmin, isConfirmingDelete]);
 
   useEffect(() => {
     if (isTizen) {

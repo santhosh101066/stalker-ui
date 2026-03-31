@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 
 type ConfirmationModalProps = {
   isOpen: boolean;
@@ -32,7 +32,17 @@ const ConfirmationModal: React.FC<
   inputPlaceholder = '',
   onInputChange,
 }) => {
+
+  const confirmButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(()=>{
+    if (isOpen) {
+      // Modal open aana udane focus-ai inge thalluvom
+      confirmButtonRef.current?.focus();
+    }
+  },[isOpen])
   if (!isOpen) return null;
+
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
@@ -79,6 +89,7 @@ const ConfirmationModal: React.FC<
             {cancelLabel}
           </button>
           <button
+          ref={confirmButtonRef}
             onClick={onConfirm}
             data-focusable="true"
             className={`rounded-lg px-4 py-2 text-sm font-bold text-white shadow-lg transition-all focus:outline-none focus:ring-2 active:scale-95 ${
