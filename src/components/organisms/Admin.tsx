@@ -82,6 +82,7 @@ const Admin = () => {
   const [groups, setGroups] = useState<Group[]>([]);
   const [showImportModal, setShowImportModal] = useState(false);
   const [importText, setImportText] = useState('');
+  const [isTokenVerified, setIsTokenVerified] = useState(false);
 
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
@@ -106,6 +107,20 @@ const Admin = () => {
     const controller = new AbortController();
     (async () => {
       try {
+        await api.get('/config', { signal: controller.signal });
+        setIsTokenVerified(true);
+      } catch {
+        // Will be caught by global auth-expired
+      }
+    })();
+    return () => controller.abort();
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !isTokenVerified) return;
+    const controller = new AbortController();
+    (async () => {
+      try {
         await loadGroups(controller.signal);
         await loadConfig(controller.signal);
       } catch (error) {
@@ -115,7 +130,18 @@ const Admin = () => {
       }
     })();
     return () => controller.abort();
-  }, [isAuthenticated]);
+  }, [isAuthenticated, isTokenVerified]);
+
+  useEffect(() => {
+    const handleAuthExpired = () => {
+      localStorage.removeItem('admin_token');
+      setIsAuthenticated(false);
+      setIsTokenVerified(false);
+      toast.error('Session expired. Please log in again.', { toastId: 'auth-expired' });
+    };
+    window.addEventListener('auth-expired', handleAuthExpired);
+    return () => window.removeEventListener('auth-expired', handleAuthExpired);
+  }, []);
 
   useEffect(() => {
     if (!socket) return;
@@ -375,6 +401,17 @@ const Admin = () => {
               Login
             </button>
           </form>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isTokenVerified) {
+    return (
+      <div className="flex h-[80vh] w-full items-center justify-center p-4">
+        <div className="flex flex-col items-center gap-4">
+          <RefreshCw className="animate-spin text-blue-500" size={36} />
+          <p className="text-sm font-bold text-gray-500">Verifying session...</p>
         </div>
       </div>
     );

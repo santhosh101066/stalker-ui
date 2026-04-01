@@ -60,6 +60,10 @@ export const api: Api = {
       const response = await fetch(url.toString(), { signal, headers });
 
       if (!response.ok) {
+        if (response.status === 401) {
+          localStorage.removeItem('admin_token');
+          window.dispatchEvent(new Event('auth-expired'));
+        }
         const errorText = await response.text();
         console.error('API Error:', response.status, errorText);
         throw new Error(
@@ -100,6 +104,10 @@ export const api: Api = {
       });
 
       if (!response.ok) {
+        if (response.status === 401) {
+          localStorage.removeItem('admin_token');
+          window.dispatchEvent(new Event('auth-expired'));
+        }
         const errorText = await response.text();
         console.error('API Error:', response.status, errorText);
         throw new Error(
@@ -140,6 +148,10 @@ export const api: Api = {
       });
 
       if (!response.ok) {
+        if (response.status === 401) {
+          localStorage.removeItem('admin_token');
+          window.dispatchEvent(new Event('auth-expired'));
+        }
         const errorText = await response.text();
         console.error('API Error:', response.status, errorText);
         throw new Error(
@@ -176,6 +188,10 @@ export const api: Api = {
       });
 
       if (!response.ok) {
+        if (response.status === 401) {
+          localStorage.removeItem('admin_token');
+          window.dispatchEvent(new Event('auth-expired'));
+        }
         const errorText = await response.text();
         console.error('API Error:', response.status, errorText);
         throw new Error(
