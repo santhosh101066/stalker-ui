@@ -61,6 +61,16 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({
     newSocket.on('receivers_updated', handleListUpdate);
     newSocket.on('receivers_list', handleListUpdate);
 
+    newSocket.on('config_changed', (data: { hash: string }) => {
+      const currentHash = localStorage.getItem('config_hash');
+      if (currentHash !== data.hash) {
+        localStorage.setItem('config_hash', data.hash);
+        if (currentHash) {
+          window.location.reload();
+        }
+      }
+    });
+
     newSocket.on('disconnect', () => setIsConnected(false));
 
     setSocket(newSocket);
@@ -68,6 +78,7 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({
     return () => {
       newSocket.off('receivers_updated');
       newSocket.off('receivers_list');
+      newSocket.off('config_changed');
       newSocket.disconnect();
     };
   }, [SOCKET_URL, isReceiver]);

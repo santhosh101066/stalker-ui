@@ -233,7 +233,7 @@ const ProfileManager = () => {
 
   return (
     <div className="font-sans text-white">
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
         <div>
           <h2 className="text-2xl font-bold">Profiles</h2>
           <p className="text-sm text-gray-400">
@@ -243,7 +243,7 @@ const ProfileManager = () => {
         <button
           onClick={() => setShowCreateModal(true)}
           data-focusable="true"
-          className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 font-bold text-white shadow-lg shadow-blue-500/20 transition-all hover:scale-105 hover:bg-blue-500 active:scale-95"
+          className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 font-bold text-white shadow-lg shadow-blue-500/20 transition-all hover:scale-105 hover:bg-blue-500 active:scale-95 sm:w-auto sm:py-2"
         >
           <span>+</span> New Profile
         </button>
@@ -310,7 +310,7 @@ const ProfileManager = () => {
               </div>
             </div>
 
-            <div className="mt-6 flex items-center justify-end gap-2 border-t border-gray-700/50 pt-4">
+            <div className="mt-6 flex flex-wrap items-center justify-end gap-2 border-t border-gray-700/50 pt-4">
               {!profile.isActive && (
                 <>
                   <button

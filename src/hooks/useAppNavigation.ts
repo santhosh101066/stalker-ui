@@ -204,7 +204,7 @@ export function useAppNavigation(
         savedResumeTime ? { currentTime: savedResumeTime } : undefined
       );
     },
-    [context, currentSeriesItem, fetchData, focusedIndex, items]
+    [context, currentSeriesItem, fetchData, focusedIndex, items, totalItemsCount]
   );
 
   const handleItemClick = useCallback(

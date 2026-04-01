@@ -52,7 +52,12 @@ export const api: Api = {
     }
 
     try {
-      const response = await fetch(url.toString(), { signal });
+      const headers: Record<string, string> = {};
+      const token = localStorage.getItem('admin_token');
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      const response = await fetch(url.toString(), { signal, headers });
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -80,12 +85,17 @@ export const api: Api = {
         ? new URL(fullUrl, window.location.origin)
         : new URL(fullUrl);
     try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      const token = localStorage.getItem('admin_token');
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
       const response = await fetch(url.toString(), {
         method: 'POST',
         signal,
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify(body),
       });
 
@@ -115,12 +125,17 @@ export const api: Api = {
         ? new URL(fullUrl, window.location.origin)
         : new URL(fullUrl);
     try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      const token = localStorage.getItem('admin_token');
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
       const response = await fetch(url.toString(), {
         method: 'PUT',
         signal,
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify(body),
       });
 
@@ -149,9 +164,15 @@ export const api: Api = {
         ? new URL(fullUrl, window.location.origin)
         : new URL(fullUrl);
     try {
+      const headers: Record<string, string> = {};
+      const token = localStorage.getItem('admin_token');
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
       const response = await fetch(url.toString(), {
         method: 'DELETE',
         signal,
+        headers
       });
 
       if (!response.ok) {
