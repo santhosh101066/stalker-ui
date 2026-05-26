@@ -66,7 +66,7 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({
       if (currentHash !== data.hash) {
         localStorage.setItem('config_hash', data.hash);
         if (currentHash) {
-          window.location.reload();
+          window.dispatchEvent(new Event('config-changed'));
         }
       }
     });

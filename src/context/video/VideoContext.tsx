@@ -271,6 +271,7 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
             media: item || previewChannelInfo || channelInfo,
             streamUrl: formatUrl(streamUrl),
             rawStreamUrl: formatUrl(rawStreamUrl),
+            contentType,
           },
           {
             currentTime: playerRef.current?.currentTime || 0,
@@ -282,7 +283,7 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
       toast.success('Casting started...');
       setIsSettingsMenuOpen(false);
     },
-    [item, previewChannelInfo, channelInfo, streamUrl, rawStreamUrl, castTo]
+    [item, previewChannelInfo, channelInfo, streamUrl, rawStreamUrl, castTo, contentType]
   );
 
   const toggleChannelList = useCallback(() => {
@@ -292,8 +293,16 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
 
   const onProviderChange = useCallback(
     (provider: MediaProviderAdapter | null) => {
-      if (isHLSProvider(provider))
+      if (provider && isHLSProvider(provider)) {
         console.log('[VideoPlayer] HLS provider loaded');
+        provider.config = {
+          enableSoftwareAES:true,
+          enableWorker: true,
+          // progressive:true,
+          stretchShortVideoTrack: true,
+          
+        };
+      }
     },
     []
   );
@@ -446,7 +455,20 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
         `video-in-progress-${mediaId}`,
         JSON.stringify(progressData)
       );
-  }, [contentType, mediaId, itemId, seasonId, categoryId, seriesItem, item?.name, item?.title, item?.screenshot_uri, item?.cmd, item?.series_number, rawStreamUrl]);
+  }, [
+    contentType,
+    mediaId,
+    itemId,
+    seasonId,
+    categoryId,
+    seriesItem,
+    item?.name,
+    item?.title,
+    item?.screenshot_uri,
+    item?.cmd,
+    item?.series_number,
+    rawStreamUrl,
+  ]);
 
   const handleEnded = useCallback(() => {
     if (mediaId) {

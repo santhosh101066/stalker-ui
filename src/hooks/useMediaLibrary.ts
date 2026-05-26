@@ -128,27 +128,32 @@ export function useMediaLibrary() {
           };
           response = await getMedia(params);
           setItems((prev) => {
-            if (newContext.page === 1) return response.data;
+            if (newContext.page === 1) return response.data || [];
 
             const existingIds = new Set(prev.map((item) => item.id));
-            const uniqueNew = response.data.filter(
+            const uniqueNew = (response.data || []).filter(
               (item) => !existingIds.has(item.id)
             );
 
-            return [...prev, ...uniqueNew];
+            return [...(prev || []), ...(uniqueNew || [])];
           });
           if (response.total_items) setTotalItemsCount(response.total_items);
           if (response.isPortal !== undefined) setIsPortal(response.isPortal);
         } else if (currentContentType === 'series') {
-          if (newContext.movieId) {
-            response = await getSeries({ movieId: newContext.movieId });
-          } else if (newContext.seasonId) {
+          if (newContext.seasonId && newContext.movieId) {
             response = await getSeries({
+              movieId: newContext.movieId,
               seasonId: newContext.seasonId,
               page: newContext.page,
               pageAtaTime: 1,
             });
-          } else {
+          } 
+          // 2. SECOND Priority: Check if movieId exists (Load Seasons)
+          else if (newContext.movieId) {
+            response = await getSeries({ movieId: newContext.movieId });
+          } 
+          // 3. LAST Priority: Load main series list
+          else {
             response = await getSeries({
               page: newContext.page,
               search: newContext.search,
@@ -158,7 +163,7 @@ export function useMediaLibrary() {
             });
           }
           setItems((prev) =>
-            newContext.page === 1 ? response.data : [...prev, ...response.data]
+            newContext.page === 1 ? (response.data || []) : [...(prev || []), ...(response.data || [])]
           );
           if (response.total_items) setTotalItemsCount(response.total_items);
         } else {
@@ -217,7 +222,7 @@ export function useMediaLibrary() {
       if (
         isFetchingMore.current ||
         loading ||
-        (totalItemsCount > 0 && items.length >= totalItemsCount)
+        (totalItemsCount > 0 && (items?.length || 0) >= totalItemsCount)
       )
         return;
 
@@ -225,7 +230,7 @@ export function useMediaLibrary() {
       const newPage = context.page + direction;
       fetchData({ ...context, page: newPage });
     },
-    [loading, totalItemsCount, items.length, context, fetchData, contentType]
+    [loading, totalItemsCount, items?.length, context, fetchData, contentType]
   );
 
   const toggleFavorite = useCallback(
@@ -359,8 +364,8 @@ export function useMediaLibrary() {
       return;
     }
     if (
-      items.length === 0 ||
-      (totalItemsCount > 0 && items.length >= totalItemsCount)
+      (items?.length || 0) === 0 ||
+      (totalItemsCount > 0 && (items?.length || 0) >= totalItemsCount)
     )
       return;
 
@@ -388,6 +393,22 @@ export function useMediaLibrary() {
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, [contentType, handlePageChange]);
+
+  useEffect(() => {
+    const handleConfigChange = () => {
+      setItems([]);
+      setTotalItemsCount(0);
+      setContext(initialContext);
+      fetchData(initialContext, contentType);
+      if (contentType === 'tv') {
+        loadEpgData();
+      }
+      toast.info('Configuration updated, content reloaded.', { autoClose: 3000 });
+    };
+
+    window.addEventListener('config-changed', handleConfigChange);
+    return () => window.removeEventListener('config-changed', handleConfigChange);
+  }, [fetchData, contentType, loadEpgData]);
 
   return {
     context,

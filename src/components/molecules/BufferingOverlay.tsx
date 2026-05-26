@@ -1,8 +1,10 @@
 import React from 'react';
 import { useMediaState } from '@vidstack/react';
+import { useVideoContext } from '@/context/video';
 
 export const BufferingOverlay = React.memo(() => {
- const isBuffering = useMediaState('waiting');
+  const { playerRef } = useVideoContext();
+  const isBuffering = useMediaState('waiting', playerRef);
   if (!isBuffering) return null;
 
   return (

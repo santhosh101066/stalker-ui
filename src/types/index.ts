@@ -21,6 +21,7 @@ export interface MediaItem {
   runtime?: number;
   duration?: number;
   progressPercent?: number;
+  isPortal?: boolean;
 }
 
 export interface ContextType {

@@ -40,6 +40,8 @@ export const VODControls = React.memo(() => {
     setActiveSettingsMenu: onActiveSettingsMenuChange,
     handleSkipButtonClick,
     setIsSettingsMenuOpen,
+    isSettingsMenuOpen,
+    activeSettingsMenu,
     useProxy,
     setUseProxy,
   } = useVideoContext();
@@ -135,7 +137,12 @@ export const VODControls = React.memo(() => {
                 data-focusable="true"
                 onClick={() => {
                   refreshReceivers();
-                  onActiveSettingsMenuChange('cast');
+                  if (isSettingsMenuOpen && activeSettingsMenu === 'cast') {
+                    setIsSettingsMenuOpen(false);
+                  } else {
+                    setIsSettingsMenuOpen(true);
+                    onActiveSettingsMenuChange('cast');
+                  }
                 }}
                 className="text-white hover:text-blue-400"
                 title="Cast"
@@ -147,7 +154,14 @@ export const VODControls = React.memo(() => {
               {
                 <button
                   data-focusable="true"
-                  onClick={() => setIsSettingsMenuOpen((v) => !v)}
+                  onClick={() => {
+                    if (isSettingsMenuOpen && activeSettingsMenu === 'main') {
+                      setIsSettingsMenuOpen(false);
+                    } else {
+                      setIsSettingsMenuOpen(true);
+                      onActiveSettingsMenuChange('main');
+                    }
+                  }}
                   className="text-white hover:text-blue-400"
                 >
                   <SettingsIcon className="h-4 w-4 md:h-6 md:w-6" />

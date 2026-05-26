@@ -80,7 +80,7 @@ const VideoPlayerContent: React.FC = () => {
     setIsSettingsMenuOpen,
   } = useVideoContext();
 
-  const remote = useMediaRemote();
+  const remote = useMediaRemote(playerRef);
   const tvChannelListRef = useRef<TvChannelListRef>(null);
   const [showExitToast, setShowExitToast] = useState(false);
   const backPressRef = useRef<NodeJS.Timeout | null>(null);
@@ -411,7 +411,7 @@ const VideoPlayerContent: React.FC = () => {
     if (!activeUrl) return '';
     return {
       src: activeUrl,
-      type: activeUrl.toLowerCase().includes('m3u8')
+      type: rawStreamUrl?.toLowerCase().includes('m3u8')
         ? 'application/x-mpegurl'
         : 'video/mp4',
     } as PlayerSrc;
@@ -485,6 +485,7 @@ const VideoPlayerContent: React.FC = () => {
           title={
             item?.title || seriesItem?.title || channelInfo?.name || 'Video'
           }
+          
           src={videoSrc}
           viewType="video"
           streamType={contentType === 'tv' ? 'live' : 'on-demand'}

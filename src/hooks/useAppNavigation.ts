@@ -273,6 +273,12 @@ export function useAppNavigation(
 
       if (item.is_episode) {
         try {
+          if (!isPortal && item.cmd) {
+            const { raw, proxied } = await resolveStreamUrl(item, isPortal, item.series_number);
+            openPlayer(item as any, raw, proxied, getResumeTime(item));
+            return;
+          }
+
           const res = await getMedia({
             movieId: context.movieId,
             seasonId: context.seasonId,
@@ -308,6 +314,12 @@ export function useAppNavigation(
 
       if (isInsideMovieCategory || item.is_playable_movie) {
         try {
+          if (!isPortal && item.cmd) {
+            const { raw, proxied } = await resolveStreamUrl(item, isPortal);
+            openPlayer(item as any, raw, proxied, getResumeTime(item));
+            return;
+          }
+
           const res = await getMedia({
             movieId: item.id,
             category: context.category || '*',
@@ -334,11 +346,15 @@ export function useAppNavigation(
           return;
         }
         const baseUrl = URL_PATHS.HOST === '/' ? '' : URL_PATHS.HOST;
-        const channelUrl = `${baseUrl}/live.m3u8?cmd=${item.cmd}&id=${item.id}&proxy=1`;
+        
+        let channelUrl = item.cmd;
+        if (channelUrl.startsWith('/')) {
+          channelUrl = `${baseUrl}${channelUrl}`;
+        }
 
         localStorage.setItem('lastPlayedTvChannelId', item.id.toString());
         addToRecentChannels(item);
-        openPlayer(item, channelUrl, channelUrl);
+        openPlayer(item, channelUrl, item.isPortal ? channelUrl : buildProxiedUrl(channelUrl));
         return;
       }
 
@@ -409,12 +425,20 @@ export function useAppNavigation(
   ]);
 
   const playCastedMedia = useCallback(
-    (media: MediaItem, castStreamUrl?: string, castRawStreamUrl?: string) => {
+    (
+      media: MediaItem,
+      castStreamUrl?: string,
+      castRawStreamUrl?: string,
+      castContentType?: 'movie' | 'series' | 'tv'
+    ) => {
       setCurrentItem(media);
       if (castRawStreamUrl) setRawStreamUrl(castRawStreamUrl);
+      if (castContentType) {
+        setContext((prev) => ({ ...prev, contentType: castContentType }));
+      }
       setStreamUrl(castStreamUrl ?? castRawStreamUrl ?? null);
     },
-    []
+    [setContext]
   );
 
   const debounceChannelChange = useCallback(

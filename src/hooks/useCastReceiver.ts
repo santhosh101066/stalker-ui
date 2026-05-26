@@ -8,7 +8,8 @@ interface CastReceiverProps {
   playCastedMedia: (
     media: MediaItem,
     streamUrl?: string,
-    rawStreamUrl?: string
+    rawStreamUrl?: string,
+    contentType?: 'movie' | 'series' | 'tv'
   ) => void;
 }
 
@@ -28,14 +29,15 @@ export function useCastReceiver({ playCastedMedia }: CastReceiverProps) {
         streamUrl?: string;
         rawStreamUrl?: string;
         playbackInfo?: PlaybackInfo;
+        contentType?: 'movie' | 'series' | 'tv';
       };
       from: string;
     }) => {
       if (data.command === 'play') {
-        const { media, streamUrl, rawStreamUrl, playbackInfo } = data.payload;
+        const { media, streamUrl, rawStreamUrl, playbackInfo, contentType } = data.payload;
         toast.info(`Casting from ${data.from}...`);
 
-        playCastedMedia(media, streamUrl, rawStreamUrl);
+        playCastedMedia(media, streamUrl, rawStreamUrl, contentType);
 
         if (playbackInfo) {
           setPendingPlaybackState(playbackInfo);

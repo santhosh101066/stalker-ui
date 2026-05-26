@@ -1,36 +1,41 @@
 import React from 'react';
 import { useVideoContext } from '@/context/video';
-import { 
-  useVideoQualityOptions, 
-  useAudioOptions, 
-  useCaptionOptions 
+import {
+  useVideoQualityOptions,
+  useAudioOptions,
+  useCaptionOptions,
 } from '@vidstack/react';
 import { ChevronRightIcon, CheckIcon, ChevronLeftIcon } from 'lucide-react';
 
 export const SettingsMenu = React.memo(() => {
-  const { 
-    isSettingsMenuOpen, 
-    activeSettingsMenu, 
-    setActiveSettingsMenu, 
+  const {
+    isSettingsMenuOpen,
+    activeSettingsMenu,
+    setActiveSettingsMenu,
     setIsSettingsMenuOpen,
     settingsMenuRef,
-    setFocusedIndex 
+    setFocusedIndex,
+    receivers,
+    handleCast,
   } = useVideoContext();
 
   const qualities = useVideoQualityOptions({ auto: true, sort: 'ascending' });
   const audioOptions = useAudioOptions();
   const captionOptions = useCaptionOptions();
+  
 
   // Helper function to handle menu changes smoothly
-  const handleMenuChange = (menuName: 'main' | 'quality' | 'audio' | 'subtitles' | 'cast') => {
+  const handleMenuChange = (
+    menuName: 'main' | 'quality' | 'audio' | 'subtitles' | 'cast'
+  ) => {
     setActiveSettingsMenu(menuName);
-    setFocusedIndex(0); 
+    setFocusedIndex(0);
   };
 
   if (!isSettingsMenuOpen) return null;
 
   return (
-    <div 
+    <div
       ref={settingsMenuRef}
       className="absolute bottom-[calc(100%+12px)] right-[-10px] z-50 flex w-56 origin-bottom-right flex-col rounded-xl border border-gray-600/40 bg-gray-900/95 p-2 text-base text-gray-100 shadow-[0_-10px_40px_rgba(0,0,0,0.7)] backdrop-blur-xl transition-all"
     >
@@ -45,7 +50,11 @@ export const SettingsMenu = React.memo(() => {
           >
             <span>Quality</span>
             <div className="flex items-center text-gray-400">
-              <span className="mr-1 text-xs">{qualities.selectedValue === 'auto' ? 'Auto' : `${qualities.selectedQuality?.height}p`}</span>
+              <span className="mr-1 text-xs">
+                {qualities.selectedValue === 'auto'
+                  ? 'Auto'
+                  : `${qualities.selectedQuality?.height}p`}
+              </span>
               <ChevronRightIcon className="h-4 w-4" />
             </div>
           </button>
@@ -72,7 +81,9 @@ export const SettingsMenu = React.memo(() => {
           >
             <span>Captions</span>
             <div className="flex items-center text-gray-400">
-              <span className="mr-1 text-xs">{captionOptions.selectedValue === 'off' ? 'Off' : 'On'}</span>
+              <span className="mr-1 text-xs">
+                {captionOptions.selectedValue === 'off' ? 'Off' : 'On'}
+              </span>
               <ChevronRightIcon className="h-4 w-4" />
             </div>
           </button>
@@ -86,7 +97,7 @@ export const SettingsMenu = React.memo(() => {
             data-focusable="true"
             data-control="settings-back"
             onClick={() => handleMenuChange('main')} // 👈 Back ponalum focus reset aagum
-            className="mb-2 flex items-center border-b border-gray-700 rounded px-3 py-2 transition-colors hover:bg-white/20 focus:bg-white/20 focus:outline-none"
+            className="mb-2 flex items-center rounded border-b border-gray-700 px-3 py-2 transition-colors hover:bg-white/20 focus:bg-white/20 focus:outline-none"
           >
             <ChevronLeftIcon className="mr-1 h-4 w-4" />
             <span>Back</span>
@@ -96,11 +107,17 @@ export const SettingsMenu = React.memo(() => {
               key={value}
               data-focusable="true"
               data-control="settings-item"
-              onClick={() => { select(); setIsSettingsMenuOpen(false); setFocusedIndex(0); }}
+              onClick={() => {
+                select();
+                setIsSettingsMenuOpen(false);
+                setFocusedIndex(0);
+              }}
               className={`flex items-center justify-between rounded px-3 py-2 transition-colors hover:bg-white/20 focus:bg-white/20 focus:outline-none ${qualities.selectedValue === value ? 'text-blue-400' : ''}`}
             >
               <span>{label}</span>
-              {qualities.selectedValue === value && <CheckIcon className="h-4 w-4" />}
+              {qualities.selectedValue === value && (
+                <CheckIcon className="h-4 w-4" />
+              )}
             </button>
           ))}
         </div>
@@ -112,8 +129,8 @@ export const SettingsMenu = React.memo(() => {
           <button
             data-focusable="true"
             data-control="settings-back"
-            onClick={() => handleMenuChange('main')} 
-            className="mb-2 flex items-center border-b border-gray-700 rounded px-3 py-2 transition-colors hover:bg-white/20 focus:bg-white/20 focus:outline-none"
+            onClick={() => handleMenuChange('main')}
+            className="mb-2 flex items-center rounded border-b border-gray-700 px-3 py-2 transition-colors hover:bg-white/20 focus:bg-white/20 focus:outline-none"
           >
             <ChevronLeftIcon className="mr-1 h-4 w-4" />
             <span>Back</span>
@@ -123,11 +140,17 @@ export const SettingsMenu = React.memo(() => {
               key={value}
               data-focusable="true"
               data-control="settings-item"
-              onClick={() => { select(); setIsSettingsMenuOpen(false); setFocusedIndex(0); }}
+              onClick={() => {
+                select();
+                setIsSettingsMenuOpen(false);
+                setFocusedIndex(0);
+              }}
               className={`flex items-center justify-between rounded px-3 py-2 transition-colors hover:bg-white/20 focus:bg-white/20 focus:outline-none ${audioOptions.selectedValue === value ? 'text-blue-400' : ''}`}
             >
               <span>{label || 'Default'}</span>
-              {audioOptions.selectedValue === value && <CheckIcon className="h-4 w-4" />}
+              {audioOptions.selectedValue === value && (
+                <CheckIcon className="h-4 w-4" />
+              )}
             </button>
           ))}
         </div>
@@ -140,7 +163,7 @@ export const SettingsMenu = React.memo(() => {
             data-focusable="true"
             data-control="settings-back"
             onClick={() => handleMenuChange('main')} // 👈 Back
-            className="mb-2 flex items-center border-b border-gray-700 rounded px-3 py-2 transition-colors hover:bg-white/20 focus:bg-white/20 focus:outline-none"
+            className="mb-2 flex items-center rounded border-b border-gray-700 px-3 py-2 transition-colors hover:bg-white/20 focus:bg-white/20 focus:outline-none"
           >
             <ChevronLeftIcon className="mr-1 h-4 w-4" />
             <span>Back</span>
@@ -150,13 +173,47 @@ export const SettingsMenu = React.memo(() => {
               key={value}
               data-focusable="true"
               data-control="settings-item"
-              onClick={() => { select(); setIsSettingsMenuOpen(false); setFocusedIndex(0); }}
+              onClick={() => {
+                select();
+                setIsSettingsMenuOpen(false);
+                setFocusedIndex(0);
+              }}
               className={`flex items-center justify-between rounded px-3 py-2 transition-colors hover:bg-white/20 focus:bg-white/20 focus:outline-none ${captionOptions.selectedValue === value ? 'text-blue-400' : ''}`}
             >
               <span>{label}</span>
-              {captionOptions.selectedValue === value && <CheckIcon className="h-4 w-4" />}
+              {captionOptions.selectedValue === value && (
+                <CheckIcon className="h-4 w-4" />
+              )}
             </button>
           ))}
+        </div>
+      )}
+
+      {/* CAST SUBMENU */}
+      {activeSettingsMenu === 'cast' && (
+        <div className="flex max-h-[250px] flex-col overflow-y-auto overflow-x-hidden">
+          {receivers && receivers.length > 0 ? (
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            receivers.map((receiver: any) => (
+              <button
+                key={receiver.id}
+                data-focusable="true"
+                data-control="settings-item"
+                onClick={() => {
+                  handleCast(receiver.id);
+                  setIsSettingsMenuOpen(false);
+                  setFocusedIndex(0);
+                }}
+                className="flex items-center justify-between rounded px-3 py-2 transition-colors hover:bg-white/20 focus:bg-white/20 focus:outline-none"
+              >
+                <span>{receiver.name}</span>
+              </button>
+            ))
+          ) : (
+            <div className="px-3 py-2 text-center text-sm text-gray-400">
+              No devices found
+            </div>
+          )}
         </div>
       )}
     </div>
