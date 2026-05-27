@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import '@/App.css';
@@ -8,16 +8,18 @@ import Admin from '@/components/organisms/Admin';
 import VideoPlayer from '@/components/organisms/VideoPlayer';
 import ConfirmationModal from '@/components/molecules/ConfirmationModal';
 import MainContentGrid from '@/components/organisms/MainContentGrid';
+import DetailModal from '@/components/organisms/DetailModal';
 
 import { useMediaLibrary } from '@/hooks/useMediaLibrary';
 import { useAppNavigation } from '@/hooks/useAppNavigation';
 import { useTVFocus } from '@/hooks/useTVFocus';
 import { useCastReceiver } from '@/hooks/useCastReceiver';
 import { isTizenDevice } from './utils/helpers';
+import type { MediaItem } from '@/types';
 
-export default function App() {
+function TVPortal({ onShowAdmin }: { onShowAdmin: () => void }) {
   const isTizen = isTizenDevice();
-  const [showAdmin, setShowAdmin] = useState(false);
+  const [detailItem, setDetailItem] = useState<MediaItem | null>(null);
   const [confirmModal, setConfirmModal] = useState({
     isOpen: false,
     title: '',
@@ -72,6 +74,7 @@ export default function App() {
     handlePrevChannel,
     playCastedMedia,
     pushFrame,
+    startPlayback,
   } = useAppNavigation(
     context,
     items,
@@ -85,7 +88,8 @@ export default function App() {
     setItems,
     setContext,
     setTotalItemsCount,
-    isRestoringFromHistory
+    isRestoringFromHistory,
+    setDetailItem
   );
 
   const onClearWatched = useCallback(
@@ -110,7 +114,7 @@ export default function App() {
     handleContentTypeChange,
     handleClearWatched: onClearWatched,
     isConfirmingDelete: confirmModal.isOpen,
-    showAdmin,
+    isDetailOpen: !!detailItem,
   });
 
   const onSearchSubmit = useCallback(
@@ -197,8 +201,8 @@ export default function App() {
               setIsSearchTyping={setIsSearchTyping}
               sort={context.sort}
               cycleSort={cycleSort}
-              showAdmin={showAdmin}
-              setShowAdmin={setShowAdmin}
+              showAdmin={false}
+              setShowAdmin={onShowAdmin}
               handleClearWatched={onClearWatched}
               streamUrl={streamUrl}
               historyLength={history.length}
@@ -207,29 +211,38 @@ export default function App() {
             />
 
             <main>
-              {showAdmin ? (
-                <Admin />
-              ) : (
-                <MainContentGrid
-                  items={items}
-                  loading={loading}
-                  error={error}
-                  paginationError={paginationError}
-                  context={context}
-                  contentType={contentType}
-                  totalItemsCount={totalItemsCount}
-                  handleItemClick={handleItemClick}
-                  handlePageChange={handlePageChange}
-                  channelGroups={channelGroups}
-                  handleBack={handleBack}
-                  cwRefreshKey={cwRefreshKey}
-                  fetchData={fetchData}
-                  isRestoringFromHistory={isRestoringFromHistory.current}
-                />
-              )}
+              <MainContentGrid
+                items={items}
+                currentSeriesItem={currentSeriesItem}
+                loading={loading}
+                error={error}
+                paginationError={paginationError}
+                context={context}
+                contentType={contentType}
+                totalItemsCount={totalItemsCount}
+                handleItemClick={handleItemClick}
+                handlePageChange={handlePageChange}
+                channelGroups={channelGroups}
+                handleBack={handleBack}
+                cwRefreshKey={cwRefreshKey}
+                fetchData={fetchData}
+                isRestoringFromHistory={isRestoringFromHistory.current}
+              />
             </main>
           </div>
         </div>
+      )}
+
+      {detailItem && (
+        <DetailModal
+          item={detailItem}
+          epgData={epgData}
+          onClose={() => setDetailItem(null)}
+          onPlay={(item, startTime, endTime) => {
+            setDetailItem(null);
+            startPlayback(item, startTime, endTime);
+          }}
+        />
       )}
 
       <ConfirmationModal
@@ -240,6 +253,48 @@ export default function App() {
         onCancel={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
         isDestructive={confirmModal.isDestructive}
       />
+    </>
+  );
+}
+
+export default function App() {
+  const [showAdmin, setShowAdmin] = useState(false);
+
+  const enterAdmin = useCallback(() => {
+    window.history.pushState({ view: 'admin' }, '', '');
+    setShowAdmin(true);
+  }, []);
+
+  const exitAdmin = useCallback(() => {
+    if (window.history.state && window.history.state.view === 'admin') {
+      window.history.back();
+    } else {
+      window.history.replaceState({}, '', '');
+      setShowAdmin(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const handlePopState = (e: PopStateEvent) => {
+      const state = e.state;
+      setShowAdmin(!!(state && state.view === 'admin'));
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  if (showAdmin) {
+    return (
+      <div className="min-h-screen bg-gray-950 font-sans text-gray-200">
+        <Admin onBack={exitAdmin} />
+        <ToastContainer />
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <TVPortal onShowAdmin={enterAdmin} />
       <ToastContainer />
     </>
   );

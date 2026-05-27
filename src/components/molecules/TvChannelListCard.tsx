@@ -35,7 +35,7 @@ const TvChannelListCard: React.FC<TvChannelListCardProps> = ({
       <span
         className={`w-8 pr-1.5 text-left text-xs font-medium transition-colors sm:w-10 sm:pr-2 sm:text-sm ${isFocused ? 'text-white' : 'text-gray-400 group-hover:text-gray-300'}`}
       >
-        {item.number}
+        {item.number || ''}
       </span>
       <div
         className={`mr-2 flex h-8 w-11 flex-shrink-0 items-center justify-center overflow-hidden rounded transition-colors sm:mr-3 sm:h-10 sm:w-14 ${isFocused ? 'bg-white/20' : 'bg-gray-800/80'}`}

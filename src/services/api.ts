@@ -184,7 +184,7 @@ export const api: Api = {
       const response = await fetch(url.toString(), {
         method: 'DELETE',
         signal,
-        headers
+        headers,
       });
 
       if (!response.ok) {

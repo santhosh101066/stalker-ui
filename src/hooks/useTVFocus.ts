@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { isTizenDevice } from '@/utils/helpers';
 import type { MediaItem } from '@/types';
 
@@ -11,8 +11,8 @@ interface TVFocusProps {
   cycleSort: () => void;
   handleContentTypeChange: (type: 'movie' | 'series' | 'tv') => void;
   handleClearWatched: () => void;
-  showAdmin: boolean;
   isConfirmingDelete: boolean;
+  isDetailOpen: boolean;
 }
 
 export function useTVFocus({
@@ -24,8 +24,8 @@ export function useTVFocus({
   cycleSort,
   handleContentTypeChange,
   handleClearWatched,
-  showAdmin,
   isConfirmingDelete,
+  isDetailOpen,
 }: TVFocusProps) {
   const isTizen = isTizenDevice();
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
@@ -33,21 +33,50 @@ export function useTVFocus({
   const [isSearchTyping, setIsSearchTyping] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
+  const getFocusableElements = useCallback(() => {
+    const detailModal = document.querySelector('.detail-modal-container');
+    const confirmModal = document.querySelector('[role="dialog"]');
+
+    if (detailModal) {
+      return Array.from(
+        detailModal.querySelectorAll('[data-focusable="true"]')
+      ) as HTMLElement[];
+    } else if (confirmModal) {
+      return Array.from(
+        confirmModal.querySelectorAll('[data-focusable="true"]')
+      ) as HTMLElement[];
+    } else {
+      return Array.from(
+        document.querySelectorAll('[data-focusable="true"]')
+      ) as HTMLElement[];
+    }
+  }, []);
+
+  const savedGridIndex = useRef<number | null>(null);
+  const latestFocusedIndex = useRef<number | null>(null);
 
   useEffect(() => {
-  if (showAdmin || isConfirmingDelete) { 
-    // Modal open aana udane, antha modal-la irukka 
-    // first focusable element-oda index-ai set pannunga.
-    // Usually, modal elements array-oda last index-la irukkum.
-    
-    const focusable = Array.from(
-      document.querySelectorAll('[data-focusable="true"]')
-    ) as HTMLElement[];
-    
-    // Modal buttons list-oda end-la iruntha:
-    setFocusedIndex(focusable.length - 1); 
-  }
-}, [showAdmin, isConfirmingDelete]);
+    latestFocusedIndex.current = focusedIndex;
+  }, [focusedIndex]);
+
+  useEffect(() => {
+    if (isDetailOpen || isConfirmingDelete) {
+      savedGridIndex.current = latestFocusedIndex.current;
+      const timer = setTimeout(() => {
+        const focusable = getFocusableElements();
+        const defaultIndex = focusable.findIndex(
+          (el) => el.getAttribute('data-default-focus') === 'true'
+        );
+        setFocusedIndex(defaultIndex !== -1 ? defaultIndex : 0);
+      }, 50);
+      return () => clearTimeout(timer);
+    } else {
+      if (savedGridIndex.current !== null) {
+        setFocusedIndex(savedGridIndex.current);
+        savedGridIndex.current = null;
+      }
+    }
+  }, [isDetailOpen, isConfirmingDelete, getFocusableElements]);
 
   useEffect(() => {
     if (isTizen) {
@@ -169,9 +198,7 @@ export function useTVFocus({
         }
       }
 
-      const focusable = Array.from(
-        document.querySelectorAll('[data-focusable="true"]')
-      ) as HTMLElement[];
+      const focusable = getFocusableElements();
       if (focusable.length === 0) return;
 
       let currentIndex = focusedIndex === null ? 0 : focusedIndex;
@@ -192,7 +219,11 @@ export function useTVFocus({
           break;
         case 38: {
           e.preventDefault();
-          const gridUp = document.querySelector('.grid, .channel-list');
+          const isModalOpen =
+            !!document.querySelector('.detail-modal-container') ||
+            !!document.querySelector('[role="dialog"]');
+          const gridUp =
+            !isModalOpen && document.querySelector('.grid, .channel-list');
           if (gridUp) {
             const cols = window
               .getComputedStyle(gridUp)
@@ -206,7 +237,11 @@ export function useTVFocus({
         }
         case 40: {
           e.preventDefault();
-          const gridDown = document.querySelector('.grid, .channel-list');
+          const isModalOpen =
+            !!document.querySelector('.detail-modal-container') ||
+            !!document.querySelector('[role="dialog"]');
+          const gridDown =
+            !isModalOpen && document.querySelector('.grid, .channel-list');
           let newIndexDown = currentIndex;
 
           if (gridDown) {
@@ -288,13 +323,12 @@ export function useTVFocus({
     handleClearWatched,
     contentType,
     checkAndFetchNextPage,
+    getFocusableElements,
   ]);
 
   useEffect(() => {
     if (streamUrl || (isTizen && isSearchActive)) return;
-    const focusable = Array.from(
-      document.querySelectorAll('[data-focusable="true"]')
-    ) as HTMLElement[];
+    const focusable = getFocusableElements();
     if (focusable.length === 0) return;
 
     const newIndex = focusedIndex === null ? 0 : focusedIndex;
@@ -306,7 +340,14 @@ export function useTVFocus({
       }
       if (i === newIndex) el.focus();
     });
-  }, [focusedIndex, items, streamUrl, isTizen, isSearchActive]);
+  }, [
+    focusedIndex,
+    items,
+    streamUrl,
+    isTizen,
+    isSearchActive,
+    getFocusableElements,
+  ]);
 
   return {
     isSearchActive,

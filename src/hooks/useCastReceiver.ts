@@ -34,7 +34,8 @@ export function useCastReceiver({ playCastedMedia }: CastReceiverProps) {
       from: string;
     }) => {
       if (data.command === 'play') {
-        const { media, streamUrl, rawStreamUrl, playbackInfo, contentType } = data.payload;
+        const { media, streamUrl, rawStreamUrl, playbackInfo, contentType } =
+          data.payload;
         toast.info(`Casting from ${data.from}...`);
 
         playCastedMedia(media, streamUrl, rawStreamUrl, contentType);

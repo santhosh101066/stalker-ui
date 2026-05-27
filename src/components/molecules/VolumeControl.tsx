@@ -3,7 +3,7 @@ import { VolumeMutedIcon, VolumeUpIcon } from '@/components/atoms/Icons';
 import { useMediaRemote, useMediaState } from '@vidstack/react';
 
 export const VolumeControl = React.memo(() => {
- const volume = useMediaState('volume');
+  const volume = useMediaState('volume');
   const isMuted = useMediaState('muted');
   const remote = useMediaRemote();
 

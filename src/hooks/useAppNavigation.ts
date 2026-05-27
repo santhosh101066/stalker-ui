@@ -68,7 +68,8 @@ export function useAppNavigation(
   setItems: React.Dispatch<React.SetStateAction<MediaItem[]>>,
   setContext: React.Dispatch<React.SetStateAction<ContextType>>,
   setTotalItemsCount: React.Dispatch<React.SetStateAction<number>>,
-  isRestoringFromHistory: React.MutableRefObject<boolean>
+  isRestoringFromHistory: React.MutableRefObject<boolean>,
+  onOpenDetail?: (item: MediaItem) => void
 ) {
   const isTizen = isTizenDevice();
 
@@ -204,7 +205,119 @@ export function useAppNavigation(
         savedResumeTime ? { currentTime: savedResumeTime } : undefined
       );
     },
-    [context, currentSeriesItem, fetchData, focusedIndex, items, totalItemsCount]
+    [
+      context,
+      currentSeriesItem,
+      fetchData,
+      focusedIndex,
+      items,
+      totalItemsCount,
+    ]
+  );
+
+  const startPlayback = useCallback(
+    async (item: MediaItem, startTime?: number, endTime?: number) => {
+      if (contentType === 'tv') {
+        if (!item.cmd) {
+          toast.error('Channel has no command to play.');
+          return;
+        }
+        const baseUrl = URL_PATHS.HOST === '/' ? '' : URL_PATHS.HOST;
+        let channelUrl = item.cmd;
+        if (startTime && endTime) {
+          channelUrl = `${baseUrl}/live.m3u8?cmd=${encodeURIComponent(item.cmd)}&id=${item.id}&start_time=${startTime}&end_time=${endTime}`;
+        } else if (channelUrl.startsWith('/')) {
+          channelUrl = `${baseUrl}${channelUrl}`;
+        }
+
+        localStorage.setItem('lastPlayedTvChannelId', item.id.toString());
+        addToRecentChannels(item);
+        openPlayer(
+          item,
+          channelUrl,
+          item.isPortal || (startTime && endTime)
+            ? channelUrl
+            : buildProxiedUrl(channelUrl)
+        );
+        return;
+      }
+
+      if (item.is_episode) {
+        try {
+          if (!isPortal && item.cmd) {
+            const { raw, proxied } = await resolveStreamUrl(
+              item,
+              isPortal,
+              item.series_number
+            );
+            openPlayer(item as any, raw, proxied, getResumeTime(item));
+            return;
+          }
+
+          const res = await getMedia({
+            movieId: context.movieId,
+            seasonId: context.seasonId,
+            episodeId: item.id,
+            category: '*',
+          });
+          const episodeFiles = res.data;
+
+          if (!episodeFiles?.length)
+            throw new Error('No episode files returned.');
+
+          const episodeFile = episodeFiles[0];
+          const enrichedItem = {
+            ...episodeFile,
+            _episodeCardId: item.id,
+            series_number: item.series_number,
+          };
+
+          const { raw, proxied } = await resolveStreamUrl(
+            episodeFile,
+            isPortal,
+            item.series_number
+          );
+
+          openPlayer(enrichedItem as any, raw, proxied, getResumeTime(item));
+        } catch (err) {
+          console.error(err);
+          toast.error('Could not fetch stream URL.');
+        }
+        return;
+      }
+
+      const isInsideMovieCategory =
+        contentType === 'movie' && context.category !== null;
+
+      if (isInsideMovieCategory || item.is_playable_movie) {
+        try {
+          if (!isPortal && item.cmd) {
+            const { raw, proxied } = await resolveStreamUrl(item, isPortal);
+            openPlayer(item as any, raw, proxied, getResumeTime(item));
+            return;
+          }
+
+          const res = await getMedia({
+            movieId: item.id,
+            category: context.category || '*',
+          });
+          if (!res.data?.length) throw new Error('No movie files returned.');
+
+          const movieFile = res.data[0];
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          const { id, cmd, ...filteredItem } = item;
+          const finalMovieItem = { ...movieFile, ...filteredItem };
+
+          const { raw, proxied } = await resolveStreamUrl(movieFile, isPortal);
+          openPlayer(finalMovieItem, raw, proxied, getResumeTime(item));
+        } catch (err) {
+          console.error(err);
+          toast.error('Could not fetch stream details.');
+        }
+        return;
+      }
+    },
+    [contentType, isPortal, addToRecentChannels, openPlayer, context]
   );
 
   const handleItemClick = useCallback(
@@ -271,90 +384,33 @@ export function useAppNavigation(
         return;
       }
 
-      if (item.is_episode) {
-        try {
-          if (!isPortal && item.cmd) {
-            const { raw, proxied } = await resolveStreamUrl(item, isPortal, item.series_number);
-            openPlayer(item as any, raw, proxied, getResumeTime(item));
-            return;
-          }
-
-          const res = await getMedia({
-            movieId: context.movieId,
-            seasonId: context.seasonId,
-            episodeId: item.id,
-            category: '*',
-          });
-          const episodeFiles = res.data;
-
-          if (!episodeFiles?.length)
-            throw new Error('No episode files returned.');
-
-          const episodeFile = episodeFiles[0];
-
+      const isPlayable =
+        item.is_episode ||
+        isInsideMovieCategory ||
+        item.is_playable_movie ||
+        contentType === 'tv';
+      if (isPlayable) {
+        if (onOpenDetail && contentType !== 'tv') {
           const enrichedItem = {
-            ...episodeFile,
-            _episodeCardId: item.id,
-            series_number: item.series_number,
+            ...item,
+            description: item.description || currentSeriesItem?.description,
+            director: item.director || currentSeriesItem?.director,
+            actors: item.actors || currentSeriesItem?.actors,
+            year: item.year || currentSeriesItem?.year,
+            rating_imdb: item.rating_imdb || currentSeriesItem?.rating_imdb,
+            rating_kinopoisk:
+              item.rating_kinopoisk || currentSeriesItem?.rating_kinopoisk,
+            rating_mpaa: item.rating_mpaa || currentSeriesItem?.rating_mpaa,
+            age: item.age || currentSeriesItem?.age,
+            country: item.country || currentSeriesItem?.country,
+            genres_str: item.genres_str || currentSeriesItem?.genres_str,
+            screenshot_uri:
+              item.screenshot_uri || currentSeriesItem?.screenshot_uri,
           };
-
-          const { raw, proxied } = await resolveStreamUrl(
-            episodeFile,
-            isPortal,
-            item.series_number
-          );
-
-          openPlayer(enrichedItem as any, raw, proxied, getResumeTime(item));
-        } catch (err) {
-          console.error(err);
-          toast.error('Could not fetch stream URL.');
-        }
-        return;
-      }
-
-      if (isInsideMovieCategory || item.is_playable_movie) {
-        try {
-          if (!isPortal && item.cmd) {
-            const { raw, proxied } = await resolveStreamUrl(item, isPortal);
-            openPlayer(item as any, raw, proxied, getResumeTime(item));
-            return;
-          }
-
-          const res = await getMedia({
-            movieId: item.id,
-            category: context.category || '*',
-          });
-          if (!res.data?.length) throw new Error('No movie files returned.');
-
-          const movieFile = res.data[0];
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          const { id, cmd, ...filteredItem } = item;
-          const finalMovieItem = { ...movieFile, ...filteredItem };
-
-          const { raw, proxied } = await resolveStreamUrl(movieFile, isPortal);
-          openPlayer(finalMovieItem, raw, proxied, getResumeTime(item));
-        } catch (err) {
-          console.error(err);
-          toast.error('Could not fetch stream details.');
-        }
-        return;
-      }
-
-      if (contentType === 'tv') {
-        if (!item.cmd) {
-          toast.error('Channel has no command to play.');
+          onOpenDetail(enrichedItem);
           return;
         }
-        const baseUrl = URL_PATHS.HOST === '/' ? '' : URL_PATHS.HOST;
-        
-        let channelUrl = item.cmd;
-        if (channelUrl.startsWith('/')) {
-          channelUrl = `${baseUrl}${channelUrl}`;
-        }
-
-        localStorage.setItem('lastPlayedTvChannelId', item.id.toString());
-        addToRecentChannels(item);
-        openPlayer(item, channelUrl, item.isPortal ? channelUrl : buildProxiedUrl(channelUrl));
+        await startPlayback(item);
         return;
       }
 
@@ -369,32 +425,22 @@ export function useAppNavigation(
       contentType,
       context,
       currentItem,
+      currentSeriesItem,
       fetchData,
-      isPortal,
-      openPlayer,
       playContinueWatching,
       pushFrame,
       streamUrl,
-      addToRecentChannels,
+      onOpenDetail,
+      startPlayback,
     ]
   );
 
-  const closePlayer = useCallback(() => {
-    if (channelChangeTimer.current) {
-      clearTimeout(channelChangeTimer.current);
-      channelChangeTimer.current = null;
-      setPreviewChannel(null);
-      return;
-    }
-    setStreamUrl(null);
-    setRawStreamUrl(null);
-    setCurrentItem(null);
-    setResumePlaybackState(undefined);
-  }, []);
-
-  const handleBack = useCallback(() => {
+  const restorePreviousFrame = useCallback(() => {
     if (streamUrl) {
-      closePlayer();
+      setStreamUrl(null);
+      setRawStreamUrl(null);
+      setCurrentItem(null);
+      setResumePlaybackState(undefined);
       return;
     }
 
@@ -417,12 +463,27 @@ export function useAppNavigation(
   }, [
     streamUrl,
     history,
-    closePlayer,
     isRestoringFromHistory,
     setItems,
     setContext,
     setTotalItemsCount,
   ]);
+
+  const closePlayer = useCallback(() => {
+    if (channelChangeTimer.current) {
+      clearTimeout(channelChangeTimer.current);
+      channelChangeTimer.current = null;
+      setPreviewChannel(null);
+      return;
+    }
+    window.history.back();
+  }, []);
+
+  const handleBack = useCallback(() => {
+    if (streamUrl || history.length > 0) {
+      window.history.back();
+    }
+  }, [streamUrl, history.length]);
 
   const playCastedMedia = useCallback(
     (
@@ -479,10 +540,10 @@ export function useAppNavigation(
     [debounceChannelChange]
   );
 
-  const handleBackRef = useRef(handleBack);
+  const restorePreviousFrameRef = useRef(restorePreviousFrame);
   useEffect(() => {
-    handleBackRef.current = handleBack;
-  }, [handleBack]);
+    restorePreviousFrameRef.current = restorePreviousFrame;
+  }, [restorePreviousFrame]);
 
   const navDepth = history.length + (streamUrl ? 1 : 0);
   const prevNavDepth = useRef(navDepth);
@@ -496,7 +557,7 @@ export function useAppNavigation(
 
   useEffect(() => {
     const onPopState = () => {
-      handleBackRef.current?.();
+      restorePreviousFrameRef.current?.();
     };
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
@@ -542,5 +603,6 @@ export function useAppNavigation(
     handlePrevChannel,
     playCastedMedia,
     pushFrame,
+    startPlayback,
   };
 }

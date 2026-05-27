@@ -7,8 +7,8 @@ export default {
         stalker: {
           light: '#00C6FF',
           dark: '#0072FF',
-        }
-      }
+        },
+      },
     },
   },
   plugins: [],

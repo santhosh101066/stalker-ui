@@ -15,10 +15,10 @@ const ignoredKeys = [
   'device_id',
   'config_hash',
   'PREFERRED_CONTENT_TYPE',
-  'admin_token'
+  'admin_token',
 ];
 
-Storage.prototype.getItem = function(key: string) {
+Storage.prototype.getItem = function (key: string) {
   if (ignoredKeys.includes(key)) {
     return originalGetItem.call(this, key);
   }
@@ -26,7 +26,7 @@ Storage.prototype.getItem = function(key: string) {
   return originalGetItem.call(this, prefix + key);
 };
 
-Storage.prototype.setItem = function(key: string, value: string) {
+Storage.prototype.setItem = function (key: string, value: string) {
   if (ignoredKeys.includes(key)) {
     return originalSetItem.call(this, key, value);
   }
@@ -34,7 +34,7 @@ Storage.prototype.setItem = function(key: string, value: string) {
   return originalSetItem.call(this, prefix + key, value);
 };
 
-Storage.prototype.removeItem = function(key: string) {
+Storage.prototype.removeItem = function (key: string) {
   if (ignoredKeys.includes(key)) {
     return originalRemoveItem.call(this, key);
   }

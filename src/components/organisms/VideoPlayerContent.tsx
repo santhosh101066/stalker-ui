@@ -485,7 +485,6 @@ const VideoPlayerContent: React.FC = () => {
           title={
             item?.title || seriesItem?.title || channelInfo?.name || 'Video'
           }
-          
           src={videoSrc}
           viewType="video"
           streamType={contentType === 'tv' ? 'live' : 'on-demand'}

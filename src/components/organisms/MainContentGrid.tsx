@@ -10,6 +10,7 @@ import type { MediaItem, ContextType, ChannelGroup } from '@/types';
 
 interface MainContentGridProps {
   items: MediaItem[];
+  currentSeriesItem?: MediaItem | null;
   loading: boolean;
   error: string | null;
   paginationError: string | null;
@@ -31,6 +32,7 @@ interface MainContentGridProps {
 const MainContentGrid = React.memo(
   ({
     items,
+    currentSeriesItem,
     loading,
     error,
     paginationError,
@@ -45,7 +47,31 @@ const MainContentGrid = React.memo(
     fetchData,
   }: MainContentGridProps) => {
     const isTizen = isTizenDevice();
-    const isEpisodeList = items && items.length > 0 && items[0].is_episode;
+    const isEpisodeList =
+      items &&
+      items.length > 0 &&
+      (!!items[0].is_episode || context.seasonId !== null);
+
+    const enrichedItems = React.useMemo(() => {
+      if (!isEpisodeList || !items) return items;
+      return items.map((item) => ({
+        ...item,
+        is_episode: 1,
+        description: item.description || currentSeriesItem?.description,
+        director: item.director || currentSeriesItem?.director,
+        actors: item.actors || currentSeriesItem?.actors,
+        year: item.year || currentSeriesItem?.year,
+        rating_imdb: item.rating_imdb || currentSeriesItem?.rating_imdb,
+        rating_kinopoisk:
+          item.rating_kinopoisk || currentSeriesItem?.rating_kinopoisk,
+        rating_mpaa: item.rating_mpaa || currentSeriesItem?.rating_mpaa,
+        age: item.age || currentSeriesItem?.age,
+        country: item.country || currentSeriesItem?.country,
+        genres_str: item.genres_str || currentSeriesItem?.genres_str,
+        screenshot_uri:
+          item.screenshot_uri || currentSeriesItem?.screenshot_uri,
+      }));
+    }, [items, isEpisodeList, currentSeriesItem]);
 
     if (loading && items.length === 0) return <LoadingSpinner />;
 
@@ -99,7 +125,7 @@ const MainContentGrid = React.memo(
                       : 'grid grid-cols-3 gap-2 px-2 sm:grid-cols-4 sm:gap-4 sm:px-0 md:grid-cols-5 md:gap-6 lg:grid-cols-6 xl:grid-cols-7'
               } ${loading && items.length > 0 && context.page === 1 ? 'pointer-events-none opacity-50 transition-opacity duration-300' : 'opacity-100'}`}
             >
-              {items?.map((item, index) =>
+              {enrichedItems?.map((item, index) =>
                 contentType === 'tv' ? (
                   <TvChannelListCard
                     key={`${item.id}-${index}`}

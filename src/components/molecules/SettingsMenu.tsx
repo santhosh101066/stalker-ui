@@ -22,7 +22,6 @@ export const SettingsMenu = React.memo(() => {
   const qualities = useVideoQualityOptions({ auto: true, sort: 'ascending' });
   const audioOptions = useAudioOptions();
   const captionOptions = useCaptionOptions();
-  
 
   // Helper function to handle menu changes smoothly
   const handleMenuChange = (

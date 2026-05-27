@@ -169,14 +169,19 @@ export const TVControls = React.memo(() => {
           </div>
 
           <div className="flex items-center gap-1.5 md:gap-4">
-            <button data-focusable="true" className="text-white hover:text-blue-400" onClick={() => setUseProxy(!useProxy)} title='Proxy'>
+            <button
+              data-focusable="true"
+              className="text-white hover:text-blue-400"
+              onClick={() => setUseProxy(!useProxy)}
+              title="Proxy"
+            >
               {!useProxy ? <ShieldX /> : <ShieldCheck />}
             </button>
             <button
               data-focusable="true"
               onClick={onCycleFitMode}
               className="text-white hover:text-blue-400"
-              title='Video Scale'
+              title="Video Scale"
             >
               {fitMode === 'contain' && (
                 <Shrink className="h-5 w-5 md:h-6 md:w-6" />

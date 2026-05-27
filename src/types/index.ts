@@ -22,6 +22,19 @@ export interface MediaItem {
   duration?: number;
   progressPercent?: number;
   isPortal?: boolean;
+
+  description?: string;
+  director?: string;
+  actors?: string;
+  year?: string;
+  rating_imdb?: string | number;
+  rating_kinopoisk?: string | number;
+  rating_mpaa?: string;
+  age?: string;
+  country?: string;
+  genres_str?: string;
+  enable_tv_archive?: number;
+  tv_archive_duration?: string | number;
 }
 
 export interface ContextType {

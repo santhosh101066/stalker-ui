@@ -283,7 +283,15 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
       toast.success('Casting started...');
       setIsSettingsMenuOpen(false);
     },
-    [item, previewChannelInfo, channelInfo, streamUrl, rawStreamUrl, castTo, contentType]
+    [
+      item,
+      previewChannelInfo,
+      channelInfo,
+      streamUrl,
+      rawStreamUrl,
+      castTo,
+      contentType,
+    ]
   );
 
   const toggleChannelList = useCallback(() => {
@@ -296,11 +304,10 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
       if (provider && isHLSProvider(provider)) {
         console.log('[VideoPlayer] HLS provider loaded');
         provider.config = {
-          enableSoftwareAES:true,
+          enableSoftwareAES: true,
           enableWorker: true,
           // progressive:true,
           stretchShortVideoTrack: true,
-          
         };
       }
     },

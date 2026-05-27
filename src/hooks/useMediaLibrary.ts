@@ -147,11 +147,11 @@ export function useMediaLibrary() {
               page: newContext.page,
               pageAtaTime: 1,
             });
-          } 
+          }
           // 2. SECOND Priority: Check if movieId exists (Load Seasons)
           else if (newContext.movieId) {
             response = await getSeries({ movieId: newContext.movieId });
-          } 
+          }
           // 3. LAST Priority: Load main series list
           else {
             response = await getSeries({
@@ -163,7 +163,9 @@ export function useMediaLibrary() {
             });
           }
           setItems((prev) =>
-            newContext.page === 1 ? (response.data || []) : [...(prev || []), ...(response.data || [])]
+            newContext.page === 1
+              ? response.data || []
+              : [...(prev || []), ...(response.data || [])]
           );
           if (response.total_items) setTotalItemsCount(response.total_items);
         } else {
@@ -403,11 +405,14 @@ export function useMediaLibrary() {
       if (contentType === 'tv') {
         loadEpgData();
       }
-      toast.info('Configuration updated, content reloaded.', { autoClose: 3000 });
+      toast.info('Configuration updated, content reloaded.', {
+        autoClose: 3000,
+      });
     };
 
     window.addEventListener('config-changed', handleConfigChange);
-    return () => window.removeEventListener('config-changed', handleConfigChange);
+    return () =>
+      window.removeEventListener('config-changed', handleConfigChange);
   }, [fetchData, contentType, loadEpgData]);
 
   return {
