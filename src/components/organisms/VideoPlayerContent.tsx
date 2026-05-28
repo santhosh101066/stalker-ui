@@ -85,6 +85,7 @@ const VideoPlayerContent: React.FC = () => {
     onEpisodeSelect,
     onBack,
     setIsSettingsMenuOpen,
+    subtitles,
   } = useVideoContext();
 
   const remote = useMediaRemote(playerRef);
@@ -436,11 +437,12 @@ const VideoPlayerContent: React.FC = () => {
     const activeUrl =
       (useProxy ? streamUrl || rawStreamUrl : rawStreamUrl || streamUrl) || '';
     if (!activeUrl) return '';
+    const isM3u8 =
+      (rawStreamUrl && rawStreamUrl.toLowerCase().includes('m3u8')) ||
+      activeUrl.toLowerCase().includes('m3u8');
     return {
       src: activeUrl,
-      type: rawStreamUrl?.toLowerCase().includes('m3u8')
-        ? 'application/x-mpegurl'
-        : 'video/mp4',
+      type: isM3u8 ? 'application/x-mpegurl' : 'video/mp4',
     } as PlayerSrc;
   }, [useProxy, streamUrl, rawStreamUrl]);
 
@@ -492,6 +494,15 @@ const VideoPlayerContent: React.FC = () => {
                 label={sub.language}
                 srcLang={sub.langCode}
                 default={index === 0}
+              />
+            ))}
+            {subtitles?.map((sub: any, index: number) => (
+              <track
+                key={`dynamic-sub-${sub.id}-${index}`}
+                src={sub.src}
+                kind="subtitles"
+                label={sub.label}
+                srcLang={sub.srclang}
               />
             ))}
           </MediaProvider>

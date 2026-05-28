@@ -69,15 +69,32 @@ const DetailModal: React.FC<DetailModalProps> = ({
     });
   }, [programs, currentUnix]);
 
-  // Handle key navigation (Escape key to close modal)
+  // Handle key navigation (Escape / Back key to close modal)
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' || e.keyCode === 27) {
+      const activeElement = document.activeElement;
+      const isInput =
+        activeElement &&
+        (activeElement.tagName === 'INPUT' ||
+          activeElement.tagName === 'TEXTAREA');
+
+      if (isInput) return;
+
+      if (
+        e.key === 'Escape' ||
+        e.keyCode === 27 ||
+        e.keyCode === 10009 ||
+        e.keyCode === 8 ||
+        e.keyCode === 0
+      ) {
+        e.preventDefault();
+        e.stopPropagation();
         onClose();
       }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    // Use capture phase to intercept the key event before other global keydown handlers run
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
   }, [onClose]);
 
   return (
@@ -215,7 +232,7 @@ const DetailModal: React.FC<DetailModalProps> = ({
           {!isTvChannel && item.description && (
             <div className="space-y-1">
               <h3 className="text-xs font-black uppercase tracking-wider text-gray-500">
-                Synopsis
+                Description
               </h3>
               <p className="text-sm font-medium leading-relaxed text-gray-300 md:text-base">
                 {item.description}

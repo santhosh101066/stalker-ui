@@ -194,6 +194,11 @@ export function useAppNavigation(
       const urlParams: Record<string, any> = { id: playbackId };
       if (item.series_number !== undefined) {
         urlParams.series = item.series_number;
+      } else if (isEpisodeCWT) {
+        urlParams.series = 1;
+      }
+      if (item.cmd) {
+        urlParams.cmd = item.cmd;
       }
 
       const linkData = (await getMovieUrl(urlParams)) as Record<string, any>;
@@ -260,7 +265,7 @@ export function useAppNavigation(
             movieId: context.movieId,
             seasonId: context.seasonId,
             episodeId: item.id,
-            category: item.category_id ? String(item.category_id) : (context.category || '*'),
+            category: '*',
           });
           const episodeFiles = res.data;
 
@@ -272,7 +277,6 @@ export function useAppNavigation(
             ...episodeFile,
             _episodeCardId: item.id,
             series_number: item.series_number,
-            is_episode: 1,
           };
 
           const { raw, proxied } = await resolveStreamUrl(
@@ -355,7 +359,7 @@ export function useAppNavigation(
         setResumePlaybackState(undefined);
         fetchData({
           ...initialContext,
-          category: item.category_id ? String(item.category_id) : '*',
+          category: '*',
           movieId: item.id,
           parentTitle: displayTitle,
           contentType,
@@ -559,7 +563,15 @@ export function useAppNavigation(
   }, [navDepth]);
 
   useEffect(() => {
-    const onPopState = () => {
+    const onPopState = (e: PopStateEvent) => {
+      const state = e.state;
+      if (state && (state.modal || state.view)) {
+        return;
+      }
+      const stateDepth = state && typeof state.depth === 'number' ? state.depth : 0;
+      if (stateDepth === prevNavDepth.current) {
+        return;
+      }
       restorePreviousFrameRef.current?.();
     };
     window.addEventListener('popstate', onPopState);

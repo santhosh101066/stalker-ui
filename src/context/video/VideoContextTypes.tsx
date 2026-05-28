@@ -42,6 +42,7 @@ export interface VideoContextType {
   streamUrl?: string | null;
   rawStreamUrl?: string | null;
   itemId?: string | null;
+  subtitles?: any[];
   contentType: 'movie' | 'series' | 'tv';
   mediaId?: string | null;
   item?: any;

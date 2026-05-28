@@ -69,11 +69,20 @@ export const VODControls = React.memo(() => {
             tabIndex={-1} // <-- The Magic Wand: This prevents Vidstack from taking native keyboard focus!
           >
             <TimeSlider.Track className="absolute h-full w-full rounded-sm bg-white/30" />
-            <TimeSlider.Progress className="absolute h-full w-[var(--slider-progress)] rounded-sm bg-white/50" />
-            <TimeSlider.TrackFill className="absolute h-full w-[var(--slider-fill)] rounded-sm bg-blue-500" />
+            <TimeSlider.Progress
+              className="absolute h-full rounded-sm bg-white/50"
+              style={{ width: 'var(--slider-progress)' }}
+            />
+            <TimeSlider.TrackFill
+              className="absolute h-full rounded-sm bg-blue-500"
+              style={{ width: 'var(--slider-fill)' }}
+            />
 
             {/* Added 'group-[.focused]:opacity-100' so the blue thumb appears when your TV remote highlights the timeline! */}
-            <TimeSlider.Thumb className="absolute left-[var(--slider-fill)] top-1/2 -ml-1.5 -mt-1.5 h-3 w-3 rounded-full bg-blue-500 opacity-0 transition-opacity group-hover:opacity-100 group-[.focused]:scale-125 group-[.focused]:opacity-100" />
+            <TimeSlider.Thumb
+              className="absolute top-1/2 -ml-1.5 -mt-1.5 h-3 w-3 rounded-full bg-blue-500 opacity-0 transition-opacity group-hover:opacity-100 group-[.focused]:scale-125 group-[.focused]:opacity-100"
+              style={{ left: 'var(--slider-fill)' }}
+            />
           </TimeSlider.Root>
         </div>
 

@@ -10,7 +10,7 @@ import React, {
 import { formatTime, isTizenDevice } from '@/utils/helpers';
 import { isHLSProvider, type MediaProviderAdapter } from '@vidstack/react';
 import { toast } from 'react-toastify';
-import { URL_PATHS } from '@/services/api';
+import { URL_PATHS, BASE_URL } from '@/services/api';
 import type { VideoFitMode, SeekOverlayData } from '@/types';
 import {
   VideoContext,
@@ -114,6 +114,7 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
   const [showChannelList, setShowChannelList] = useState(false);
   const [showEpisodeList, setShowEpisodeList] = useState(false);
   const [seekOverlay, setSeekOverlay] = useState<SeekOverlayData | null>(null);
+  const [subtitles, setSubtitles] = useState<any[]>([]);
 
   const [fitMode, setFitMode] = useState<VideoFitMode>(() => {
     return (localStorage.getItem('videoFitMode') as VideoFitMode) || 'contain';
@@ -157,6 +158,56 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
     isRetrying.current = false;
     setRetryCount(0);
   }, [streamUrl, rawStreamUrl]);
+
+  useEffect(() => {
+    if (!streamUrl || contentType === 'tv') {
+      setSubtitles([]);
+      return;
+    }
+
+    const isProgressive = [
+      ".mp4",
+      ".mkv",
+      ".avi",
+      ".mov",
+      ".flv",
+      ".wmv",
+      ".m4v",
+      ".3gp",
+      ".mpg",
+      ".mpeg",
+    ].some((ext) => rawStreamUrl?.toLowerCase().split("?")[0].endsWith(ext));
+
+    if (!isProgressive) {
+      setSubtitles([]);
+      return;
+    }
+
+    const fetchSubtitles = async () => {
+      try {
+        const b64url = btoa(rawStreamUrl!);
+        const response = await fetch(`${BASE_URL}/media/info?url=${b64url}`);
+        if (!response.ok) return;
+        const data = await response.json();
+        if (data.subtitles && Array.isArray(data.subtitles)) {
+          const mapped = data.subtitles.map((sub: any, idx: number) => {
+            const hostPart = BASE_URL.replace("/api", "");
+            return {
+              src: `${hostPart}/api/media/subtitle?url=${b64url}&track=${sub.index}`,
+              label: sub.title || sub.language || `Track ${idx + 1}`,
+              srclang: sub.language || 'und',
+              id: sub.index,
+            };
+          });
+          setSubtitles(mapped);
+        }
+      } catch (err) {
+        console.error("Failed to fetch subtitles:", err);
+      }
+    };
+
+    fetchSubtitles();
+  }, [streamUrl, rawStreamUrl, contentType]);
 
   // --- Controls & Cursor Visibility ---
   const showControlsAndCursor = useCallback(() => {
@@ -314,8 +365,16 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
         provider.config = {
           enableSoftwareAES: true,
           enableWorker: true,
-          // progressive:true,
           stretchShortVideoTrack: true,
+          manifestLoadingTimeOut: 30000, // 30s
+          manifestLoadingMaxRetry: 10,
+          manifestLoadingRetryDelay: 1000,
+          levelLoadingTimeOut: 30000, // 30s
+          levelLoadingMaxRetry: 10,
+          levelLoadingRetryDelay: 1000,
+          fragLoadingTimeOut: 30000, // 30s
+          fragLoadingMaxRetry: 10,
+          fragLoadingRetryDelay: 1000,
         };
       }
     },
@@ -653,6 +712,7 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
     streamUrl,
     rawStreamUrl,
     itemId,
+    subtitles,
     contentType,
     mediaId,
     item,

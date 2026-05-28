@@ -20,6 +20,8 @@ import type { MediaItem } from '@/types';
 function TVPortal({ onShowAdmin }: { onShowAdmin: () => void }) {
   const isTizen = isTizenDevice();
   const [detailItem, setDetailItem] = useState<MediaItem | null>(null);
+  // Track whether the detail modal pushed its own history entry
+  const detailHistoryPushed = React.useRef(false);
   const [confirmModal, setConfirmModal] = useState({
     isOpen: false,
     title: '',
@@ -127,6 +129,37 @@ function TVPortal({ onShowAdmin }: { onShowAdmin: () => void }) {
     },
     [searchTerm, context.search, pushFrame, handleSearch]
   );
+
+  // Push a history entry when the modal opens so the browser Back button
+  // closes the modal rather than popping a navigation frame.
+  React.useEffect(() => {
+    if (detailItem) {
+      window.history.pushState({ modal: 'detail' }, '');
+      detailHistoryPushed.current = true;
+    }
+  }, [detailItem]);
+
+  // Hardware Back (popstate) while the modal is open — just close the modal.
+  React.useEffect(() => {
+    const onPop = (e: PopStateEvent) => {
+      if (detailItem) {
+        e.stopImmediatePropagation();
+        setDetailItem(null);
+        detailHistoryPushed.current = false;
+      }
+    };
+    window.addEventListener('popstate', onPop, true); // capture phase → runs before nav handler
+    return () => window.removeEventListener('popstate', onPop, true);
+  }, [detailItem]);
+
+  const handleCloseDetail = useCallback(() => {
+    // If we pushed a history entry for the modal, remove it cleanly.
+    if (detailHistoryPushed.current) {
+      window.history.back();
+    } else {
+      setDetailItem(null);
+    }
+  }, []);
 
   const { pendingPlaybackState } = useCastReceiver({
     playCastedMedia,
@@ -244,10 +277,16 @@ function TVPortal({ onShowAdmin }: { onShowAdmin: () => void }) {
         <DetailModal
           item={detailItem}
           epgData={epgData}
-          onClose={() => setDetailItem(null)}
+          onClose={handleCloseDetail}
           onPlay={(item, startTime, endTime) => {
+            if (detailHistoryPushed.current) {
+              detailHistoryPushed.current = false;
+              window.history.back();
+            }
             setDetailItem(null);
-            startPlayback(item, startTime, endTime);
+            setTimeout(() => {
+              startPlayback(item, startTime, endTime);
+            }, 50);
           }}
         />
       )}
@@ -290,18 +329,16 @@ export default function App() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
-  if (showAdmin) {
-    return (
-      <div className="min-h-screen bg-gray-950 font-sans text-gray-200">
-        <Admin onBack={exitAdmin} />
-        <ToastContainer />
-      </div>
-    );
-  }
-
   return (
     <>
-      <TVPortal onShowAdmin={enterAdmin} />
+      <div className={showAdmin ? 'hidden' : 'block'}>
+        <TVPortal onShowAdmin={enterAdmin} />
+      </div>
+      {showAdmin && (
+        <div className="min-h-screen bg-gray-950 font-sans text-gray-200">
+          <Admin onBack={exitAdmin} />
+        </div>
+      )}
       <ToastContainer />
     </>
   );
