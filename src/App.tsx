@@ -171,11 +171,18 @@ function TVPortal({ onShowAdmin }: { onShowAdmin: () => void }) {
           item={currentItem}
           seriesItem={currentSeriesItem}
           channels={contentType === 'tv' ? items : undefined}
+          episodes={
+            currentItem?.is_episode || currentItem?.series_number !== undefined
+              ? items
+              : undefined
+          }
           channelInfo={contentType === 'tv' ? currentItem : null}
           previewChannelInfo={contentType === 'tv' ? previewChannel : null}
           onNextChannel={handleNextChannel}
           onPrevChannel={handlePrevChannel}
           onChannelSelect={handleItemClick}
+          onEpisodeSelect={startPlayback}
+          onLoadMoreEpisodes={async () => handlePageChange(1)}
           epgData={epgData}
           channelGroups={channelGroups}
           favorites={favorites}

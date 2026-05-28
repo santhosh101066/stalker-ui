@@ -19,6 +19,9 @@ import '@vidstack/react/player/styles/base.css';
 import TvChannelList, {
   type TvChannelListRef,
 } from '@/components/organisms/TvChannelList';
+import EpisodeOverlay, {
+  type EpisodeOverlayRef,
+} from '@/components/organisms/EpisodeOverlay';
 import '@/components/organisms/VideoPlayerContent.css';
 
 import { BufferingOverlay } from '@/components/molecules/BufferingOverlay';
@@ -39,6 +42,7 @@ const VideoPlayerContent: React.FC = () => {
     useProxy,
     focusedIndex,
     showChannelList,
+    showEpisodeList,
     seekOverlay,
     fitMode,
     isSettingsMenuOpen,
@@ -51,6 +55,7 @@ const VideoPlayerContent: React.FC = () => {
     item,
     seriesItem,
     channels,
+    episodes,
     previewChannelInfo,
     channelInfo,
     channelGroups,
@@ -71,17 +76,20 @@ const VideoPlayerContent: React.FC = () => {
     setIsTooltipVisible,
     setFocusedIndex,
     setShowChannelList,
+    setShowEpisodeList,
     showControlsAndCursor,
     handleSkipButtonClick,
     onPrevChannel,
     onNextChannel,
     onChannelSelect,
+    onEpisodeSelect,
     onBack,
     setIsSettingsMenuOpen,
   } = useVideoContext();
 
   const remote = useMediaRemote(playerRef);
   const tvChannelListRef = useRef<TvChannelListRef>(null);
+  const episodeOverlayRef = useRef<EpisodeOverlayRef>(null);
   const [showExitToast, setShowExitToast] = useState(false);
   const backPressRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -90,6 +98,7 @@ const VideoPlayerContent: React.FC = () => {
     index: focusedIndex ?? 0,
     isSettingsOpen: isSettingsMenuOpen,
     isControlsVisible: controlsVisible,
+    isEpisodeListOpen: showEpisodeList,
   });
 
   // Keep ref in sync with React state
@@ -99,6 +108,9 @@ const VideoPlayerContent: React.FC = () => {
   useEffect(() => {
     navRef.current.isControlsVisible = controlsVisible;
   }, [controlsVisible]);
+  useEffect(() => {
+    navRef.current.isEpisodeListOpen = showEpisodeList;
+  }, [showEpisodeList]);
   useEffect(() => {
     if (focusedIndex !== null) navRef.current.index = focusedIndex;
   }, [focusedIndex]);
@@ -173,6 +185,12 @@ const VideoPlayerContent: React.FC = () => {
       if (showChannelList) {
         e.stopPropagation();
         tvChannelListRef.current?.handleKeyDown(e);
+        return;
+      }
+
+      if (showEpisodeList) {
+        e.stopPropagation();
+        episodeOverlayRef.current?.handleKeyDown(e);
         return;
       }
 
@@ -312,6 +330,12 @@ const VideoPlayerContent: React.FC = () => {
           e.preventDefault();
           e.stopPropagation();
 
+          if (showEpisodeList) {
+            setShowEpisodeList(false);
+            setFocusSync(0);
+            return;
+          }
+
           if (isMenuOpen) {
             const activeTarget =
               document.activeElement ||
@@ -362,6 +386,8 @@ const VideoPlayerContent: React.FC = () => {
       document.removeEventListener('keydown', handleKeyDown, { capture: true });
   }, [
     showChannelList,
+    showEpisodeList,
+    setShowEpisodeList,
     contentType,
     remote,
     handleSkipButtonClick,
@@ -380,7 +406,7 @@ const VideoPlayerContent: React.FC = () => {
 
   // Handle Focus CSS Classes
   useEffect(() => {
-    if (showChannelList) return;
+    if (showChannelList || showEpisodeList) return;
     const focusable = getVisibleFocusableElements();
     if (focusable.length === 0) return;
 
@@ -401,6 +427,7 @@ const VideoPlayerContent: React.FC = () => {
     isSettingsMenuOpen,
     activeSettingsMenu,
     showChannelList,
+    showEpisodeList,
     getVisibleFocusableElements,
     setFocusedIndex,
   ]);
@@ -434,54 +461,9 @@ const VideoPlayerContent: React.FC = () => {
         }}
         className={`group relative h-full w-full overflow-hidden ${!cursorVisible && !controlsVisible ? 'cursor-none' : ''}`}
       >
-        {showChannelList &&
-          contentType === 'tv' &&
-          channels &&
-          onChannelSelect && (
-            <TvChannelList
-              ref={tvChannelListRef}
-              channels={channels}
-              channelGroups={channelGroups || []}
-              onChannelSelect={(item) => {
-                onChannelSelect(item);
-                setShowChannelList(false);
-              }}
-              onBack={() => setShowChannelList(false)}
-              currentItemId={itemId}
-              isOverlay={true}
-            />
-          )}
-
-        {isRecovering && (
-          <div className="absolute z-50 flex h-full w-full flex-col items-center justify-center bg-gray-950/90 text-white backdrop-blur-md">
-            <div className="relative mb-8 h-20 w-20">
-              <div className="absolute inset-0 animate-ping rounded-full bg-blue-500/20"></div>
-              <div className="absolute inset-2 animate-pulse rounded-full bg-blue-500/30 blur-md"></div>
-              <div className="absolute inset-0 animate-spin rounded-full border-4 border-white/5 border-r-indigo-500 border-t-blue-500"></div>
-              <div className="absolute inset-0 m-auto h-2 w-2 rounded-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.8)]"></div>
-            </div>
-            <div className="flex flex-col items-center space-y-2 text-center">
-              <div className="bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-2xl font-bold tracking-wider text-transparent">
-                Connecting...
-              </div>
-              <div className="text-sm font-medium tracking-wide transition-colors duration-300">
-                {retryCount > 0 ? (
-                  <span className="text-amber-400/90">
-                    Retrying connection ({retryCount})...
-                  </span>
-                ) : (
-                  <span className="text-gray-400">
-                    Establishing secure stream
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
         <MediaPlayer
           key={`${reloadTrigger}-${useProxy ? 'proxied' : 'direct'}`}
-          className={`media-provider h-full w-full ${isRecovering ? 'invisible' : ''}`}
+          className="media-provider h-full w-full"
           title={
             item?.title || seriesItem?.title || channelInfo?.name || 'Video'
           }
@@ -536,30 +518,90 @@ const VideoPlayerContent: React.FC = () => {
               </>
             )}
           </div>
-        </MediaPlayer>
 
-        {previewChannelInfo && (
-          <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center">
-            <div className="rounded-lg bg-black bg-opacity-75 p-6 shadow-xl">
-              <h2 className="text-center text-5xl font-bold text-white">
-                {previewChannelInfo.number}
-              </h2>
-              <h3 className="mt-2 text-center text-2xl text-gray-200">
-                {previewChannelInfo.name}
-              </h3>
+          {showChannelList &&
+            contentType === 'tv' &&
+            channels &&
+            onChannelSelect && (
+              <TvChannelList
+                ref={tvChannelListRef}
+                channels={channels}
+                channelGroups={channelGroups || []}
+                onChannelSelect={(item) => {
+                  onChannelSelect(item);
+                  setShowChannelList(false);
+                }}
+                onBack={() => setShowChannelList(false)}
+                currentItemId={itemId}
+                isOverlay={true}
+              />
+            )}
+
+          {showEpisodeList &&
+            episodes &&
+            onEpisodeSelect && (
+              <EpisodeOverlay
+                ref={episodeOverlayRef}
+                episodes={episodes}
+                onEpisodeSelect={(item) => {
+                  onEpisodeSelect(item);
+                  setShowEpisodeList(false);
+                }}
+                onBack={() => setShowEpisodeList(false)}
+                currentItemId={item?._episodeCardId || itemId}
+              />
+            )}
+
+          {isRecovering && (
+            <div className="absolute z-50 flex h-full w-full flex-col items-center justify-center bg-gray-950/90 text-white backdrop-blur-md">
+              <div className="relative mb-8 h-20 w-20">
+                <div className="absolute inset-0 animate-ping rounded-full bg-blue-500/20"></div>
+                <div className="absolute inset-2 animate-pulse rounded-full bg-blue-500/30 blur-md"></div>
+                <div className="absolute inset-0 animate-spin rounded-full border-4 border-white/5 border-r-indigo-500 border-t-blue-500"></div>
+                <div className="absolute inset-0 m-auto h-2 w-2 rounded-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.8)]"></div>
+              </div>
+              <div className="flex flex-col items-center space-y-2 text-center">
+                <div className="bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-2xl font-bold tracking-wider text-transparent">
+                  Connecting...
+                </div>
+                <div className="text-sm font-medium tracking-wide transition-colors duration-300">
+                  {retryCount > 0 ? (
+                    <span className="text-amber-400/90">
+                      Retrying connection ({retryCount})...
+                    </span>
+                  ) : (
+                    <span className="text-gray-400">
+                      Establishing secure stream
+                    </span>
+                  )}
+                </div>
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {showExitToast && (
-          <div className="pointer-events-none absolute bottom-20 left-1/2 z-[100] -translate-x-1/2 rounded-full border border-gray-700 bg-black/90 px-6 py-3 text-white shadow-xl backdrop-blur-md transition-all duration-300">
-            <span className="text-sm font-medium tracking-wide">
-              Press BACK again to exit
-            </span>
-          </div>
-        )}
+          {previewChannelInfo && (
+            <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center">
+              <div className="rounded-lg bg-black bg-opacity-75 p-6 shadow-xl">
+                <h2 className="text-center text-5xl font-bold text-white">
+                  {previewChannelInfo.number}
+                </h2>
+                <h3 className="mt-2 text-center text-2xl text-gray-200">
+                  {previewChannelInfo.name}
+                </h3>
+              </div>
+            </div>
+          )}
 
-        <BufferingOverlay />
+          {showExitToast && (
+            <div className="pointer-events-none absolute bottom-20 left-1/2 z-[100] -translate-x-1/2 rounded-full border border-gray-700 bg-black/90 px-6 py-3 text-white shadow-xl backdrop-blur-md transition-all duration-300">
+              <span className="text-sm font-medium tracking-wide">
+                Press BACK again to exit
+              </span>
+            </div>
+          )}
+
+          <BufferingOverlay />
+        </MediaPlayer>
       </div>
     </div>
   );

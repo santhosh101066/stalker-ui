@@ -18,6 +18,7 @@ export interface VideoContextType {
   isTooltipVisible: boolean;
   focusedIndex: number | null;
   showChannelList: boolean;
+  showEpisodeList: boolean;
   seekOverlay: SeekOverlayData | null;
   fitMode: VideoFitMode;
   isSettingsMenuOpen: boolean;
@@ -49,6 +50,7 @@ export interface VideoContextType {
   previewChannelInfo?: any;
   epgData?: any;
   channels?: any[];
+  episodes?: any[];
   initialPlaybackState?: any;
   channelGroups?: any[];
   favorites: string[];
@@ -63,6 +65,8 @@ export interface VideoContextType {
   onNextChannel?: () => void;
   onPrevChannel?: () => void;
   onChannelSelect?: (item: any) => void;
+  onEpisodeSelect?: (item: any) => void;
+  onLoadMoreEpisodes?: () => Promise<void>;
 
   toggleSettingsMenu: () => void;
   toggleChannelList: () => void;
@@ -72,6 +76,7 @@ export interface VideoContextType {
   setIsTooltipVisible: (v: boolean) => void;
   setFocusedIndex: (i: number | null) => void;
   setShowChannelList: (v: boolean) => void;
+  setShowEpisodeList: (v: boolean) => void;
   showControlsAndCursor: () => void;
   cycleFitMode: () => void;
   setActiveSettingsMenu: (

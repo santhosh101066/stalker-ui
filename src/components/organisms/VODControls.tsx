@@ -20,6 +20,7 @@ import {
   SettingsIcon,
   ShieldX,
   ShieldCheck,
+  ListVideo,
 } from 'lucide-react';
 import { FaChromecast } from 'react-icons/fa';
 
@@ -44,6 +45,8 @@ export const VODControls = React.memo(() => {
     activeSettingsMenu,
     useProxy,
     setUseProxy,
+    episodes,
+    setShowEpisodeList,
   } = useVideoContext();
 
   return (
@@ -148,6 +151,16 @@ export const VODControls = React.memo(() => {
                 title="Cast"
               >
                 <FaChromecast className="h-5 w-5 md:h-6 md:w-6" />
+              </button>
+            )}
+            {episodes && episodes.length > 0 && (
+              <button
+                data-focusable="true"
+                onClick={() => setShowEpisodeList(true)}
+                className="text-white hover:text-blue-400"
+                title="Episodes"
+              >
+                <ListVideo className="h-5 w-5 md:h-6 md:w-6" />
               </button>
             )}
             <div className="relative flex items-center justify-center">

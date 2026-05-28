@@ -12,6 +12,7 @@ export interface MediaItem {
   cmd?: string;
   number?: number;
   tv_genre_id?: string;
+  category_id?: string | number;
   series_id?: string;
   season_id?: string;
   is_continue_watching?: boolean;

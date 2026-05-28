@@ -151,9 +151,10 @@ export function useAppNavigation(
           currentSeriesItem,
           totalItemsCount,
         };
+        const cwCategory = item.category_id ? String(item.category_id) : ((item as any).cw_category_id ? String((item as any).cw_category_id) : '*');
         const seasonContext: ContextType = {
           ...initialContext,
-          category: '*',
+          category: cwCategory,
           movieId: mainSeriesId,
           parentTitle: displayTitle,
           contentType: 'series',
@@ -166,6 +167,7 @@ export function useAppNavigation(
             ...item,
             id: mainSeriesId,
             is_series: 1,
+            category_id: item.category_id || (item as any).cw_category_id,
           } as MediaItem,
           totalItemsCount: 0,
         };
@@ -174,7 +176,7 @@ export function useAppNavigation(
 
         const episodeContext: ContextType = {
           ...initialContext,
-          category: context.category,
+          category: cwCategory,
           movieId: mainSeriesId,
           seasonId: activeSeasonId,
           parentTitle: displayTitle,
@@ -258,7 +260,7 @@ export function useAppNavigation(
             movieId: context.movieId,
             seasonId: context.seasonId,
             episodeId: item.id,
-            category: '*',
+            category: item.category_id ? String(item.category_id) : (context.category || '*'),
           });
           const episodeFiles = res.data;
 
@@ -270,6 +272,7 @@ export function useAppNavigation(
             ...episodeFile,
             _episodeCardId: item.id,
             series_number: item.series_number,
+            is_episode: 1,
           };
 
           const { raw, proxied } = await resolveStreamUrl(
@@ -352,7 +355,7 @@ export function useAppNavigation(
         setResumePlaybackState(undefined);
         fetchData({
           ...initialContext,
-          category: '*',
+          category: item.category_id ? String(item.category_id) : '*',
           movieId: item.id,
           parentTitle: displayTitle,
           contentType,

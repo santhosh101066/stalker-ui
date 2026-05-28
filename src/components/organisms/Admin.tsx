@@ -375,6 +375,25 @@ const Admin: React.FC<AdminProps> = ({ onBack }) => {
     });
   };
 
+  const handleClearCache = () => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Clear Server Cache',
+      message:
+        'Are you sure you want to clear the server cache? This will force reload metadata from the IPTV provider.',
+      isDestructive: true,
+      onConfirm: async () => {
+        setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+        try {
+          await api.post('/clear-cache');
+          toast.success('Server cache cleared successfully.');
+        } catch {
+          toast.error('Failed to clear server cache.');
+        }
+      },
+    });
+  };
+
   const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -918,6 +937,13 @@ const Admin: React.FC<AdminProps> = ({ onBack }) => {
                   restart for active streams.
                 </p>
                 <div className="flex w-full items-center gap-3 sm:w-auto sm:justify-end">
+                  <button
+                    type="button"
+                    onClick={handleClearCache}
+                    className="flex-1 rounded-xl border border-blue-500/20 bg-blue-500/5 px-2 py-3 text-xs font-bold text-blue-400 transition-colors hover:bg-blue-500/10 sm:flex-none sm:border-transparent sm:bg-transparent sm:px-4 sm:py-2"
+                  >
+                    Clear Cache
+                  </button>
                   <button
                     type="button"
                     onClick={handleClearWatched}

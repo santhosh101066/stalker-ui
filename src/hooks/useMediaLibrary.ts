@@ -146,11 +146,15 @@ export function useMediaLibrary() {
               seasonId: newContext.seasonId,
               page: newContext.page,
               pageAtaTime: 1,
+              category: newContext.category || undefined,
             });
           }
           // 2. SECOND Priority: Check if movieId exists (Load Seasons)
           else if (newContext.movieId) {
-            response = await getSeries({ movieId: newContext.movieId });
+            response = await getSeries({
+              movieId: newContext.movieId,
+              category: newContext.category || undefined,
+            });
           }
           // 3. LAST Priority: Load main series list
           else {

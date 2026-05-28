@@ -31,6 +31,9 @@ export interface VideoPlayerProps {
   favorites: string[];
   recentChannels?: string[];
   toggleFavorite: (item: MediaItem) => void;
+  episodes?: MediaItem[];
+  onEpisodeSelect?: (item: MediaItem) => void;
+  onLoadMoreEpisodes?: () => Promise<void>;
   initialPlaybackState?: {
     currentTime?: number;
     volume?: number;

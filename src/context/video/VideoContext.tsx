@@ -32,10 +32,13 @@ interface VideoProviderProps {
   previewChannelInfo?: any;
   epgData?: any;
   channels?: any[];
+  episodes?: any[];
   channelGroups?: any[];
   onNextChannel?: () => void;
   onPrevChannel?: () => void;
   onChannelSelect?: (item: any) => void;
+  onEpisodeSelect?: (item: any) => void;
+  onLoadMoreEpisodes?: () => Promise<void>;
   favorites: string[];
   recentChannels?: string[];
   toggleFavorite: (channel: any) => void;
@@ -63,10 +66,13 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
   previewChannelInfo,
   epgData,
   channels,
+  episodes,
   channelGroups,
   onNextChannel,
   onPrevChannel,
   onChannelSelect,
+  onEpisodeSelect,
+  onLoadMoreEpisodes,
   favorites,
   recentChannels,
   toggleFavorite,
@@ -102,9 +108,11 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
   const [retryCount, setRetryCount] = useState(0);
   const [reloadTrigger, setReloadTrigger] = useState(0);
   const [isRecovering, setIsRecovering] = useState(false);
+  const [pendingNextIndex, setPendingNextIndex] = useState<number | null>(null);
   const [isTooltipVisible, setIsTooltipVisible] = useState(false);
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
   const [showChannelList, setShowChannelList] = useState(false);
+  const [showEpisodeList, setShowEpisodeList] = useState(false);
   const [seekOverlay, setSeekOverlay] = useState<SeekOverlayData | null>(null);
 
   const [fitMode, setFitMode] = useState<VideoFitMode>(() => {
@@ -493,7 +501,58 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
     if (itemId && itemId !== mediaId) {
       localStorage.removeItem(`video-in-progress-${itemId}`);
     }
-  }, [contentType, mediaId, itemId]);
+
+    // Smart Auto-Play next episode
+    if (episodes && episodes.length > 0 && item && onEpisodeSelect) {
+      const activeCardId = item._episodeCardId || item.id;
+      const curIndex = episodes.findIndex((ep: any) => ep.id === activeCardId);
+
+      if (curIndex !== -1) {
+        const getEpNum = (ep: any) => {
+          const numVal = ep.series_number ?? ep.episode_number;
+          return numVal !== undefined ? Number(numVal) : NaN;
+        };
+
+        // Determine if the episode list is descending based on episode numbers
+        let isDescending = false;
+        const firstEpNum = getEpNum(episodes[0]);
+        const lastEpNum = getEpNum(episodes[episodes.length - 1]);
+        if (!isNaN(firstEpNum) && !isNaN(lastEpNum) && episodes.length > 1) {
+          isDescending = firstEpNum > lastEpNum;
+        }
+
+        const currentEpisodeObj = episodes[curIndex];
+        const curEpNum = getEpNum(currentEpisodeObj);
+
+        if (!isNaN(curEpNum)) {
+          // Look for next episode number N + 1
+          const nextEp = episodes.find(
+            (ep: any) => getEpNum(ep) === curEpNum + 1
+          );
+          if (nextEp) {
+            toast.info(`Playing Next Episode: ${nextEp.name || nextEp.title}`);
+            onEpisodeSelect(nextEp);
+            return;
+          }
+        }
+
+        // Fallback: Use index based on list direction (if descending, next is index-1)
+        const nextIndex = isDescending ? curIndex - 1 : curIndex + 1;
+        if (nextIndex >= 0 && nextIndex < episodes.length) {
+          const nextEp = episodes[nextIndex];
+          toast.info(`Playing Next Episode: ${nextEp.name || nextEp.title}`);
+          onEpisodeSelect(nextEp);
+        } else if (nextIndex === episodes.length && onLoadMoreEpisodes) {
+          toast.info("Loading next episodes...");
+          setPendingNextIndex(nextIndex);
+          onLoadMoreEpisodes().catch((err) => {
+            console.error("Failed to load more episodes:", err);
+            setPendingNextIndex(null);
+          });
+        }
+      }
+    }
+  }, [contentType, mediaId, itemId, episodes, item, onEpisodeSelect, onLoadMoreEpisodes]);
 
   useEffect(() => {
     if (contentType === 'tv') return;
@@ -548,6 +607,18 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
     if (previewChannelInfo) showControlsAndCursor();
   }, [previewChannelInfo, showControlsAndCursor]);
 
+  // Autoplay next page of episodes when they are loaded
+  useEffect(() => {
+    if (pendingNextIndex !== null && episodes && pendingNextIndex < episodes.length) {
+      const nextEp = episodes[pendingNextIndex];
+      setPendingNextIndex(null);
+      if (nextEp && onEpisodeSelect) {
+        toast.info(`Playing Next Episode: ${nextEp.name || nextEp.title}`);
+        onEpisodeSelect(nextEp);
+      }
+    }
+  }, [episodes, pendingNextIndex, onEpisodeSelect]);
+
   // Note: Only the essential non-video states are passed here.
   // Make sure your `VideoContextTypes.ts` matches the cleaned up version provided in the previous step!
   const value: VideoContextType = {
@@ -562,6 +633,7 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
     isTooltipVisible,
     focusedIndex,
     showChannelList,
+    showEpisodeList,
     seekOverlay,
     fitMode,
     isSettingsMenuOpen,
@@ -589,6 +661,7 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
     previewChannelInfo,
     epgData,
     channels,
+    episodes,
     initialPlaybackState,
     channelGroups,
     favorites,
@@ -602,6 +675,8 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
     onNextChannel,
     onPrevChannel,
     onChannelSelect,
+    onEpisodeSelect,
+    onLoadMoreEpisodes,
 
     handleSkipButtonClick,
     setControlsVisible,
@@ -609,6 +684,7 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
     setIsTooltipVisible,
     setFocusedIndex,
     setShowChannelList,
+    setShowEpisodeList,
     showControlsAndCursor,
     cycleFitMode,
     toggleSettingsMenu,
