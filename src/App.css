@@ -42,7 +42,33 @@
 }
 
 .focused {
-  outline: 2px solid #3b82f6;
+  outline: 2px solid #3b82f6 !important;
   outline-offset: 2px;
-  /* border-color: #eef5ff !important; */
+}
+
+/* Premium scale and glow effects for focused media cards and grid elements on smart TVs */
+[data-focusable="true"].focused {
+  z-index: 10;
+  transform: scale(1.03) !important;
+  border-color: rgba(59, 130, 246, 0.8) !important; /* blue-500 */
+  box-shadow: 0 10px 25px -5px rgba(59, 130, 246, 0.4), 0 8px 10px -6px rgba(59, 130, 246, 0.4) !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Premium gradient style for TV channel list card when focused */
+.channel-list [data-focusable="true"].focused {
+  transform: scale(1.01) !important;
+  background: linear-gradient(90deg, #3b82f6 0%, #1d4ed8 100%) !important;
+  color: white !important;
+  border-color: transparent !important;
+  box-shadow: 0 4px 12px rgba(29, 78, 216, 0.3) !important;
+}
+
+/* Ensure child texts color transitions beautifully when parent list card is focused */
+.channel-list [data-focusable="true"].focused h3 {
+  color: #ffffff !important;
+  font-weight: 700;
+}
+.channel-list [data-focusable="true"].focused span {
+  color: rgba(255, 255, 255, 0.9) !important;
 }

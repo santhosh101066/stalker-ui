@@ -11,7 +11,7 @@ import { initialContext } from './useMediaLibrary';
 interface NavFrame {
   context: ContextType;
   items: MediaItem[];
-  focusedIndex: number;
+  focusedIndex: number | null;
   currentSeriesItem: MediaItem | null;
   totalItemsCount: number;
 }
@@ -84,7 +84,7 @@ export function useAppNavigation(
     { currentTime: number } | undefined
   >(undefined);
   const [previewChannel, setPreviewChannel] = useState<MediaItem | null>(null);
-  const [focusedIndex, setFocusedIndex] = useState<number>(0);
+  const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
 
   const channelChangeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -162,7 +162,7 @@ export function useAppNavigation(
         const seasonState: NavFrame = {
           context: seasonContext,
           items: [],
-          focusedIndex: 0,
+          focusedIndex: null,
           currentSeriesItem: {
             ...item,
             id: mainSeriesId,
@@ -546,6 +546,19 @@ export function useAppNavigation(
     () => debounceChannelChange('prev'),
     [debounceChannelChange]
   );
+
+  useEffect(() => {
+    if (isRestoringFromHistory.current) {
+      return;
+    }
+    setFocusedIndex(null);
+  }, [
+    context.category,
+    context.movieId,
+    context.seasonId,
+    context.search,
+    contentType,
+  ]);
 
   const restorePreviousFrameRef = useRef(restorePreviousFrame);
   useEffect(() => {

@@ -77,6 +77,8 @@ function TVPortal({ onShowAdmin }: { onShowAdmin: () => void }) {
     playCastedMedia,
     pushFrame,
     startPlayback,
+    focusedIndex,
+    setFocusedIndex,
   } = useAppNavigation(
     context,
     items,
@@ -117,6 +119,8 @@ function TVPortal({ onShowAdmin }: { onShowAdmin: () => void }) {
     handleClearWatched: onClearWatched,
     isConfirmingDelete: confirmModal.isOpen,
     isDetailOpen: !!detailItem,
+    focusedIndex,
+    setFocusedIndex,
   });
 
   const onSearchSubmit = useCallback(

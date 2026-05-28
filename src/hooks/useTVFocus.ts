@@ -13,6 +13,8 @@ interface TVFocusProps {
   handleClearWatched: () => void;
   isConfirmingDelete: boolean;
   isDetailOpen: boolean;
+  focusedIndex: number | null;
+  setFocusedIndex: (index: number | null) => void;
 }
 
 export function useTVFocus({
@@ -26,9 +28,10 @@ export function useTVFocus({
   handleClearWatched,
   isConfirmingDelete,
   isDetailOpen,
+  focusedIndex,
+  setFocusedIndex,
 }: TVFocusProps) {
   const isTizen = isTizenDevice();
-  const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
   const [isSearchActive, setIsSearchActive] = useState(false);
   const [isSearchTyping, setIsSearchTyping] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -50,6 +53,13 @@ export function useTVFocus({
         document.querySelectorAll('[data-focusable="true"]')
       ) as HTMLElement[];
     }
+  }, []);
+
+  const getFirstContentIndex = useCallback((focusableElements: HTMLElement[]) => {
+    const header = document.querySelector('header');
+    if (!header) return 0;
+    const firstContentIdx = focusableElements.findIndex((el) => !header.contains(el));
+    return firstContentIdx !== -1 ? firstContentIdx : 0;
   }, []);
 
   const savedGridIndex = useRef<number | null>(null);
@@ -76,7 +86,7 @@ export function useTVFocus({
         savedGridIndex.current = null;
       }
     }
-  }, [isDetailOpen, isConfirmingDelete, getFocusableElements]);
+  }, [isDetailOpen, isConfirmingDelete, getFocusableElements, setFocusedIndex]);
 
   useEffect(() => {
     if (isTizen) {
@@ -158,6 +168,8 @@ export function useTVFocus({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (streamUrl) return;
 
+      const focusable = getFocusableElements();
+
       if (isTizen && isSearchActive) {
         if (e.keyCode === 13) return;
         if (e.keyCode === 0 || e.keyCode === 10009 || e.keyCode === 8) {
@@ -178,7 +190,8 @@ export function useTVFocus({
           e.preventDefault();
           (activeElement as HTMLElement).blur();
           setIsSearchTyping(false);
-          setFocusedIndex(0);
+          const firstContent = getFirstContentIndex(focusable);
+          setFocusedIndex(firstContent);
           return;
         }
         if (isSearchTyping) {
@@ -198,7 +211,6 @@ export function useTVFocus({
         }
       }
 
-      const focusable = getFocusableElements();
       if (focusable.length === 0) return;
 
       let currentIndex = focusedIndex === null ? 0 : focusedIndex;
@@ -324,22 +336,39 @@ export function useTVFocus({
     contentType,
     checkAndFetchNextPage,
     getFocusableElements,
+    getFirstContentIndex,
+    setFocusedIndex,
   ]);
 
   useEffect(() => {
     if (streamUrl || (isTizen && isSearchActive)) return;
-    const focusable = getFocusableElements();
-    if (focusable.length === 0) return;
 
-    const newIndex = focusedIndex === null ? 0 : focusedIndex;
-    focusable.forEach((el, i) => {
-      if (i === newIndex) {
-        el.classList.add('focused');
-      } else {
-        el.classList.remove('focused');
+    const timer = setTimeout(() => {
+      const focusable = getFocusableElements();
+      if (focusable.length === 0) return;
+
+      let targetIndex = focusedIndex;
+      if (targetIndex === null) {
+        targetIndex = getFirstContentIndex(focusable);
+        setFocusedIndex(targetIndex);
       }
-      if (i === newIndex) el.focus();
-    });
+
+      if (targetIndex >= focusable.length) {
+        targetIndex = focusable.length - 1;
+        setFocusedIndex(targetIndex);
+      }
+
+      focusable.forEach((el, i) => {
+        if (i === targetIndex) {
+          el.classList.add('focused');
+          el.focus();
+        } else {
+          el.classList.remove('focused');
+        }
+      });
+    }, 50);
+
+    return () => clearTimeout(timer);
   }, [
     focusedIndex,
     items,
@@ -347,6 +376,8 @@ export function useTVFocus({
     isTizen,
     isSearchActive,
     getFocusableElements,
+    getFirstContentIndex,
+    setFocusedIndex,
   ]);
 
   return {

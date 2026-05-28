@@ -62,6 +62,7 @@ const VideoPlayerContent: React.FC = () => {
     retryCount,
     reloadTrigger,
     isRecovering,
+    isTizen,
 
     toggleFavorite,
     onProviderChange,
@@ -93,6 +94,7 @@ const VideoPlayerContent: React.FC = () => {
   const episodeOverlayRef = useRef<EpisodeOverlayRef>(null);
   const [showExitToast, setShowExitToast] = useState(false);
   const backPressRef = useRef<NodeJS.Timeout | null>(null);
+  const lastTouchTime = useRef(0);
 
   // 🚀 FIX 1: Synchronous Navigation Ref (Prevents getting stuck on fast clicks)
   const navRef = useRef({
@@ -286,13 +288,6 @@ const VideoPlayerContent: React.FC = () => {
         case 13: // Enter
           e.preventDefault();
           if (focusedElement) {
-            focusedElement.focus();
-            focusedElement.dispatchEvent(
-              new PointerEvent('pointerdown', { bubbles: true })
-            );
-            focusedElement.dispatchEvent(
-              new PointerEvent('pointerup', { bubbles: true })
-            );
             focusedElement.click();
 
             if (
@@ -452,6 +447,9 @@ const VideoPlayerContent: React.FC = () => {
       data-focusable="true"
       tabIndex={-1}
       style={{ '--video-fit-mode': fitMode } as React.CSSProperties}
+      onTouchStart={() => {
+        lastTouchTime.current = Date.now();
+      }}
     >
       <div
         ref={playerContainerRef}
@@ -482,7 +480,11 @@ const VideoPlayerContent: React.FC = () => {
           onTimeUpdate={handleTimeUpdate}
           onError={handleError}
           onEnded={handleEnded}
-          onDoubleClick={() => remote.toggleFullscreen()}
+          onDoubleClick={() => {
+            const isTouch = Date.now() - lastTouchTime.current < 500;
+            if (isTizen || isTouch) return;
+            remote.toggleFullscreen();
+          }}
           keyDisabled={true}
         >
           <MediaProvider>
@@ -517,6 +519,8 @@ const VideoPlayerContent: React.FC = () => {
 
           <div
             className={`pointer-events-none absolute inset-0 z-20 transition-opacity duration-300 ${controlsVisible ? 'opacity-100' : 'opacity-0'}`}
+            onClick={(e) => e.stopPropagation()}
+            onDoubleClick={(e) => e.stopPropagation()}
           >
             <TopBar onBack={onBack} />
 
@@ -534,33 +538,37 @@ const VideoPlayerContent: React.FC = () => {
             contentType === 'tv' &&
             channels &&
             onChannelSelect && (
-              <TvChannelList
-                ref={tvChannelListRef}
-                channels={channels}
-                channelGroups={channelGroups || []}
-                onChannelSelect={(item) => {
-                  onChannelSelect(item);
-                  setShowChannelList(false);
-                }}
-                onBack={() => setShowChannelList(false)}
-                currentItemId={itemId}
-                isOverlay={true}
-              />
+              <div onClick={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
+                <TvChannelList
+                  ref={tvChannelListRef}
+                  channels={channels}
+                  channelGroups={channelGroups || []}
+                  onChannelSelect={(item) => {
+                    onChannelSelect(item);
+                    setShowChannelList(false);
+                  }}
+                  onBack={() => setShowChannelList(false)}
+                  currentItemId={itemId}
+                  isOverlay={true}
+                />
+              </div>
             )}
 
           {showEpisodeList &&
             episodes &&
             onEpisodeSelect && (
-              <EpisodeOverlay
-                ref={episodeOverlayRef}
-                episodes={episodes}
-                onEpisodeSelect={(item) => {
-                  onEpisodeSelect(item);
-                  setShowEpisodeList(false);
-                }}
-                onBack={() => setShowEpisodeList(false)}
-                currentItemId={item?._episodeCardId || itemId}
-              />
+              <div onClick={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
+                <EpisodeOverlay
+                  ref={episodeOverlayRef}
+                  episodes={episodes}
+                  onEpisodeSelect={(item) => {
+                    onEpisodeSelect(item);
+                    setShowEpisodeList(false);
+                  }}
+                  onBack={() => setShowEpisodeList(false)}
+                  currentItemId={item?._episodeCardId || itemId}
+                />
+              </div>
             )}
 
           {isRecovering && (
