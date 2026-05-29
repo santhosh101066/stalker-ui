@@ -552,13 +552,7 @@ export function useAppNavigation(
       return;
     }
     setFocusedIndex(null);
-  }, [
-    context.category,
-    context.movieId,
-    context.seasonId,
-    context.search,
-    contentType,
-  ]);
+  }, [context.category, context.movieId, context.seasonId, context.search, contentType, isRestoringFromHistory]);
 
   const restorePreviousFrameRef = useRef(restorePreviousFrame);
   useEffect(() => {

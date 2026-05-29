@@ -305,7 +305,7 @@ export function useMediaLibrary() {
       fetchData({
         ...initialContext,
         search,
-        category: search ? '*' : contentType === 'tv' ? null : '*',
+        category: search ? '*' : null,
         parentTitle: newTitle,
         contentType,
       });
