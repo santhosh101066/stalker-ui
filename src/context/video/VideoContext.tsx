@@ -97,6 +97,7 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
   const seekRunDirection = useRef<number>(0);
   const hasRestoredProgress = useRef(false);
   const isRetrying = useRef(false);
+  const seekFadeOutTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const SEEK_LEVELS = useMemo(() => [10, 30, 60, 180], []);
 
@@ -242,6 +243,7 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
       const currentTime = player.state?.currentTime || player.currentTime || 0;
 
       if (seekRunTimer.current) clearTimeout(seekRunTimer.current);
+      if (seekFadeOutTimer.current) clearTimeout(seekFadeOutTimer.current);
 
       if (
         seekRunStart.current === null ||
@@ -277,7 +279,11 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
       seekRunTimer.current = setTimeout(() => {
         seekRunStart.current = null;
         seekRunLevel.current = 0;
-        setSeekOverlay(null);
+        setControlsVisible(false);
+        seekFadeOutTimer.current = setTimeout(() => {
+          setSeekOverlay(null);
+          seekFadeOutTimer.current = null;
+        }, 300);
       }, 1500);
     },
     [SEEK_LEVELS]

@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { FaChromecast } from 'react-icons/fa';
 import {
   Maximize2,
@@ -7,6 +7,7 @@ import {
   ShieldX,
   Shrink,
   SquareDashedBottomCode,
+  MoreVertical,
 } from 'lucide-react';
 
 // --- Vidstack Native Hooks ---
@@ -59,7 +60,16 @@ export const TVControls = React.memo(() => {
     refreshReceivers,
     useProxy,
     setUseProxy,
+    controlsVisible,
   } = useVideoContext();
+
+  const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
+
+  useEffect(() => {
+    if (!controlsVisible) {
+      setIsMoreMenuOpen(false);
+    }
+  }, [controlsVisible]);
 
   // 2. Video-Specific State (From Vidstack Native Hooks)
   const remote = useMediaRemote(); // Used to send commands to the player
@@ -171,7 +181,7 @@ export const TVControls = React.memo(() => {
           <div className="flex items-center gap-1.5 md:gap-4">
             <button
               data-focusable="true"
-              className="text-white hover:text-blue-400"
+              className="hidden md:block text-white hover:text-blue-400"
               onClick={() => setUseProxy(!useProxy)}
               title="Proxy"
             >
@@ -180,7 +190,7 @@ export const TVControls = React.memo(() => {
             <button
               data-focusable="true"
               onClick={onCycleFitMode}
-              className="text-white hover:text-blue-400"
+              className="hidden md:block text-white hover:text-blue-400"
               title="Video Scale"
             >
               {fitMode === 'contain' && (
@@ -207,7 +217,7 @@ export const TVControls = React.memo(() => {
                       onActiveSettingsMenuChange('cast');
                     }
                   }}
-                  className="mr-1 text-white hover:text-blue-400 md:mr-2"
+                  className="hidden md:block mr-1 text-white hover:text-blue-400 md:mr-2"
                 >
                   <FaChromecast className="h-4 w-4 md:h-6 md:w-6" />
                 </button>
@@ -217,7 +227,7 @@ export const TVControls = React.memo(() => {
                   <button
                     data-focusable="true"
                     onClick={() => onSetIsSettingsMenuOpen((v) => !v)}
-                    className="text-white hover:text-blue-400"
+                    className="hidden md:block text-white hover:text-blue-400"
                   >
                     <SettingsIcon className="h-4 w-4 md:h-6 md:w-6" />
                   </button>
@@ -265,6 +275,70 @@ export const TVControls = React.memo(() => {
                 </button>
               </>
             )}
+
+            {/* Mobile More Options Button */}
+            <div className="relative flex items-center justify-center md:hidden">
+              <button
+                onClick={() => setIsMoreMenuOpen(!isMoreMenuOpen)}
+                className="text-white hover:text-blue-400 p-1.5 transition-colors"
+                title="More Options"
+              >
+                <MoreVertical className="h-5 w-5" />
+              </button>
+              {isMoreMenuOpen && (
+                <div className="more-options-menu absolute bottom-[calc(100%+12px)] right-0 z-50 flex w-48 origin-bottom-right flex-col rounded-xl border border-gray-600/40 bg-gray-900/95 p-2 text-sm text-gray-100 shadow-[0_-10px_40px_rgba(0,0,0,0.7)] backdrop-blur-xl">
+                  <button
+                    onClick={() => {
+                      setUseProxy(!useProxy);
+                      setIsMoreMenuOpen(false);
+                    }}
+                    className="flex items-center space-x-3 rounded px-3 py-2 transition-colors hover:bg-white/10"
+                  >
+                    {!useProxy ? <ShieldX className="h-4 w-4 text-gray-400" /> : <ShieldCheck className="h-4 w-4 text-green-400" />}
+                    <span>Proxy: {useProxy ? 'On' : 'Off'}</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      onCycleFitMode();
+                    }}
+                    className="flex items-center space-x-3 rounded px-3 py-2 transition-colors hover:bg-white/10"
+                  >
+                    {fitMode === 'contain' && <Shrink className="h-4 w-4 text-gray-400" />}
+                    {fitMode === 'cover' && <SquareDashedBottomCode className="h-4 w-4 text-gray-400" />}
+                    {fitMode === 'fill' && <Maximize2 className="h-4 w-4 text-gray-400" />}
+                    <span className="capitalize">{fitMode}</span>
+                  </button>
+
+                  {!isReceiver && (
+                    <button
+                      onClick={() => {
+                        refreshReceivers();
+                        onSetIsSettingsMenuOpen(true);
+                        onActiveSettingsMenuChange('cast');
+                        setIsMoreMenuOpen(false);
+                      }}
+                      className="flex items-center space-x-3 rounded px-3 py-2 transition-colors hover:bg-white/10"
+                    >
+                      <FaChromecast className="h-4 w-4 text-gray-400" />
+                      <span>Cast</span>
+                    </button>
+                  )}
+
+                  <button
+                    onClick={() => {
+                      onSetIsSettingsMenuOpen(true);
+                      onActiveSettingsMenuChange('main');
+                      setIsMoreMenuOpen(false);
+                    }}
+                    className="flex items-center space-x-3 rounded px-3 py-2 transition-colors hover:bg-white/10"
+                  >
+                    <SettingsIcon className="h-4 w-4 text-gray-400" />
+                    <span>Settings</span>
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>

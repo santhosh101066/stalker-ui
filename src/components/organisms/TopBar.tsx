@@ -11,7 +11,7 @@ export const TopBar = React.memo<TopBarProps>(({ onBack }) => {
 
   if (isTizen) return null;
   return (
-    <div className="pointer-events-auto absolute left-0 right-0 top-0 p-2 md:p-4">
+    <div className="top-bar-container pointer-events-auto absolute left-0 right-0 top-0 p-2 md:p-4">
       <div className="flex items-center space-x-2 md:space-x-4">
         <button
           data-focusable="true"

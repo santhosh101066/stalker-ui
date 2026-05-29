@@ -55,3 +55,80 @@ media-provider {
     border-radius: 6px;
   }
 }
+
+/* Hide parts of controls in seekbar-only mode */
+.seek-bar-only .top-bar-container {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transition: opacity 0.2s ease-out;
+}
+
+.seek-bar-only .vod-controls-buttons-row {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transition: opacity 0.2s ease-out;
+}
+
+/* More Options glassmorphic dropdown */
+.more-options-menu {
+  animation: slideUpFade 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideUpFade {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ==========================================================================
+   REDESIGNED FOCUS SYSTEM FOR VIDEO PLAYER CONTROLS
+   ========================================================================== */
+
+/* 1. Global Reset: Remove browser default solid rectangular outline inside player */
+media-player [data-focusable="true"].focused {
+  outline: none !important;
+}
+
+/* 2. Control Buttons: Premium glowing circular/pill ring with micro-zoom */
+media-player button[data-focusable="true"].focused:not([data-control="settings-item"]) {
+  outline: none !important;
+  box-shadow: 
+    0 0 0 2px rgba(59, 130, 246, 0.95), 
+    0 0 14px rgba(59, 130, 246, 0.6) !important;
+  background-color: rgba(255, 255, 255, 0.15) !important;
+  transform: scale(1.15) !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  z-index: 10;
+}
+
+/* 3. Settings Dropdown Items: Left border accent & background highlight (no scaling) */
+media-player button[data-control="settings-item"].focused {
+  background-color: rgba(255, 255, 255, 0.15) !important;
+  border-left: 3px solid #3b82f6 !important;
+  padding-left: 9px !important; /* Offset padding to prevent text from shifting */
+  transition: background-color 0.2s ease, border-color 0.2s ease !important;
+}
+
+/* 4. Seekbar Timeline: Remove global container glows */
+media-player [data-control="seekbar"].focused {
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+/* Highlight seekbar track progress bar when timeline is focused */
+media-player [data-control="seekbar"].focused .bg-blue-500.rounded-sm {
+  background-color: #60a5fa !important;
+  filter: drop-shadow(0 0 4px rgba(96, 165, 250, 0.8));
+}
+
+/* Highlight & add circular glow shadow to seekbar thumb dot when focused */
+media-player [data-control="seekbar"].focused .bg-blue-500.rounded-full {
+  background-color: #60a5fa !important;
+  box-shadow: 0 0 10px 4px rgba(96, 165, 250, 0.7) !important;
+}
+

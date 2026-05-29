@@ -4,8 +4,10 @@ import {
   useVideoQualityOptions,
   useAudioOptions,
   useCaptionOptions,
+  GoogleCastButton,
 } from '@vidstack/react';
 import { ChevronRightIcon, CheckIcon, ChevronLeftIcon } from 'lucide-react';
+import { FaChromecast } from 'react-icons/fa';
 
 export const SettingsMenu = React.memo(() => {
   const {
@@ -191,6 +193,21 @@ export const SettingsMenu = React.memo(() => {
       {/* CAST SUBMENU */}
       {activeSettingsMenu === 'cast' && (
         <div className="flex max-h-[250px] flex-col overflow-y-auto overflow-x-hidden">
+          <GoogleCastButton
+            data-focusable="true"
+            data-control="settings-item"
+            onClick={() => {
+              setIsSettingsMenuOpen(false);
+              setFocusedIndex(0);
+            }}
+            className="flex w-full items-center justify-between rounded px-3 py-2 text-left transition-colors hover:bg-white/20 focus:bg-white/20 focus:outline-none border-b border-gray-700/40 mb-1 pb-2"
+          >
+            <div className="flex items-center space-x-2">
+              <FaChromecast className="h-4 w-4 text-blue-400" />
+              <span>Google Cast (Chromecast)</span>
+            </div>
+          </GoogleCastButton>
+
           {receivers && receivers.length > 0 ? (
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             receivers.map((receiver: any) => (
@@ -210,7 +227,7 @@ export const SettingsMenu = React.memo(() => {
             ))
           ) : (
             <div className="px-3 py-2 text-center text-sm text-gray-400">
-              No devices found
+              No other local screen apps found
             </div>
           )}
         </div>

@@ -167,137 +167,172 @@ const VideoPlayerContent: React.FC = () => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' || (!e.isTrusted && e.keyCode === 0)) return;
       const wereControlsHidden = !navRef.current.isControlsVisible;
-      showControlsAndCursor();
+      
       e.stopPropagation();
 
-      // If UI was hidden, only open it on 'OK' (Enter) without triggering action
-      if (wereControlsHidden && e.keyCode === 13) return;
       // Direct Global TV Keys
       if (e.keyCode === 405 && contentType === 'tv' && channelInfo) {
         e.preventDefault();
-        e.stopPropagation();
         toggleFavorite(channelInfo);
         return;
       } else if (e.keyCode === 10073) {
         e.preventDefault();
-        e.stopPropagation();
         if (contentType === 'tv') toggleChannelList();
         return;
       }
 
       if (showChannelList) {
-        e.stopPropagation();
         tvChannelListRef.current?.handleKeyDown(e);
         return;
       }
 
       if (showEpisodeList) {
-        e.stopPropagation();
         episodeOverlayRef.current?.handleKeyDown(e);
         return;
       }
 
       const focusable = getVisibleFocusableElements();
+      const isMenuOpen = navRef.current.isSettingsOpen;
 
-      if (focusable.length === 0) {
-        // Fallback Native Media Control Keys
-        if ([415, 19, 10252].includes(e.keyCode)) {
+      let currentIndex = navRef.current.index;
+      currentIndex = Math.max(0, Math.min(currentIndex, focusable.length - 1));
+      const focusedElement = focusable[currentIndex];
+
+      // Handle Directional & OK Keys
+      if ([37, 38, 39, 40, 13].includes(e.keyCode)) {
+        if (wereControlsHidden) {
           e.preventDefault();
-          remote.togglePaused();
+          showControlsAndCursor();
+          
+          // Special Live TV shortcut: Left/Right key switches channels immediately on first press
+          if (contentType === 'tv') {
+            if (e.keyCode === 37) onPrevChannel?.();
+            if (e.keyCode === 39) onNextChannel?.();
+          }
+          
+          // Special VOD shortcut: Left/Right key seeks immediately on first press
+          if (contentType !== 'tv') {
+            if (e.keyCode === 37) handleSkipButtonClick(-10);
+            if (e.keyCode === 39) handleSkipButtonClick(10);
+          }
+          return;
         }
-        if (e.keyCode === 412) {
-          e.preventDefault();
-          contentType === 'tv' ? onPrevChannel?.() : handleSkipButtonClick(-30);
-        }
-        if (e.keyCode === 417) {
-          e.preventDefault();
-          contentType === 'tv' ? onNextChannel?.() : handleSkipButtonClick(30);
-        }
-        if (e.keyCode === 427 && contentType === 'tv') {
-          e.preventDefault();
-          onPrevChannel?.();
-        }
-        if (e.keyCode === 428 && contentType === 'tv') {
-          e.preventDefault();
-          onNextChannel?.();
-        }
-        if ([0, 10009, 8].includes(e.keyCode)) {
-          e.preventDefault();
-          document.fullscreenElement ? remote.toggleFullscreen() : onBack();
+
+        // Controls are visible
+        showControlsAndCursor();
+
+        if (contentType === 'tv') {
+          // --- TV Mode ---
+          switch (e.keyCode) {
+            case 37: // Left
+              e.preventDefault();
+              if (!isMenuOpen) {
+                onPrevChannel?.();
+              } else if (currentIndex > 0) {
+                setFocusSync(currentIndex - 1);
+              }
+              break;
+            case 39: // Right
+              e.preventDefault();
+              if (!isMenuOpen) {
+                onNextChannel?.();
+              } else if (currentIndex < focusable.length - 1) {
+                setFocusSync(currentIndex + 1);
+              }
+              break;
+            case 38: // Up
+              e.preventDefault();
+              setFocusSync(currentIndex > 0 ? currentIndex - 1 : 0);
+              break;
+            case 40: // Down
+              e.preventDefault();
+              setFocusSync(
+                currentIndex < focusable.length - 1
+                  ? currentIndex + 1
+                  : currentIndex
+              );
+              break;
+            case 13: // Enter
+              e.preventDefault();
+              if (focusedElement) {
+                focusedElement.click();
+                if (focusedElement.getAttribute('data-control') === 'settings-menu') {
+                  setIsSettingsMenuOpen(true);
+                  setFocusSync(0);
+                }
+              }
+              break;
+          }
+        } else {
+          // --- VOD Mode ---
+          switch (e.keyCode) {
+            case 37: // Left
+              e.preventDefault();
+              if (isMenuOpen) {
+                if (currentIndex > 0) setFocusSync(currentIndex - 1);
+              } else if (focusedElement?.getAttribute('data-control') === 'seekbar') {
+                handleSkipButtonClick(-10);
+              } else {
+                const minIndex = 1;
+                if (currentIndex > minIndex) {
+                  setFocusSync(currentIndex - 1);
+                }
+              }
+              break;
+            case 39: // Right
+              e.preventDefault();
+              if (isMenuOpen) {
+                if (currentIndex < focusable.length - 1) setFocusSync(currentIndex + 1);
+              } else if (focusedElement?.getAttribute('data-control') === 'seekbar') {
+                handleSkipButtonClick(10);
+              } else {
+                if (currentIndex < focusable.length - 1) {
+                  setFocusSync(currentIndex + 1);
+                }
+              }
+              break;
+            case 38: // Up
+              e.preventDefault();
+              if (isMenuOpen) {
+                setFocusSync(currentIndex > 0 ? currentIndex - 1 : 0);
+              } else {
+                setFocusSync(0); // Focus seekbar (index 0)
+              }
+              break;
+            case 40: // Down
+              e.preventDefault();
+              if (isMenuOpen) {
+                setFocusSync(
+                  currentIndex < focusable.length - 1
+                    ? currentIndex + 1
+                    : currentIndex
+                );
+              } else if (focusedElement?.getAttribute('data-control') === 'seekbar') {
+                const playIdx = focusable.findIndex(
+                  (el) => el.getAttribute('data-control') === 'play-pause'
+                );
+                setFocusSync(playIdx !== -1 ? playIdx : 1);
+              } else {
+                setControlsVisible(false); // Hide controls
+              }
+              break;
+            case 13: // Enter
+              e.preventDefault();
+              if (focusedElement) {
+                focusedElement.click();
+                if (focusedElement.getAttribute('data-control') === 'settings-menu') {
+                  setIsSettingsMenuOpen(true);
+                  setFocusSync(0);
+                }
+              }
+              break;
+          }
         }
         return;
       }
 
-      // Read from the instant Ref, not the delayed React state
-      let currentIndex = navRef.current.index;
-      currentIndex = Math.max(0, Math.min(currentIndex, focusable.length - 1));
-
-      const focusedElement = focusable[currentIndex];
-      const isMenuOpen = navRef.current.isSettingsOpen;
-
+      // Handle non-directional and non-OK keys
       switch (e.keyCode) {
-        case 37: // Left
-          e.preventDefault();
-          if (
-            !isMenuOpen &&
-            contentType === 'tv' &&
-            focusedElement?.getAttribute('data-control') !== 'seekbar'
-          ) {
-            onPrevChannel?.();
-            showControlsAndCursor();
-          } else if (
-            focusedElement?.getAttribute('data-control') === 'seekbar'
-          ) {
-            handleSkipButtonClick(-10);
-          } else {
-            const minIndex = contentType !== 'tv' && !isMenuOpen ? 1 : 0;
-            if (currentIndex > minIndex) setFocusSync(currentIndex - 1);
-          }
-          break;
-        case 39: // Right
-          e.preventDefault();
-          if (
-            !isMenuOpen &&
-            contentType === 'tv' &&
-            focusedElement?.getAttribute('data-control') !== 'seekbar'
-          ) {
-            onNextChannel?.();
-            showControlsAndCursor();
-          } else if (
-            focusedElement?.getAttribute('data-control') === 'seekbar'
-          ) {
-            handleSkipButtonClick(10);
-          } else if (currentIndex < focusable.length - 1) {
-            setFocusSync(currentIndex + 1);
-          }
-          break;
-        case 38: // Up
-          e.preventDefault();
-          e.stopPropagation();
-          setFocusSync(currentIndex > 0 ? currentIndex - 1 : 0);
-          break;
-        case 40: // Down
-          e.preventDefault();
-          e.stopPropagation();
-          setFocusSync(
-            currentIndex < focusable.length - 1
-              ? currentIndex + 1
-              : currentIndex
-          );
-          break;
-        case 13: // Enter
-          e.preventDefault();
-          if (focusedElement) {
-            focusedElement.click();
-
-            if (
-              focusedElement.getAttribute('data-control') === 'settings-menu'
-            ) {
-              setIsSettingsMenuOpen(true);
-              setFocusSync(0);
-            }
-          }
-          break;
         case 415:
         case 19:
         case 10252: // Play/Pause
@@ -398,6 +433,7 @@ const VideoPlayerContent: React.FC = () => {
     getVisibleFocusableElements,
     setFocusSync,
     settingsMenuRef,
+    setControlsVisible,
   ]);
 
   // Handle Focus CSS Classes
@@ -426,6 +462,37 @@ const VideoPlayerContent: React.FC = () => {
     showEpisodeList,
     getVisibleFocusableElements,
     setFocusedIndex,
+    controlsVisible,
+    seekOverlay,
+  ]);
+
+  // Default focus to Play button when controls transition to visible
+  useEffect(() => {
+    if (controlsVisible && !isSettingsMenuOpen && !showChannelList && !showEpisodeList) {
+      const timer = setTimeout(() => {
+        const focusable = getVisibleFocusableElements();
+        
+        // Find play button
+        const playIndex = focusable.findIndex(
+          (el) => el.getAttribute('data-control') === 'play-pause'
+        );
+        if (playIndex !== -1) {
+          setFocusSync(playIndex);
+        } else if (focusable.length > 0) {
+          // Fallback to seekbar (index 0) if play button is not found or not visible (e.g. seekbar-only mode)
+          setFocusSync(0);
+        }
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [
+    controlsVisible,
+    seekOverlay,
+    isSettingsMenuOpen,
+    showChannelList,
+    showEpisodeList,
+    getVisibleFocusableElements,
+    setFocusSync,
   ]);
 
   const videoSrc = useMemo<PlayerSrc>(() => {
@@ -470,6 +537,10 @@ const VideoPlayerContent: React.FC = () => {
           src={videoSrc}
           viewType="video"
           streamType={contentType === 'tv' ? 'live' : 'on-demand'}
+          googleCast={{
+            autoJoinPolicy: 'origin_scoped' as any,
+            language: 'en-US',
+          }}
           crossOrigin
           playsInline
           autoplay
@@ -518,7 +589,7 @@ const VideoPlayerContent: React.FC = () => {
           />
 
           <div
-            className={`pointer-events-none absolute inset-0 z-20 transition-opacity duration-300 ${controlsVisible ? 'opacity-100' : 'opacity-0'}`}
+            className={`pointer-events-none absolute inset-0 z-20 transition-opacity duration-300 ${controlsVisible ? 'opacity-100' : 'opacity-0'} ${seekOverlay ? 'seek-bar-only' : ''}`}
             onClick={(e) => e.stopPropagation()}
             onDoubleClick={(e) => e.stopPropagation()}
           >
