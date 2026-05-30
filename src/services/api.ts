@@ -16,12 +16,12 @@ interface Api {
   ): Promise<ApiResponse<T>>;
   post<T = unknown>(
     path: string,
-    body?: Record<string, unknown>,
+    body?: any,
     config?: { signal?: AbortSignal }
   ): Promise<ApiResponse<T>>;
   put<T = unknown>(
     path: string,
-    body: Record<string, unknown>,
+    body?: any,
     config?: { signal?: AbortSignal }
   ): Promise<ApiResponse<T>>;
   delete<T = unknown>(
@@ -80,7 +80,7 @@ export const api: Api = {
   },
   post: async <T = unknown>(
     path: string,
-    body: Record<string, unknown> = {},
+    body: any = {},
     { signal }: { signal?: AbortSignal } = {}
   ): Promise<ApiResponse<T>> => {
     const fullUrl = `${BASE_URL}${path}`;
@@ -124,7 +124,7 @@ export const api: Api = {
   },
   put: async <T = unknown>(
     path: string,
-    body: Record<string, unknown>,
+    body: any = {},
     { signal }: { signal?: AbortSignal } = {}
   ): Promise<ApiResponse<T>> => {
     const fullUrl = `${BASE_URL}${path}`;

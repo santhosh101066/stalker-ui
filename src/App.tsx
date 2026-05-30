@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { ToastContainer } from 'react-toastify';
+import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import '@/App.css';
 
@@ -10,12 +10,13 @@ import ConfirmationModal from '@/components/molecules/ConfirmationModal';
 import MainContentGrid from '@/components/organisms/MainContentGrid';
 import DetailModal from '@/components/organisms/DetailModal';
 
-import { useMediaLibrary } from '@/hooks/useMediaLibrary';
+import { useMediaLibrary, initialContext } from '@/hooks/useMediaLibrary';
 import { useAppNavigation } from '@/hooks/useAppNavigation';
 import { useTVFocus } from '@/hooks/useTVFocus';
 import { useCastReceiver } from '@/hooks/useCastReceiver';
 import { isTizenDevice } from './utils/helpers';
 import type { MediaItem } from '@/types';
+import { getMedia, getSeries, getChannels, type CarouselSlide } from '@/services/services';
 
 function TVPortal({ onShowAdmin }: { onShowAdmin: () => void }) {
   const isTizen = isTizenDevice();
@@ -59,6 +60,9 @@ function TVPortal({ onShowAdmin }: { onShowAdmin: () => void }) {
     setContext,
     isRestoringFromHistory,
     setTotalItemsCount,
+    vodCategories,
+    loadingCategories,
+    carouselSlides,
   } = useMediaLibrary();
 
   const {
@@ -189,6 +193,75 @@ function TVPortal({ onShowAdmin }: { onShowAdmin: () => void }) {
     return context.parentTitle || 'Browse';
   }, [streamUrl, context, contentType]);
 
+  const handleCarouselAction = useCallback(
+    async (slide: CarouselSlide) => {
+      if (slide.actionType === 'none') return;
+      try {
+        let resolvedItem: MediaItem;
+        if (slide.mediaType === 'movie') {
+          const res = await getMedia({ movieId: slide.mediaId, category: '*' });
+          if (res.data && res.data.length > 0) {
+            resolvedItem = {
+              ...res.data[0],
+              is_playable_movie: true,
+            };
+          } else {
+            throw new Error('Movie not found');
+          }
+        } else if (slide.mediaType === 'series') {
+          const res = await getSeries({ movieId: slide.mediaId, category: '*' });
+          if (res.data && res.data.length > 0) {
+            resolvedItem = {
+              ...res.data[0],
+              is_series: 1,
+            };
+          } else {
+            throw new Error('Series not found');
+          }
+        } else {
+          // TV Channel
+          const res = await getChannels();
+          const channel = res.data.find(
+            (c) => String(c.id) === String(slide.mediaId)
+          );
+          if (channel) {
+            resolvedItem = channel;
+          } else {
+            throw new Error('Channel not found');
+          }
+        }
+
+        if (slide.actionType === 'play') {
+          await startPlayback(resolvedItem);
+        } else if (slide.actionType === 'details') {
+          await handleItemClick(resolvedItem);
+        }
+      } catch (err) {
+        console.error('Failed to execute carousel action:', err);
+        toast.error('Failed to load media.');
+      }
+    },
+    [startPlayback, handleItemClick]
+  );
+
+  const onSelectCategory = useCallback(
+    (categoryId: string, categoryTitle: string) => {
+      const newContext = {
+        ...initialContext,
+        category: categoryId,
+        parentTitle:
+          categoryId === '*'
+            ? contentType === 'movie'
+              ? 'Movies'
+              : 'Series'
+            : categoryTitle,
+        contentType,
+      };
+      fetchData(newContext);
+    },
+    [contentType, fetchData]
+  );
+
   return (
     <>
       {streamUrl ? (
@@ -271,6 +344,11 @@ function TVPortal({ onShowAdmin }: { onShowAdmin: () => void }) {
                 cwRefreshKey={cwRefreshKey}
                 fetchData={fetchData}
                 isRestoringFromHistory={isRestoringFromHistory.current}
+                vodCategories={vodCategories}
+                loadingCategories={loadingCategories}
+                carouselSlides={carouselSlides}
+                handleCarouselAction={handleCarouselAction}
+                onSelectCategory={onSelectCategory}
               />
             </main>
           </div>

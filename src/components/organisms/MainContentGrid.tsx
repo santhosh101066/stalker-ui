@@ -5,8 +5,11 @@ import EpisodeCard from '@/components/molecules/EpisodeCard';
 import TvChannelListCard from '@/components/molecules/TvChannelListCard';
 import TvChannelList from '@/components/organisms/TvChannelList';
 import ContinueWatching from '@/components/organisms/ContinueWatching';
+import { WelcomeCarousel } from '@/components/organisms/WelcomeCarousel';
+import { CategorySelector } from '@/components/organisms/CategorySelector';
 import { isTizenDevice } from '@/utils/helpers';
 import type { MediaItem, ContextType, ChannelGroup } from '@/types';
+import type { CarouselSlide } from '@/services/services';
 
 interface MainContentGridProps {
   items: MediaItem[];
@@ -27,6 +30,11 @@ interface MainContentGridProps {
     contentType: 'movie' | 'series' | 'tv'
   ) => void;
   isRestoringFromHistory: boolean;
+  vodCategories?: ChannelGroup[];
+  loadingCategories?: boolean;
+  carouselSlides?: CarouselSlide[];
+  handleCarouselAction?: (slide: CarouselSlide) => void;
+  onSelectCategory?: (categoryId: string, categoryTitle: string) => void;
 }
 
 const MainContentGrid = React.memo(
@@ -45,6 +53,10 @@ const MainContentGrid = React.memo(
     handleBack,
     cwRefreshKey,
     fetchData,
+    vodCategories = [],
+    carouselSlides = [],
+    handleCarouselAction = () => {},
+    onSelectCategory = () => {},
   }: MainContentGridProps) => {
     const isTizen = isTizenDevice();
     const isEpisodeList =
@@ -90,6 +102,8 @@ const MainContentGrid = React.memo(
       );
     }
 
+    const isRootVod = contentType !== 'tv' && !context.search && !context.movieId;
+
     return (
       <>
         {!isTizen && contentType === 'tv' ? (
@@ -105,14 +119,27 @@ const MainContentGrid = React.memo(
           </div>
         ) : (
           <>
-            {contentType !== 'tv' &&
-              !context.search &&
-              context.category === null && (
-                <ContinueWatching
-                  onClick={handleItemClick}
-                  refreshKey={cwRefreshKey}
-                />
-              )}
+            {isRootVod && carouselSlides.length > 0 && (
+              <div data-focus-group="carousel">
+                <WelcomeCarousel slides={carouselSlides} onAction={handleCarouselAction} />
+              </div>
+            )}
+
+            {isRootVod && context.category === '*' && (
+              <ContinueWatching
+                onClick={handleItemClick}
+                refreshKey={cwRefreshKey}
+              />
+            )}
+
+            {isRootVod && (
+              <CategorySelector
+                categories={vodCategories}
+                selectedCategory={context.category}
+                onSelectCategory={onSelectCategory}
+                contentType={contentType as 'movie' | 'series'}
+              />
+            )}
 
             <div
               className={`${
@@ -162,10 +189,12 @@ const MainContentGrid = React.memo(
 
         {(totalItemsCount === 0 || items.length < totalItemsCount) &&
           contentType !== 'tv' && (
-            <div className="col-span-full">
-              {loading && items.length > 0 && <LoadingSpinner />}
+            <div className="w-full py-8 flex flex-col items-center justify-center">
+              {loading && items.length > 0 && (
+                <div className="h-10 w-10 animate-spin rounded-full border-b-2 border-t-2 border-blue-500"></div>
+              )}
               {!loading && paginationError && (
-                <div className="py-8 text-center">
+                <div className="text-center">
                   <p className="text-red-500">{paginationError}</p>
                   <button
                     onClick={() => handlePageChange(1)}

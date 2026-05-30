@@ -10,7 +10,14 @@ import {
   Layout,
   X,
   LogOut,
+  Plus,
+  Trash2,
+  Edit2,
+  ArrowUp,
+  ArrowDown,
+  Upload,
 } from 'lucide-react';
+import { getCarouselSlides, saveCarouselSlides, type CarouselSlide, uploadFile } from '@/services/services';
 import { api } from '@/services/api';
 import { getChannelGroups } from '@/services/services';
 import ProfileManager from '@/components/organisms/ProfileManager';
@@ -64,7 +71,7 @@ const Admin: React.FC<AdminProps> = ({ onBack }) => {
     }
   });
   const [passwordInput, setPasswordInput] = useState('');
-  const [activeTab, setActiveTab] = useState<'profiles' | 'config' | 'logs'>(
+  const [activeTab, setActiveTab] = useState<'profiles' | 'config' | 'logs' | 'carousel'>(
     'profiles'
   );
   const [serverLogs, setServerLogs] = useState<
@@ -485,13 +492,14 @@ const Admin: React.FC<AdminProps> = ({ onBack }) => {
             <nav className="flex w-full items-center gap-1 rounded-2xl border border-gray-800 bg-gray-900/50 p-1.5 backdrop-blur-md sm:w-auto">
               {[
                 { id: 'profiles', label: 'Profiles', icon: Users },
+                { id: 'carousel', label: 'Carousel', icon: Layout },
                 { id: 'config', label: 'Config', icon: Settings },
                 { id: 'logs', label: 'Logs', icon: Terminal },
               ].map((tab) => (
                 <button
                   key={tab.id}
                   onClick={() =>
-                    setActiveTab(tab.id as 'profiles' | 'config' | 'logs')
+                    setActiveTab(tab.id as 'profiles' | 'config' | 'logs' | 'carousel')
                   }
                   className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 text-xs font-bold transition-all duration-200 sm:flex-none sm:gap-2 sm:px-4 sm:text-sm ${
                     activeTab === tab.id
@@ -543,6 +551,12 @@ const Admin: React.FC<AdminProps> = ({ onBack }) => {
           {activeTab === 'profiles' && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
               <ProfileManager />
+            </div>
+          )}
+
+          {activeTab === 'carousel' && (
+            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <CarouselConfigManager />
             </div>
           )}
 
@@ -1019,3 +1033,584 @@ const Admin: React.FC<AdminProps> = ({ onBack }) => {
 };
 
 export default Admin;
+
+const CarouselConfigManager: React.FC = () => {
+  const [slides, setSlides] = useState<CarouselSlide[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+
+  // Form states
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [imageUrl, setImageUrl] = useState('');
+  const [mobileImageUrl, setMobileImageUrl] = useState('');
+  const [tabletImageUrl, setTabletImageUrl] = useState('');
+
+  // Selected file states for deferred upload
+  const [desktopFile, setDesktopFile] = useState<File | null>(null);
+  const [tabletFile, setTabletFile] = useState<File | null>(null);
+  const [mobileFile, setMobileFile] = useState<File | null>(null);
+
+  const [actionType, setActionType] = useState<'none' | 'play' | 'details'>('none');
+  const [mediaType, setMediaType] = useState<'movie' | 'series' | 'tv'>('movie');
+  const [mediaId, setMediaId] = useState('');
+  const [order, setOrder] = useState(0);
+  const [uploading, setUploading] = useState(false);
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>, target: 'desktop' | 'tablet' | 'mobile') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (target === 'desktop') {
+      setDesktopFile(file);
+    } else if (target === 'tablet') {
+      setTabletFile(file);
+    } else if (target === 'mobile') {
+      setMobileFile(file);
+    }
+  };
+
+  const clearFileSelect = (target: 'desktop' | 'tablet' | 'mobile') => {
+    if (target === 'desktop') {
+      setDesktopFile(null);
+    } else if (target === 'tablet') {
+      setTabletFile(null);
+    } else if (target === 'mobile') {
+      setMobileFile(null);
+    }
+  };
+
+  const fetchSlides = async () => {
+    setLoading(true);
+    try {
+      const data = await getCarouselSlides();
+      setSlides(data.sort((a, b) => (a.order || 0) - (b.order || 0)));
+    } catch {
+      toast.error('Failed to load carousel slides');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchSlides();
+  }, []);
+
+  const openAddForm = () => {
+    setTitle('');
+    setDescription('');
+    setImageUrl('');
+    setMobileImageUrl('');
+    setTabletImageUrl('');
+    setDesktopFile(null);
+    setTabletFile(null);
+    setMobileFile(null);
+    setActionType('none');
+    setMediaType('movie');
+    setMediaId('');
+    setOrder(slides.length > 0 ? Math.max(...slides.map((s) => s.order || 0)) + 1 : 0);
+    setEditingIndex(null);
+    setShowForm(true);
+  };
+
+  const openEditForm = (slide: CarouselSlide, index: number) => {
+    setTitle(slide.title || '');
+    setDescription(slide.description || '');
+    setImageUrl(slide.imageUrl || '');
+    setMobileImageUrl(slide.mobileImageUrl || '');
+    setTabletImageUrl(slide.tabletImageUrl || '');
+    setDesktopFile(null);
+    setTabletFile(null);
+    setMobileFile(null);
+    setActionType(slide.actionType);
+    setMediaType(slide.mediaType || 'movie');
+    setMediaId(slide.mediaId || '');
+    setOrder(slide.order || 0);
+    setEditingIndex(index);
+    setShowForm(true);
+  };
+
+  const saveSlides = async (newSlides: CarouselSlide[], successMessage: string) => {
+    try {
+      const res = await saveCarouselSlides(newSlides);
+      if (res.success) {
+        setSlides(newSlides);
+        toast.success(res.message || successMessage);
+        window.dispatchEvent(new Event('carousel-changed'));
+        return true;
+      } else {
+        toast.error('Failed to save slides to server');
+        return false;
+      }
+    } catch {
+      toast.error('Error saving slides to server');
+      return false;
+    }
+  };
+
+  const handleSaveSlide = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    const hasDesktop = imageUrl.trim() !== '' || desktopFile !== null;
+    const hasTablet = tabletImageUrl.trim() !== '' || tabletFile !== null;
+    const hasMobile = mobileImageUrl.trim() !== '' || mobileFile !== null;
+
+    if (!hasDesktop && !hasTablet && !hasMobile) {
+      toast.error('At least one Image variation (Desktop, Tablet, or Mobile) is required');
+      return;
+    }
+
+    setUploading(true);
+
+    let finalImageUrl = imageUrl;
+    let finalTabletImageUrl = tabletImageUrl;
+    let finalMobileImageUrl = mobileImageUrl;
+
+    try {
+      // Upload Desktop File if selected
+      if (desktopFile) {
+        const res = await uploadFile(desktopFile);
+        if (res.success && res.url) {
+          finalImageUrl = res.url;
+        } else {
+          throw new Error(res.error || 'Failed to upload Desktop image');
+        }
+      }
+
+      // Upload Tablet File if selected
+      if (tabletFile) {
+        const res = await uploadFile(tabletFile);
+        if (res.success && res.url) {
+          finalTabletImageUrl = res.url;
+        } else {
+          throw new Error(res.error || 'Failed to upload Tablet image');
+        }
+      }
+
+      // Upload Mobile File if selected
+      if (mobileFile) {
+        const res = await uploadFile(mobileFile);
+        if (res.success && res.url) {
+          finalMobileImageUrl = res.url;
+        } else {
+          throw new Error(res.error || 'Failed to upload Mobile image');
+        }
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Error uploading file(s)';
+      toast.error(errorMessage);
+      setUploading(false);
+      return;
+    }
+
+    const newSlide: CarouselSlide = {
+      ...(editingIndex !== null && slides[editingIndex]?.id ? { id: slides[editingIndex].id } : {}),
+      title,
+      description,
+      imageUrl: finalImageUrl,
+      tabletImageUrl: finalTabletImageUrl,
+      mobileImageUrl: finalMobileImageUrl,
+      actionType,
+      mediaType,
+      mediaId,
+      order: Number(order),
+    };
+
+    const updatedSlides = [...slides];
+    if (editingIndex !== null) {
+      updatedSlides[editingIndex] = newSlide;
+    } else {
+      updatedSlides.push(newSlide);
+    }
+
+    updatedSlides.sort((a, b) => (a.order || 0) - (b.order || 0));
+
+    const saved = await saveSlides(updatedSlides, editingIndex !== null ? 'Slide updated successfully!' : 'Slide added successfully!');
+    setUploading(false);
+    if (saved) {
+      setShowForm(false);
+    }
+  };
+
+  const handleDeleteSlide = async (index: number) => {
+    const updatedSlides = slides.filter((_, i) => i !== index);
+    await saveSlides(updatedSlides, 'Slide deleted successfully!');
+  };
+
+  const handleMove = async (index: number, direction: 'up' | 'down') => {
+    const newSlides = [...slides];
+    const swapWith = direction === 'up' ? index - 1 : index + 1;
+    if (swapWith < 0 || swapWith >= newSlides.length) return;
+
+    // Swap order values
+    const tempOrder = newSlides[index].order;
+    newSlides[index].order = newSlides[swapWith].order;
+    newSlides[swapWith].order = tempOrder;
+
+    // Sort again
+    newSlides.sort((a, b) => (a.order || 0) - (b.order || 0));
+    await saveSlides(newSlides, 'Slide order updated successfully!');
+  };
+
+  if (loading) {
+    return (
+      <div className="flex h-40 items-center justify-center">
+        <RefreshCw className="animate-spin text-blue-500" size={32} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 rounded-3xl border border-gray-800 bg-gray-900/30 p-6 backdrop-blur-md text-center sm:text-left">
+        <div>
+          <h2 className="text-xl font-black text-white">Carousel Slides</h2>
+          <p className="text-sm text-gray-500">Configure VOD welcome banner images and target actions.</p>
+        </div>
+        <div className="flex w-full sm:w-auto gap-3">
+          <button
+            type="button"
+            onClick={openAddForm}
+            className="flex-1 sm:flex-none flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg transition-colors hover:bg-blue-500"
+            data-focusable="true"
+          >
+            <Plus size={16} />
+            Add Slide
+          </button>
+        </div>
+      </div>
+
+      {showForm && (
+        <form onSubmit={handleSaveSlide} className="rounded-3xl border border-gray-800 bg-gray-900/30 p-6 space-y-4 text-left">
+          <h3 className="text-lg font-black text-white">{editingIndex !== null ? 'Edit Slide' : 'Add New Slide'}</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-500">Title</label>
+              <input
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                className="mt-1 w-full rounded-xl border border-gray-800 bg-gray-950 px-4 py-3 text-sm text-white outline-none focus:border-blue-500"
+                placeholder="Slide Title"
+              />
+            </div>
+            <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-4 border border-gray-800 bg-gray-950/20 rounded-2xl p-4 mt-2">
+              <div className="md:col-span-3 flex justify-between items-center">
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Image Variations</span>
+                  <p className="text-[11px] text-gray-500 mt-0.5">Specify a URL or choose a file for at least one variation. The others will fall back dynamically.</p>
+                </div>
+              </div>
+
+              {/* Desktop/TV Variant */}
+              <div className="space-y-1">
+                <div className="flex justify-between items-baseline">
+                  <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-500">Desktop / TV Image</label>
+                  <span className="text-[9px] font-black text-blue-500 uppercase tracking-wider">16:9 Aspect</span>
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={imageUrl}
+                    onChange={(e) => setImageUrl(e.target.value)}
+                    className="w-full rounded-xl border border-gray-800 bg-gray-950 px-3 py-2.5 text-xs text-white outline-none focus:border-blue-500"
+                    placeholder="https://... or upload"
+                  />
+                  <div className="relative">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handleFileSelect(e, 'desktop')}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                      disabled={uploading}
+                    />
+                    <button
+                      type="button"
+                      className="h-full rounded-xl bg-gray-800 px-3 py-2.5 text-xs font-bold text-gray-300 transition-colors hover:bg-gray-700 flex items-center gap-1 whitespace-nowrap"
+                      disabled={uploading}
+                    >
+                      <Upload size={12} />
+                    </button>
+                  </div>
+                </div>
+                {desktopFile && (
+                  <div className="flex items-center justify-between bg-blue-950/30 border border-blue-900/30 rounded-lg px-2 py-1 mt-1 text-[10px] text-blue-300">
+                    <span className="truncate max-w-[120px] font-medium">{desktopFile.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => clearFileSelect('desktop')}
+                      className="text-red-400 hover:text-red-300 font-bold ml-1 text-xs"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                )}
+                <p className="ml-1 text-[9px] text-gray-500 italic">Recommended: 1920x1080 resolution.</p>
+              </div>
+
+              {/* Tablet Variant */}
+              <div className="space-y-1">
+                <div className="flex justify-between items-baseline">
+                  <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-500">Tablet Image</label>
+                  <span className="text-[9px] font-black text-indigo-400 uppercase tracking-wider">4:3 Aspect</span>
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={tabletImageUrl}
+                    onChange={(e) => setTabletImageUrl(e.target.value)}
+                    className="w-full rounded-xl border border-gray-800 bg-gray-950 px-3 py-2.5 text-xs text-white outline-none focus:border-blue-500"
+                    placeholder="https://... or upload"
+                  />
+                  <div className="relative">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handleFileSelect(e, 'tablet')}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                      disabled={uploading}
+                    />
+                    <button
+                      type="button"
+                      className="h-full rounded-xl bg-gray-800 px-3 py-2.5 text-xs font-bold text-gray-300 transition-colors hover:bg-gray-700 flex items-center gap-1 whitespace-nowrap"
+                      disabled={uploading}
+                    >
+                      <Upload size={12} />
+                    </button>
+                  </div>
+                </div>
+                {tabletFile && (
+                  <div className="flex items-center justify-between bg-indigo-950/30 border border-indigo-900/30 rounded-lg px-2 py-1 mt-1 text-[10px] text-indigo-300">
+                    <span className="truncate max-w-[120px] font-medium">{tabletFile.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => clearFileSelect('tablet')}
+                      className="text-red-400 hover:text-red-300 font-bold ml-1 text-xs"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                )}
+                <p className="ml-1 text-[9px] text-gray-500 italic">Recommended: 1024x768 resolution.</p>
+              </div>
+
+              {/* Mobile Variant */}
+              <div className="space-y-1">
+                <div className="flex justify-between items-baseline">
+                  <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-500">Mobile Image</label>
+                  <span className="text-[9px] font-black text-purple-400 uppercase tracking-wider">16:9 / 4:3</span>
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={mobileImageUrl}
+                    onChange={(e) => setMobileImageUrl(e.target.value)}
+                    className="w-full rounded-xl border border-gray-800 bg-gray-950 px-3 py-2.5 text-xs text-white outline-none focus:border-blue-500"
+                    placeholder="https://... or upload"
+                  />
+                  <div className="relative">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handleFileSelect(e, 'mobile')}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                      disabled={uploading}
+                    />
+                    <button
+                      type="button"
+                      className="h-full rounded-xl bg-gray-800 px-3 py-2.5 text-xs font-bold text-gray-300 transition-colors hover:bg-gray-700 flex items-center gap-1 whitespace-nowrap"
+                      disabled={uploading}
+                    >
+                      <Upload size={12} />
+                    </button>
+                  </div>
+                </div>
+                {mobileFile && (
+                  <div className="flex items-center justify-between bg-purple-950/30 border border-purple-900/30 rounded-lg px-2 py-1 mt-1 text-[10px] text-purple-300">
+                    <span className="truncate max-w-[120px] font-medium">{mobileFile.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => clearFileSelect('mobile')}
+                      className="text-red-400 hover:text-red-300 font-bold ml-1 text-xs"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                )}
+                <p className="ml-1 text-[9px] text-gray-500 italic">Recommended: 640x360 or 640x480.</p>
+              </div>
+            </div>
+            <div className="md:col-span-2">
+              <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-500">Description</label>
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                rows={2}
+                className="mt-1 w-full rounded-xl border border-gray-800 bg-gray-950 px-4 py-3 text-sm text-white outline-none focus:border-blue-500"
+                placeholder="Brief slide description..."
+              />
+            </div>
+            <div>
+              <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-500">Action Type</label>
+              <select
+                value={actionType}
+                onChange={(e) => setActionType(e.target.value as 'none' | 'play' | 'details')}
+                className="mt-1 w-full rounded-xl border border-gray-800 bg-gray-950 px-4 py-3 text-sm text-white outline-none focus:border-blue-500"
+              >
+                <option value="none">No Action</option>
+                <option value="play">Play Directly</option>
+                <option value="details">Open Details Modal</option>
+              </select>
+            </div>
+            {actionType !== 'none' && (
+              <>
+                <div>
+                  <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-500">Media Type</label>
+                  <select
+                    value={mediaType}
+                    onChange={(e) => setMediaType(e.target.value as 'movie' | 'series' | 'tv')}
+                    className="mt-1 w-full rounded-xl border border-gray-800 bg-gray-950 px-4 py-3 text-sm text-white outline-none focus:border-blue-500"
+                  >
+                    <option value="movie">Movie</option>
+                    <option value="series">Series</option>
+                    <option value="tv">TV Channel</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-500">Media ID</label>
+                  <input
+                    type="text"
+                    value={mediaId}
+                    onChange={(e) => setMediaId(e.target.value)}
+                    className="mt-1 w-full rounded-xl border border-gray-800 bg-gray-950 px-4 py-3 text-sm text-white outline-none focus:border-blue-500"
+                    placeholder="Enter database ID or name"
+                  />
+                </div>
+              </>
+            )}
+            <div>
+              <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-gray-500">Sort Order</label>
+              <input
+                type="number"
+                value={order}
+                onChange={(e) => setOrder(Number(e.target.value))}
+                className="mt-1 w-full rounded-xl border border-gray-800 bg-gray-950 px-4 py-3 text-sm text-white outline-none focus:border-blue-500"
+              />
+            </div>
+          </div>
+          <div className="flex gap-3 justify-end pt-2">
+            <button
+              type="button"
+              onClick={() => setShowForm(false)}
+              className="rounded-xl border border-gray-700 bg-gray-800 px-4 py-2.5 text-xs font-bold text-gray-300 transition-colors hover:bg-gray-700"
+              data-focusable="true"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={uploading}
+              className="rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white shadow-lg transition-colors hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              data-focusable="true"
+            >
+              {uploading ? (
+                <>
+                  <RefreshCw size={14} className="animate-spin" />
+                  <span>Saving...</span>
+                </>
+              ) : (
+                <span>Save Slide</span>
+              )}
+            </button>
+          </div>
+        </form>
+      )}
+
+      <div className="grid grid-cols-1 gap-4">
+        {slides.length === 0 ? (
+          <div className="rounded-3xl border border-dashed border-gray-800 py-12 text-center text-gray-500 italic">
+            No slides configured. Add a slide to see it in VOD main pages.
+          </div>
+        ) : (
+          slides.map((slide, index) => (
+            <div key={index} className="flex flex-col md:flex-row items-center gap-4 rounded-3xl border border-gray-800 bg-gray-900/10 p-4">
+              <img
+                src={slide.imageUrl || slide.tabletImageUrl || slide.mobileImageUrl}
+                alt={slide.title || 'Banner image'}
+                className="h-20 w-36 rounded-xl object-cover border border-gray-800"
+              />
+              <div className="flex-1 text-left">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded bg-gray-800 px-2 py-0.5 text-[10px] font-black text-gray-400">Order: {slide.order}</span>
+                  {slide.imageUrl && (
+                    <span className="rounded bg-blue-950/40 border border-blue-900/50 px-2 py-0.5 text-[10px] font-semibold text-blue-400">
+                      Desktop
+                    </span>
+                  )}
+                  {slide.tabletImageUrl && (
+                    <span className="rounded bg-indigo-950/40 border border-indigo-900/50 px-2 py-0.5 text-[10px] font-semibold text-indigo-400">
+                      Tablet
+                    </span>
+                  )}
+                  {slide.mobileImageUrl && (
+                    <span className="rounded bg-purple-950/40 border border-purple-900/50 px-2 py-0.5 text-[10px] font-semibold text-purple-400">
+                      Mobile
+                    </span>
+                  )}
+                  {slide.actionType !== 'none' && (
+                    <span className="rounded bg-gray-800 border border-gray-700 px-2 py-0.5 text-[10px] font-black text-gray-300 uppercase">
+                      {slide.actionType === 'play' ? 'Play' : 'Details'}: {slide.mediaType} ({slide.mediaId})
+                    </span>
+                  )}
+                </div>
+                <h4 className="mt-1 font-bold text-white">{slide.title || 'Untitled Banner'}</h4>
+                <p className="text-xs text-gray-500 line-clamp-1">{slide.description || 'No description'}</p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleMove(index, 'up')}
+                  disabled={index === 0}
+                  className="rounded-lg bg-gray-800 p-2 text-gray-400 transition-colors hover:bg-gray-700 disabled:opacity-30"
+                  data-focusable="true"
+                  title="Move Up"
+                >
+                  <ArrowUp size={14} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleMove(index, 'down')}
+                  disabled={index === slides.length - 1}
+                  className="rounded-lg bg-gray-800 p-2 text-gray-400 transition-colors hover:bg-gray-700 disabled:opacity-30"
+                  data-focusable="true"
+                  title="Move Down"
+                >
+                  <ArrowDown size={14} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openEditForm(slide, index)}
+                  className="rounded-lg bg-blue-900/20 border border-blue-900/40 p-2 text-blue-400 transition-colors hover:bg-blue-900/40"
+                  data-focusable="true"
+                  title="Edit"
+                >
+                  <Edit2 size={14} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDeleteSlide(index)}
+                  className="rounded-lg bg-red-900/20 border border-red-900/40 p-2 text-red-500 transition-colors hover:bg-red-900/40"
+                  data-focusable="true"
+                  title="Delete"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+};

@@ -37,6 +37,7 @@ export interface VideoContextType {
   reloadTrigger: number;
   isRecovering: boolean;
   isTizen: boolean;
+  streamError: string | null;
 
   // --- Data / Props ---
   streamUrl?: string | null;

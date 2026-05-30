@@ -7,6 +7,10 @@ import {
   getSeries,
   getEPG,
   getChannelGroups,
+  getMovieCategories,
+  getSeriesCategories,
+  getCarouselSlides,
+  type CarouselSlide,
 } from '@/services/services';
 import type { MediaItem, ContextType, EPG_List, ChannelGroup } from '@/types';
 import type { PaginatedResponse } from '@/services/services';
@@ -17,25 +21,37 @@ const PREFERRED_CONTENT_TYPE_KEY = 'preferredContentType';
 export const getInitialState = (): {
   initialType: 'movie' | 'series' | 'tv';
   initialTitle: string;
+  initialCategory: string | null;
 } => {
   const savedType = localStorage.getItem(PREFERRED_CONTENT_TYPE_KEY) as
     | 'movie'
     | 'series'
     | 'tv'
     | null;
-  if (savedType === 'series')
-    return { initialType: 'series', initialTitle: 'Series' };
-  if (savedType === 'tv') return { initialType: 'tv', initialTitle: 'TV' };
-  return { initialType: 'movie', initialTitle: 'Movies' };
+  const initialType = savedType || 'movie';
+  const initialTitle = initialType === 'series' ? 'Series' : initialType === 'tv' ? 'TV' : 'Movies';
+
+  if (initialType === 'tv') {
+    return { initialType, initialTitle, initialCategory: null };
+  }
+
+  const lastCategory = localStorage.getItem(`last_selected_category_${initialType}`) || '*';
+  const lastCategoryTitle = localStorage.getItem(`last_selected_category_title_${initialType}`);
+
+  return {
+    initialType,
+    initialTitle: lastCategory === '*' ? initialTitle : (lastCategoryTitle || initialTitle),
+    initialCategory: lastCategory,
+  };
 };
 
-const { initialType, initialTitle } = getInitialState();
+const { initialType, initialTitle, initialCategory } = getInitialState();
 
 export const initialContext: ContextType = {
   page: 1,
   pageAtaTime: 1,
   search: '',
-  category: null,
+  category: initialCategory,
   movieId: null,
   seasonId: null,
   parentTitle: initialTitle,
@@ -62,6 +78,35 @@ export function useMediaLibrary() {
     null
   );
   const isTizen = isTizenDevice();
+
+  const [vodCategories, setVodCategories] = useState<ChannelGroup[]>([]);
+  const [loadingCategories, setLoadingCategories] = useState<boolean>(false);
+  const [carouselSlides, setCarouselSlides] = useState<CarouselSlide[]>([]);
+
+  const fetchVodCategories = useCallback(async (type: 'movie' | 'series') => {
+    setLoadingCategories(true);
+    try {
+      const response =
+        type === 'movie'
+          ? await getMovieCategories()
+          : await getSeriesCategories();
+      const allItem: ChannelGroup = { id: '*', title: 'ALL' };
+      setVodCategories([allItem, ...response.data]);
+    } catch (err) {
+      console.error('Failed to load categories', err);
+    } finally {
+      setLoadingCategories(false);
+    }
+  }, []);
+
+  const fetchCarousel = useCallback(async () => {
+    try {
+      const slides = await getCarouselSlides();
+      setCarouselSlides(slides.sort((a, b) => (a.order || 0) - (b.order || 0)));
+    } catch (err) {
+      console.error('Failed to load carousel slides', err);
+    }
+  }, []);
 
   const [favorites, setFavorites] = useState<string[]>(() => {
     try {
@@ -234,6 +279,11 @@ export function useMediaLibrary() {
       initialLoadRef.current = true;
     }
 
+    fetchCarousel();
+    if (initialContext.contentType !== 'tv') {
+      fetchVodCategories(initialContext.contentType as 'movie' | 'series');
+    }
+
     if (initialContext.contentType === 'tv') {
       loadEpgData();
       if (isTizen) {
@@ -241,11 +291,14 @@ export function useMediaLibrary() {
         setPlayLastTvChannel(lastPlayedId || '__play_first__');
       }
     }
-  }, [fetchData, loadEpgData, isTizen]);
+  }, [fetchData, loadEpgData, isTizen, fetchCarousel, fetchVodCategories]);
 
   const handlePageChange = useCallback(
     (direction: number) => {
-      if (direction <= 0 || contentType === 'tv') return;
+      const newPage = context.page + direction;
+      if (newPage > 1 && (!items || items.length === 0)) {
+        return;
+      }
       if (
         isFetchingMore.current ||
         loading ||
@@ -254,10 +307,9 @@ export function useMediaLibrary() {
         return;
 
       isFetchingMore.current = true;
-      const newPage = context.page + direction;
       fetchData({ ...context, page: newPage });
     },
-    [loading, totalItemsCount, items?.length, context, fetchData, contentType]
+    [loading, totalItemsCount, items, context, fetchData]
   );
 
   const toggleFavorite = useCallback(
@@ -281,12 +333,14 @@ export function useMediaLibrary() {
   const handleContentTypeChange = useCallback(
     (type: 'movie' | 'series' | 'tv') => {
       if (type === contentType) return;
-      const newTitle =
-        type === 'movie' ? 'Movies' : type === 'series' ? 'Series' : 'TV';
+      
+      const lastCategory = type === 'tv' ? null : (localStorage.getItem(`last_selected_category_${type}`) || '*');
+      const lastCategoryTitle = type === 'tv' ? 'TV' : (localStorage.getItem(`last_selected_category_title_${type}`) || (type === 'movie' ? 'Movies' : 'Series'));
+
       const newContext = {
         ...initialContext,
-        parentTitle: newTitle,
-        category: null,
+        parentTitle: lastCategory === '*' ? (type === 'movie' ? 'Movies' : 'Series') : lastCategoryTitle,
+        category: lastCategory,
         contentType: type,
       };
 
@@ -295,6 +349,11 @@ export function useMediaLibrary() {
       localStorage.setItem(PREFERRED_CONTENT_TYPE_KEY, type);
       setContext(newContext);
       fetchData(newContext, type);
+
+      if (type !== 'tv') {
+        fetchVodCategories(type);
+      }
+
       if (type === 'tv') {
         loadEpgData();
         const lastPlayedId = localStorage.getItem('lastPlayedTvChannelId');
@@ -303,7 +362,7 @@ export function useMediaLibrary() {
         setPlayLastTvChannel(null);
       }
     },
-    [contentType, fetchData, loadEpgData]
+    [contentType, fetchData, loadEpgData, fetchVodCategories]
   );
 
   const cycleSort = useCallback(() => {
@@ -425,9 +484,20 @@ export function useMediaLibrary() {
     const handleConfigChange = () => {
       setItems([]);
       setTotalItemsCount(0);
-      setContext(initialContext);
-      fetchData(initialContext, contentType);
-      if (contentType === 'tv') {
+      const lastCategory = contentType === 'tv' ? null : (localStorage.getItem(`last_selected_category_${contentType}`) || '*');
+      const lastCategoryTitle = contentType === 'tv' ? 'TV' : (localStorage.getItem(`last_selected_category_title_${contentType}`) || (contentType === 'movie' ? 'Movies' : 'Series'));
+      const initCtx = {
+        ...initialContext,
+        category: lastCategory,
+        parentTitle: lastCategory === '*' ? (contentType === 'movie' ? 'Movies' : 'Series') : lastCategoryTitle,
+        contentType,
+      };
+      setContext(initCtx);
+      fetchData(initCtx, contentType);
+      fetchCarousel();
+      if (contentType !== 'tv') {
+        fetchVodCategories(contentType as 'movie' | 'series');
+      } else {
         loadEpgData();
       }
       toast.info('Configuration updated, content reloaded.', {
@@ -438,7 +508,17 @@ export function useMediaLibrary() {
     window.addEventListener('config-changed', handleConfigChange);
     return () =>
       window.removeEventListener('config-changed', handleConfigChange);
-  }, [fetchData, contentType, loadEpgData]);
+  }, [fetchData, contentType, loadEpgData, fetchCarousel, fetchVodCategories]);
+
+  useEffect(() => {
+    const handleCarouselChange = () => {
+      fetchCarousel();
+    };
+
+    window.addEventListener('carousel-changed', handleCarouselChange);
+    return () =>
+      window.removeEventListener('carousel-changed', handleCarouselChange);
+  }, [fetchCarousel]);
 
   return {
     context,
@@ -465,6 +545,11 @@ export function useMediaLibrary() {
     addToRecentChannels,
     playLastTvChannel,
     setPlayLastTvChannel,
+    vodCategories,
+    loadingCategories,
+    carouselSlides,
+    fetchVodCategories,
+    fetchCarousel,
     setLoading,
     setItems,
     setContext,

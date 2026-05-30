@@ -109,6 +109,7 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
   const [retryCount, setRetryCount] = useState(0);
   const [reloadTrigger, setReloadTrigger] = useState(0);
   const [isRecovering, setIsRecovering] = useState(false);
+  const [streamError, setStreamError] = useState<string | null>(null);
   const [pendingNextIndex, setPendingNextIndex] = useState<number | null>(null);
   const [isTooltipVisible, setIsTooltipVisible] = useState(false);
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
@@ -389,9 +390,31 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
           fragLoadingMaxRetry: 10,
           fragLoadingRetryDelay: 1000,
         };
+
+        // Listen for hls.js instances and attach error listeners
+        (provider as any).onInstanceChange?.((hlsInstance: any) => {
+          if (!hlsInstance) return;
+          console.log('[VideoPlayer] HLS instance changed, binding error listener');
+          hlsInstance.on('hlsError', (_event: any, data: any) => {
+            console.log('[VideoPlayer] HLS event error details:', data);
+            const isNetwork404 = 
+              data.response?.status === 404 || 
+              data.response?.code === 404 ||
+              data.details?.includes('404') ||
+              data.reason?.includes('404');
+              
+            if (isNetwork404) {
+              if (contentType === 'tv') {
+                console.log('[VideoPlayer] HLS 404 error detected, setting error state');
+                setStreamError('Channel is not available 404 status');
+                setIsRecovering(false);
+              }
+            }
+          });
+        });
       }
     },
-    []
+    [contentType]
   );
 
   const handleCanPlay = useCallback(() => {
@@ -449,23 +472,56 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
   }, [contentType, mediaId, itemId, initialPlaybackState]);
 
   const handleError = useCallback(
-    (event: any) => {
+    async (event: any) => {
       if (isRetrying.current) return;
-      const error = event.detail;
+      const error = event?.detail || event?.error || playerRef.current?.error || playerRef.current?.state?.error;
+      console.log('[VideoPlayer] handleError details:', { error, event });
 
+      let is404 = false;
       if (
         error?.code === 4 ||
         error?.message?.includes('404') ||
-        error?.message?.includes('500')
+        String(error)?.includes('404')
       ) {
-        if (contentType === 'tv' && retryCount < 10) {
-          console.log(
-            `[VideoPlayer] Live TV 404. Retrying... (${retryCount + 1}/10)`
-          );
-        } else {
-          toast.error('Stream not found. Please try another source.');
+        is404 = true;
+      }
+
+      // Check stream URL status directly if we suspect a network/resource error
+      if (!is404 && streamUrl && contentType === 'tv') {
+        try {
+          // Perform a fast HEAD request to check URL status
+          const response = await fetch(streamUrl, { method: 'HEAD' });
+          if (response.status === 404) {
+            is404 = true;
+          }
+        } catch (e) {
+          // Try with GET and a short timeout
+          try {
+            const response = await fetch(streamUrl, { signal: AbortSignal.timeout(2000) });
+            if (response.status === 404) {
+              is404 = true;
+            }
+          } catch (err) {
+            console.error('[VideoPlayer] Fetch check for 404 failed:', err);
+          }
+        }
+      }
+
+      if (is404) {
+        if (contentType === 'tv') {
+          console.log('[VideoPlayer] 404 status confirmed. Showing error overlay.');
+          setStreamError('Channel is not available 404 status');
+          setIsRecovering(false);
           return;
         }
+      }
+
+      if (
+        error?.code === 4 ||
+        error?.message?.includes('500')
+      ) {
+        toast.error('Stream error. Please try another source.');
+        return;
       }
 
       if (retryCount < 10) {
@@ -484,7 +540,7 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
         setIsRecovering(false);
       }
     },
-    [retryCount, contentType]
+    [retryCount, contentType, streamUrl]
   );
 
   const saveProgress = useCallback(() => {
@@ -577,7 +633,16 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
     // Smart Auto-Play next episode
     if (episodes && episodes.length > 0 && item && onEpisodeSelect) {
       const activeCardId = item._episodeCardId || item.id;
-      const curIndex = episodes.findIndex((ep: any) => ep.id === activeCardId);
+      const activeCardIdStr = activeCardId !== undefined && activeCardId !== null ? String(activeCardId) : '';
+      const curIndex = episodes.findIndex((ep: any) => {
+        if (ep.id === undefined || ep.id === null) return false;
+        const epIdStr = String(ep.id);
+        return (
+          epIdStr === activeCardIdStr ||
+          epIdStr === activeCardIdStr.replace('ep_', '') ||
+          activeCardIdStr === epIdStr.replace('ep_', '')
+        );
+      });
 
       if (curIndex !== -1) {
         const getEpNum = (ep: any) => {
@@ -676,6 +741,11 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
   }, [contentType, channelInfo, epgData]);
 
   useEffect(() => {
+    setStreamError(null);
+    setRetryCount(0);
+  }, [itemId, streamUrl]);
+
+  useEffect(() => {
     if (previewChannelInfo) showControlsAndCursor();
   }, [previewChannelInfo, showControlsAndCursor]);
 
@@ -721,6 +791,7 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
     reloadTrigger,
     isRecovering,
     isTizen,
+    streamError,
 
     streamUrl,
     rawStreamUrl,

@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { EPG_List, MediaItem, ChannelGroup } from '@/types';
-import { api, type ApiResponse } from '@/services/api';
+import { api, type ApiResponse, BASE_URL } from '@/services/api';
 
 export const API_PATHS = {
   MOVIES: '/v2/movies',
@@ -11,6 +11,9 @@ export const API_PATHS = {
   EPG: '/v2/epg',
   CHANNEL_GROUPS: '/v2/groups',
   EXPIRY: '/v2/expiry',
+  CAROUSEL: '/carousel',
+  MOVIE_GROUPS: '/v2/movie-groups',
+  SERIES_GROUPS: '/v2/series-groups',
 };
 
 export interface PaginatedResponse<T> {
@@ -92,6 +95,85 @@ export const getChannelGroups = async (
   };
 };
 
+export const getMovieCategories = async (
+  signal?: AbortSignal
+): Promise<PaginatedResponse<ChannelGroup>> => {
+  const response = (
+    await api.get<any>(API_PATHS.MOVIE_GROUPS, {
+      signal,
+    })
+  ).data;
+  if (!response) {
+    throw new Error('No response data received from movie groups API.');
+  }
+  const rawData = response.data || response;
+  const groupsList = Array.isArray(rawData) ? rawData : [];
+  return {
+    data: groupsList.map((g: any) => ({
+      id: String(g.id),
+      title: String(g.title || g.name || ''),
+    })),
+    page: 1,
+    total_items: groupsList.length,
+  };
+};
+
+export const getSeriesCategories = async (
+  signal?: AbortSignal
+): Promise<PaginatedResponse<ChannelGroup>> => {
+  const response = (
+    await api.get<any>(API_PATHS.SERIES_GROUPS, {
+      signal,
+    })
+  ).data;
+  if (!response) {
+    throw new Error('No response data received from series groups API.');
+  }
+  const rawData = response.data || response;
+  const groupsList = Array.isArray(rawData) ? rawData : [];
+  return {
+    data: groupsList.map((g: any) => ({
+      id: String(g.id),
+      title: String(g.title || g.name || ''),
+    })),
+    page: 1,
+    total_items: groupsList.length,
+  };
+};
+
+export interface CarouselSlide {
+  id?: string;
+  title?: string;
+  description?: string;
+  imageUrl?: string;
+  mobileImageUrl?: string;
+  tabletImageUrl?: string;
+  actionType: 'none' | 'play' | 'details';
+  mediaType?: 'movie' | 'series' | 'tv';
+  mediaId?: string;
+  order: number;
+}
+
+export const getCarouselSlides = async (
+  signal?: AbortSignal
+): Promise<CarouselSlide[]> => {
+  const response = (await api.get<CarouselSlide[]>(API_PATHS.CAROUSEL, { signal }))
+    .data;
+  return response || [];
+};
+
+export const saveCarouselSlides = async (
+  slides: CarouselSlide[]
+): Promise<{ success: boolean; message?: string }> => {
+  const response = (
+    await api.post<{ success: boolean; message?: string }>(
+      API_PATHS.CAROUSEL,
+      slides
+    )
+  ).data;
+  return response;
+};
+
 export const getMovieUrl = async (params: Record<string, any> = {}) =>
   (await api.get(API_PATHS.MOVIE_LINK, { params })).data;
 export const getChannelUrl = async (cmd: string) =>
@@ -109,3 +191,33 @@ export const getExpiry = async (): Promise<{
 }> =>
   (await api.get<{ success: boolean; expiry: string | null }>(API_PATHS.EXPIRY))
     .data;
+
+export const uploadFile = async (
+  file: File
+): Promise<{ success: boolean; url?: string; error?: string }> => {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  try {
+    const token = localStorage.getItem('admin_token');
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const response = await fetch(`${BASE_URL}/upload`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+
+    if (!response.ok) {
+      throw new Error(`Upload failed: ${response.statusText}`);
+    }
+
+    return await response.json();
+  } catch (err: any) {
+    console.error('File upload failed:', err);
+    return { success: false, error: err.message };
+  }
+};

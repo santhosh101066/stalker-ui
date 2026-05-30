@@ -31,6 +31,10 @@ async function resolveStreamUrl(
 
   const urlParams: Record<string, any> = { id: item.id };
 
+  if (item.cmd) {
+    urlParams.cmd = item.cmd;
+  }
+
   if (seriesNumber !== undefined) {
     urlParams.series = seriesNumber;
   }
@@ -144,11 +148,20 @@ export function useAppNavigation(
         (item as any).series_id !== undefined;
 
       if (isEpisodeCWT && mainSeriesId) {
+        const seriesObj = {
+          ...item,
+          id: mainSeriesId,
+          is_series: 1,
+          category_id: item.category_id || (item as any).cw_category_id,
+        } as MediaItem;
+
+        setCurrentSeriesItem(seriesObj);
+
         const homeState: NavFrame = {
           context,
           items,
           focusedIndex,
-          currentSeriesItem,
+          currentSeriesItem: null,
           totalItemsCount,
         };
         const cwCategory = item.category_id ? String(item.category_id) : ((item as any).cw_category_id ? String((item as any).cw_category_id) : '*');
@@ -163,12 +176,7 @@ export function useAppNavigation(
           context: seasonContext,
           items: [],
           focusedIndex: null,
-          currentSeriesItem: {
-            ...item,
-            id: mainSeriesId,
-            is_series: 1,
-            category_id: item.category_id || (item as any).cw_category_id,
-          } as MediaItem,
+          currentSeriesItem: seriesObj,
           totalItemsCount: 0,
         };
 
@@ -212,14 +220,7 @@ export function useAppNavigation(
         savedResumeTime ? { currentTime: savedResumeTime } : undefined
       );
     },
-    [
-      context,
-      currentSeriesItem,
-      fetchData,
-      focusedIndex,
-      items,
-      totalItemsCount,
-    ]
+    [context, fetchData, focusedIndex, items, totalItemsCount]
   );
 
   const startPlayback = useCallback(
@@ -298,7 +299,7 @@ export function useAppNavigation(
 
       if (isInsideMovieCategory || item.is_playable_movie) {
         try {
-          if (!isPortal && item.cmd) {
+          if (item.cmd) {
             const { raw, proxied } = await resolveStreamUrl(item, isPortal);
             openPlayer(item as any, raw, proxied, getResumeTime(item));
             return;

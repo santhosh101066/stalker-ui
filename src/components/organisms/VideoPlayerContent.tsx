@@ -63,6 +63,7 @@ const VideoPlayerContent: React.FC = () => {
     reloadTrigger,
     isRecovering,
     isTizen,
+    streamError,
 
     toggleFavorite,
     onProviderChange,
@@ -509,6 +510,8 @@ const VideoPlayerContent: React.FC = () => {
     setFocusSync,
   ]);
 
+
+
   const videoSrc = useMemo<PlayerSrc>(() => {
     const activeUrl =
       (useProxy ? streamUrl || rawStreamUrl : rawStreamUrl || streamUrl) || '';
@@ -679,6 +682,19 @@ const VideoPlayerContent: React.FC = () => {
                     </span>
                   )}
                 </div>
+              </div>
+            </div>
+          )}
+
+          {streamError && (
+            <div className="absolute inset-0 z-10 flex items-center justify-center bg-black pointer-events-none">
+              <div className="w-[90%] max-w-md p-6 rounded-xl border border-zinc-800 bg-zinc-900/95 text-center shadow-2xl shadow-black/80 space-y-3">
+                <h3 className="text-lg font-bold text-red-500 tracking-wide">
+                  Error 404: Signal Not Found
+                </h3>
+                <p className="text-sm text-zinc-300 font-medium leading-relaxed px-2">
+                  We are currently unable to fetch the broadcast from the provider. Please try again later
+                </p>
               </div>
             </div>
           )}
