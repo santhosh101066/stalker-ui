@@ -47,6 +47,7 @@ export interface SeekOverlayData {
   visible: boolean;
   text: string;
   time: string;
+  isLeftRight?: boolean;
 }
 
 export interface VideoLevel {

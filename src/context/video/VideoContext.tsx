@@ -233,7 +233,7 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
 
   // --- Actions ---
   const handleSkipButtonClick = useCallback(
-    (seconds: number) => {
+    (seconds: number, isLeftRight: boolean = false) => {
       const player = playerRef.current;
       if (!player) return;
 
@@ -274,19 +274,26 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
         visible: true,
         text: `${direction > 0 ? '+' : '-'}${offset}s`,
         time: formatTime(targetTime),
+        isLeftRight,
       });
+
+      if (!isLeftRight) {
+        showControlsAndCursor();
+      }
 
       seekRunTimer.current = setTimeout(() => {
         seekRunStart.current = null;
         seekRunLevel.current = 0;
-        setControlsVisible(false);
+        if (isLeftRight) {
+          setControlsVisible(false);
+        }
         seekFadeOutTimer.current = setTimeout(() => {
           setSeekOverlay(null);
           seekFadeOutTimer.current = null;
         }, 300);
       }, 1500);
     },
-    [SEEK_LEVELS]
+    [SEEK_LEVELS, showControlsAndCursor]
   );
 
   const cycleFitMode = useCallback(() => {

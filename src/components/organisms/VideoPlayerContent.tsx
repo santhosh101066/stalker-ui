@@ -212,8 +212,8 @@ const VideoPlayerContent: React.FC = () => {
           
           // Special VOD shortcut: Left/Right key seeks immediately on first press
           if (contentType !== 'tv') {
-            if (e.keyCode === 37) handleSkipButtonClick(-10);
-            if (e.keyCode === 39) handleSkipButtonClick(10);
+            if (e.keyCode === 37) handleSkipButtonClick(-10, true);
+            if (e.keyCode === 39) handleSkipButtonClick(10, true);
           }
           return;
         }
@@ -278,7 +278,7 @@ const VideoPlayerContent: React.FC = () => {
               if (isMenuOpen) {
                 if (currentIndex > 0) setFocusSync(currentIndex - 1);
               } else if (focusedElement?.getAttribute('data-control') === 'seekbar') {
-                handleSkipButtonClick(-10);
+                handleSkipButtonClick(-10, true);
               } else {
                 const minIndex = 1;
                 if (currentIndex > minIndex) {
@@ -291,7 +291,7 @@ const VideoPlayerContent: React.FC = () => {
               if (isMenuOpen) {
                 if (currentIndex < focusable.length - 1) setFocusSync(currentIndex + 1);
               } else if (focusedElement?.getAttribute('data-control') === 'seekbar') {
-                handleSkipButtonClick(10);
+                handleSkipButtonClick(10, true);
               } else {
                 if (currentIndex < focusable.length - 1) {
                   setFocusSync(currentIndex + 1);
@@ -603,7 +603,7 @@ const VideoPlayerContent: React.FC = () => {
           />
 
           <div
-            className={`pointer-events-none absolute inset-0 z-20 transition-opacity duration-300 ${controlsVisible ? 'opacity-100' : 'opacity-0'} ${seekOverlay ? 'seek-bar-only' : ''}`}
+            className={`pointer-events-none absolute inset-0 z-20 transition-opacity duration-300 ${controlsVisible ? 'opacity-100' : 'opacity-0'} ${seekOverlay?.isLeftRight ? 'seek-bar-only' : ''}`}
             onClick={(e) => e.stopPropagation()}
             onDoubleClick={(e) => e.stopPropagation()}
           >

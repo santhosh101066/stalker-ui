@@ -85,7 +85,7 @@ export interface VideoContextType {
   ) => void;
   setIsSettingsMenuOpen: React.Dispatch<React.SetStateAction<boolean>>;
   setUseProxy: (v: boolean) => void;
-  handleSkipButtonClick: (seconds: number) => void;
+  handleSkipButtonClick: (seconds: number, isLeftRight?: boolean) => void;
 
   // --- Vidstack Native Event Handlers ---
   handleCanPlay: () => void;
