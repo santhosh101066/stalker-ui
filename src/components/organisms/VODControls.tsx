@@ -247,6 +247,7 @@ export const VODControls = React.memo(() => {
             {!isTizen && (
               <FullscreenButton
                 data-focusable="true"
+                data-control="fullscreen"
                 className="text-white hover:text-blue-400"
                 title="Fullscreen"
               >

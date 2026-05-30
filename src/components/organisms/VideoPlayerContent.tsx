@@ -255,10 +255,17 @@ const VideoPlayerContent: React.FC = () => {
             case 13: // Enter
               e.preventDefault();
               if (focusedElement) {
-                focusedElement.click();
-                if (focusedElement.getAttribute('data-control') === 'settings-menu') {
+                const control = focusedElement.getAttribute('data-control');
+                if (control === 'play-pause') {
+                  remote.togglePaused();
+                } else if (control === 'fullscreen') {
+                  remote.toggleFullscreen();
+                } else if (control === 'settings-menu') {
+                  focusedElement.click();
                   setIsSettingsMenuOpen(true);
                   setFocusSync(0);
+                } else {
+                  focusedElement.click();
                 }
               }
               break;
@@ -319,10 +326,17 @@ const VideoPlayerContent: React.FC = () => {
             case 13: // Enter
               e.preventDefault();
               if (focusedElement) {
-                focusedElement.click();
-                if (focusedElement.getAttribute('data-control') === 'settings-menu') {
+                const control = focusedElement.getAttribute('data-control');
+                if (control === 'play-pause') {
+                  remote.togglePaused();
+                } else if (control === 'fullscreen') {
+                  remote.toggleFullscreen();
+                } else if (control === 'settings-menu') {
+                  focusedElement.click();
                   setIsSettingsMenuOpen(true);
                   setFocusSync(0);
+                } else {
+                  focusedElement.click();
                 }
               }
               break;

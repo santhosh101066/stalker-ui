@@ -127,17 +127,25 @@ export function useMediaLibrary() {
             sort: newContext.sort,
           };
           response = await getMedia(params);
+          const responseData = response.data || [];
           setItems((prev) => {
-            if (newContext.page === 1) return response.data || [];
+            if (newContext.page === 1) return responseData;
 
             const existingIds = new Set(prev.map((item) => item.id));
-            const uniqueNew = (response.data || []).filter(
+            const uniqueNew = responseData.filter(
               (item) => !existingIds.has(item.id)
             );
 
-            return [...(prev || []), ...(uniqueNew || [])];
+            if (uniqueNew.length === 0) {
+              setTimeout(() => setTotalItemsCount(prev.length), 0);
+            }
+            return [...(prev || []), ...uniqueNew];
           });
-          if (response.total_items) setTotalItemsCount(response.total_items);
+          if (responseData.length > 0 && response.total_items) {
+            setTotalItemsCount(response.total_items);
+          } else if (newContext.page === 1) {
+            setTotalItemsCount(0);
+          }
           if (response.isPortal !== undefined) setIsPortal(response.isPortal);
         } else if (currentContentType === 'series') {
           if (newContext.seasonId && newContext.movieId) {
@@ -166,12 +174,25 @@ export function useMediaLibrary() {
               sort: newContext.sort,
             });
           }
-          setItems((prev) =>
-            newContext.page === 1
-              ? response.data || []
-              : [...(prev || []), ...(response.data || [])]
-          );
-          if (response.total_items) setTotalItemsCount(response.total_items);
+          const responseData = response.data || [];
+          setItems((prev) => {
+            if (newContext.page === 1) return responseData;
+
+            const existingIds = new Set(prev.map((item) => item.id));
+            const uniqueNew = responseData.filter(
+              (item) => !existingIds.has(item.id)
+            );
+
+            if (uniqueNew.length === 0) {
+              setTimeout(() => setTotalItemsCount(prev.length), 0);
+            }
+            return [...(prev || []), ...uniqueNew];
+          });
+          if (responseData.length > 0 && response.total_items) {
+            setTotalItemsCount(response.total_items);
+          } else if (newContext.page === 1) {
+            setTotalItemsCount(0);
+          }
         } else {
           const [channelResponse, groupResponse] = await Promise.all([
             getChannels(),
