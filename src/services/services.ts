@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { EPG_List, MediaItem, ChannelGroup } from '@/types';
-import { api, type ApiResponse, BASE_URL } from '@/services/api';
+import { api, type ApiResponse } from '@/services/api';
 
 export const API_PATHS = {
   MOVIES: '/v2/movies',
@@ -199,25 +199,18 @@ export const uploadFile = async (
   formData.append('file', file);
 
   try {
-    const token = localStorage.getItem('admin_token');
-    const headers: Record<string, string> = {};
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    const response = await fetch(`${BASE_URL}/upload`, {
-      method: 'POST',
-      headers,
-      body: formData,
-    });
-
-    if (!response.ok) {
-      throw new Error(`Upload failed: ${response.statusText}`);
-    }
-
-    return await response.json();
+    // Ippo clean-aa unga api pattern mapping direct fallback execute aagum! 🚀
+    const response = await api.post<{ success: boolean; url?: string; error?: string }>(
+      '/upload', 
+      formData
+    );
+    
+    return response.data;
   } catch (err: any) {
     console.error('File upload failed:', err);
-    return { success: false, error: err.message };
+    return { 
+      success: false, 
+      error: err.message || 'Upload failed' 
+    };
   }
 };

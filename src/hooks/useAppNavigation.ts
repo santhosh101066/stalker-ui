@@ -31,9 +31,9 @@ async function resolveStreamUrl(
 
   const urlParams: Record<string, any> = { id: item.id };
 
-  if (item.cmd) {
-    urlParams.cmd = item.cmd;
-  }
+  // if (item.cmd) {
+  //   urlParams.cmd = item.cmd;
+  // }
 
   if (seriesNumber !== undefined) {
     urlParams.series = seriesNumber;
@@ -205,9 +205,9 @@ export function useAppNavigation(
       } else if (isEpisodeCWT) {
         urlParams.series = 1;
       }
-      if (item.cmd) {
-        urlParams.cmd = item.cmd;
-      }
+      // if (item.cmd) {
+      //   urlParams.cmd = item.cmd;
+      // }
 
       const linkData = (await getMovieUrl(urlParams)) as Record<string, any>;
       const freshCmd = linkData?.js?.cmd || linkData?.cmd;
@@ -299,7 +299,7 @@ export function useAppNavigation(
 
       if (isInsideMovieCategory || item.is_playable_movie) {
         try {
-          if (item.cmd) {
+          if (!isPortal && item.cmd) {
             const { raw, proxied } = await resolveStreamUrl(item, isPortal);
             openPlayer(item as any, raw, proxied, getResumeTime(item));
             return;

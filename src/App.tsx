@@ -1,7 +1,13 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import '@/App.css';
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { useAuth } from '@/context/AuthContext';
+import Home from '@/components/pages/Home';
+import Login from '@/components/pages/Login';
+import Verify from '@/components/pages/Verify';
+import { Loader2 } from 'lucide-react';
 
 import { Header } from '@/components/organisms/Header';
 import Admin from '@/components/organisms/Admin';
@@ -303,7 +309,7 @@ function TVPortal({ onShowAdmin }: { onShowAdmin: () => void }) {
           }
         />
       ) : (
-        <div className="min-h-screen font-sans text-gray-200">
+        <div className="min-h-screen bg-gradient-to-br from-gray-950 via-slate-950 to-indigo-950 font-sans text-gray-200">
           <div className="container mx-auto p-0 pb-4 sm:p-6">
             <Header
               currentTitle={currentTitle}
@@ -385,43 +391,82 @@ function TVPortal({ onShowAdmin }: { onShowAdmin: () => void }) {
   );
 }
 
+interface ProtectedRouteProps {
+  children: React.ReactNode;
+  adminOnly?: boolean;
+}
+
+function ProtectedRoute({ children, adminOnly = false }: ProtectedRouteProps) {
+  const { isLoggedIn, user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-950 via-slate-950 to-indigo-950 flex justify-center items-center font-sans text-gray-200">
+        <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
+      </div>
+    );
+  }
+
+  if (!isLoggedIn) {
+    const dest = isTizenDevice() ? '/login' : '/home';
+    return <Navigate to={dest} replace />;
+  }
+
+  if (adminOnly && user?.role !== 'admin') {
+    return <Navigate to="/" replace />;
+  }
+
+  return <>{children}</>;
+}
+
 export default function App() {
-  const [showAdmin, setShowAdmin] = useState(false);
-
-  const enterAdmin = useCallback(() => {
-    window.history.pushState({ view: 'admin' }, '', '');
-    setShowAdmin(true);
-  }, []);
-
-  const exitAdmin = useCallback(() => {
-    if (window.history.state && window.history.state.view === 'admin') {
-      window.history.back();
-    } else {
-      window.history.replaceState({}, '', '');
-      setShowAdmin(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    const handlePopState = (e: PopStateEvent) => {
-      const state = e.state;
-      setShowAdmin(!!(state && state.view === 'admin'));
-    };
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
+  const navigate = useNavigate();
 
   return (
     <>
-      <div className={showAdmin ? 'hidden' : 'block'}>
-        <TVPortal onShowAdmin={enterAdmin} />
-      </div>
-      {showAdmin && (
-        <div className="min-h-screen bg-gray-950 font-sans text-gray-200">
-          <Admin onBack={exitAdmin} />
-        </div>
-      )}
-      <ToastContainer />
+      <Routes>
+        <Route path="/home" element={<Home />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/verify" element={<Verify />} />
+        <Route
+          path="/"
+          element={
+            <ProtectedRoute>
+              <TVPortal onShowAdmin={() => navigate('/admin')} />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin"
+          element={
+            <ProtectedRoute adminOnly>
+              <div className="min-h-screen bg-gradient-to-br from-gray-950 via-slate-950 to-indigo-950 font-sans text-gray-200">
+                <Admin onBack={() => navigate('/')} />
+              </div>
+            </ProtectedRoute>
+          }
+        />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+      <ToastContainer
+        position="bottom-right"
+        autoClose={4000}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme="dark"
+        toastClassName={(context) =>
+          "relative flex p-1 min-h-[60px] rounded-2xl justify-between overflow-hidden cursor-pointer bg-[#0b0f19] border border-slate-800 shadow-[0_8px_30px_rgb(0,0,0,0.4)] text-gray-200 mb-3 " +
+          (context?.type === 'success' ? 'border-l-4 border-l-emerald-500' : 
+           context?.type === 'error' ? 'border-l-4 border-l-red-500' : 
+           'border-l-4 border-l-[#3b82f6]') // Matching your app's electric blue
+        }
+        bodyClassName={() => "text-sm font-medium p-3 flex items-start text-gray-300"}
+      />
     </>
   );
 }

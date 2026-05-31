@@ -12,6 +12,7 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [receivers, setReceivers] = useState<Device[]>([]);
+  const [activeUserCount, setActiveUserCount] = useState<number>(1);
 
   const SOCKET_URL = URL_PATHS.HOST;
 
@@ -61,6 +62,10 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({
     newSocket.on('receivers_updated', handleListUpdate);
     newSocket.on('receivers_list', handleListUpdate);
 
+    newSocket.on('active_user_count', (count: number) => {
+      setActiveUserCount(count);
+    });
+
     newSocket.on('config_changed', (data: { hash: string }) => {
       const currentHash = localStorage.getItem('config_hash');
       if (currentHash !== data.hash) {
@@ -78,6 +83,7 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({
     return () => {
       newSocket.off('receivers_updated');
       newSocket.off('receivers_list');
+      newSocket.off('active_user_count');
       newSocket.off('config_changed');
       newSocket.disconnect();
     };
@@ -119,6 +125,7 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({
         isConnected,
         receivers,
         isReceiver,
+        activeUserCount,
         castTo,
         refreshReceivers,
       }}

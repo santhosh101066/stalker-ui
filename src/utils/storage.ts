@@ -1,5 +1,5 @@
 export const getStorageKey = (key: string) => {
-  if (['device_id', 'config_hash', 'config', 'admin_token'].includes(key))
+  if (['device_id', 'config_hash', 'config', 'admin_token', 'auth_token', 'refresh_token', 'auth_user'].includes(key))
     return key;
   const hash = localStorage.getItem('config_hash');
   return hash ? `${hash}_${key}` : key;

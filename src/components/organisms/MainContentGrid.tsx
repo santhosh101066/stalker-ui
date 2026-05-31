@@ -125,7 +125,7 @@ const MainContentGrid = React.memo(
               </div>
             )}
 
-            {isRootVod && context.category === '*' && (
+            {isRootVod && (
               <ContinueWatching
                 onClick={handleItemClick}
                 refreshKey={cwRefreshKey}

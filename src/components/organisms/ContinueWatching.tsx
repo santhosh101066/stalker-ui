@@ -31,16 +31,29 @@ const ContinueWatching: React.FC<ContinueWatchingProps> = ({
   refreshKey,
 }) => {
   const [inProgressItems, setInProgressItems] = useState<MediaItem[]>([]);
+  console.log(inProgressItems);
+  
+
+  // Helper to extract logical keys ignoring the override prefix
+  const getLogicalInProgressKeys = useCallback(() => {
+    // Normal getItem will fetch 'config_hash' correctly since it's in your ignoredKeys
+    const hash = localStorage.getItem('config_hash');
+    const prefix = hash ? `${hash}_` : '';
+
+    return Object.keys(localStorage)
+      .filter((rawKey) => prefix === '' || rawKey.startsWith(prefix))
+      .map((rawKey) => (prefix ? rawKey.substring(prefix.length) : rawKey))
+      .filter((logicalKey) => logicalKey.startsWith('video-in-progress-'));
+  }, []);
 
   const loadItems = useCallback(() => {
-    const inProgressKeys = Object.keys(localStorage).filter((key) =>
-      key.startsWith('video-in-progress-')
-    );
+    const inProgressKeys = getLogicalInProgressKeys();
 
     const items: MediaItem[] = [];
     const addedIds = new Set<string>();
 
     const sortedKeys = inProgressKeys.sort((a, b) => {
+      // Overridden getItem will automatically re-add the prefix when fetching
       const dataA = JSON.parse(localStorage.getItem(a) || '{}');
       const dataB = JSON.parse(localStorage.getItem(b) || '{}');
       return (dataB.timestamp || 0) - (dataA.timestamp || 0);
@@ -48,6 +61,8 @@ const ContinueWatching: React.FC<ContinueWatchingProps> = ({
 
     for (const key of sortedKeys) {
       const raw = localStorage.getItem(key);
+      console.log(raw);
+      
       if (!raw) continue;
       try {
         const entry: ProgressEntry = JSON.parse(raw);
@@ -57,6 +72,8 @@ const ContinueWatching: React.FC<ContinueWatchingProps> = ({
         const displayId = entry.id || entry.itemId || entry.mediaId;
 
         if (!displayId || addedIds.has(displayId.toString())) continue;
+        
+        // Overridden getItem will handle this correctly
         if (localStorage.getItem(`video-completed-${displayId}`)) continue;
 
         const isSeries = (entry.is_series ?? 0) === 1;
@@ -101,7 +118,7 @@ const ContinueWatching: React.FC<ContinueWatchingProps> = ({
       }
     }
     setInProgressItems(items);
-  }, []);
+  }, [getLogicalInProgressKeys]);
 
   useEffect(() => {
     loadItems();
@@ -110,29 +127,31 @@ const ContinueWatching: React.FC<ContinueWatchingProps> = ({
   const handleDismiss = useCallback(
     (e: React.MouseEvent, targetId: string) => {
       e.stopPropagation();
+      
+      // Overridden removeItem will correctly remove the prefixed key
       localStorage.removeItem(`video-in-progress-${targetId}`);
-      Object.keys(localStorage).forEach((key) => {
-        if (key.startsWith('video-in-progress-')) {
-          try {
-            const entry: ProgressEntry = JSON.parse(
-              localStorage.getItem(key) || '{}'
-            );
-            if (
-              entry.id === targetId ||
-              entry.itemId === targetId ||
-              entry.mediaId === targetId
-            ) {
-              localStorage.removeItem(key);
-            }
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          } catch (_) {
-            /* ignore */
+      
+      const inProgressKeys = getLogicalInProgressKeys();
+      
+      inProgressKeys.forEach((logicalKey) => {
+        try {
+          const entry: ProgressEntry = JSON.parse(
+            localStorage.getItem(logicalKey) || '{}'
+          );
+          if (
+            entry.id === targetId ||
+            entry.itemId === targetId ||
+            entry.mediaId === targetId
+          ) {
+            localStorage.removeItem(logicalKey);
           }
+        } catch {
+          /* ignore */
         }
       });
       loadItems();
     },
-    [loadItems]
+    [loadItems, getLogicalInProgressKeys]
   );
 
   if (inProgressItems.length === 0) {

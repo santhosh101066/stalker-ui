@@ -494,7 +494,7 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
           if (response.status === 404) {
             is404 = true;
           }
-        } catch (e) {
+        } catch {
           // Try with GET and a short timeout
           try {
             const response = await fetch(streamUrl, { signal: AbortSignal.timeout(2000) });

@@ -23,6 +23,8 @@ import { getChannelGroups } from '@/services/services';
 import ProfileManager from '@/components/organisms/ProfileManager';
 import ConfirmationModal from '@/components/molecules/ConfirmationModal';
 import { useSocket } from '@/context/useSocket';
+import { useAuth } from '@/context/AuthContext';
+import UserManager from '@/components/organisms/UserManager';
 
 type Config = {
   hostname: string;
@@ -51,27 +53,10 @@ interface AdminProps {
 }
 
 const Admin: React.FC<AdminProps> = ({ onBack }) => {
+  const { logout } = useAuth();
   const { socket } = useSocket();
-  const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    const token = localStorage.getItem('admin_token');
-    if (!token) return false;
-    try {
-      const parts = token.split('.');
-      if (parts.length !== 3) return false;
-      const payload = JSON.parse(
-        atob(parts[1].replace(/-/g, '+').replace(/_/g, '/'))
-      );
-      if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
-        localStorage.removeItem('admin_token');
-        return false;
-      }
-      return true;
-    } catch {
-      return false;
-    }
-  });
-  const [passwordInput, setPasswordInput] = useState('');
-  const [activeTab, setActiveTab] = useState<'profiles' | 'config' | 'logs' | 'carousel'>(
+  const isAuthenticated = true;
+  const [activeTab, setActiveTab] = useState<'profiles' | 'users' | 'config' | 'logs' | 'carousel'>(
     'profiles'
   );
   const [serverLogs, setServerLogs] = useState<
@@ -99,7 +84,6 @@ const Admin: React.FC<AdminProps> = ({ onBack }) => {
   const [groups, setGroups] = useState<Group[]>([]);
   const [showImportModal, setShowImportModal] = useState(false);
   const [importText, setImportText] = useState('');
-  const [isTokenVerified, setIsTokenVerified] = useState(false);
 
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
@@ -120,21 +104,6 @@ const Admin: React.FC<AdminProps> = ({ onBack }) => {
   const [loadingSeries, setLoadingSeries] = useState(false);
 
   useEffect(() => {
-    if (!isAuthenticated) return;
-    const controller = new AbortController();
-    (async () => {
-      try {
-        await api.get('/config', { signal: controller.signal });
-        setIsTokenVerified(true);
-      } catch {
-        // Will be caught by global auth-expired
-      }
-    })();
-    return () => controller.abort();
-  }, [isAuthenticated]);
-
-  useEffect(() => {
-    if (!isAuthenticated || !isTokenVerified) return;
     const controller = new AbortController();
     (async () => {
       try {
@@ -147,19 +116,6 @@ const Admin: React.FC<AdminProps> = ({ onBack }) => {
       }
     })();
     return () => controller.abort();
-  }, [isAuthenticated, isTokenVerified]);
-
-  useEffect(() => {
-    const handleAuthExpired = () => {
-      localStorage.removeItem('admin_token');
-      setIsAuthenticated(false);
-      setIsTokenVerified(false);
-      toast.error('Session expired. Please log in again.', {
-        toastId: 'auth-expired',
-      });
-    };
-    window.addEventListener('auth-expired', handleAuthExpired);
-    return () => window.removeEventListener('auth-expired', handleAuthExpired);
   }, []);
 
   useEffect(() => {
@@ -401,78 +357,9 @@ const Admin: React.FC<AdminProps> = ({ onBack }) => {
     });
   };
 
-  const handlePasswordSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      const response = await api.post('/auth/admin', {
-        password: passwordInput,
-      });
-      const data = response.data as Record<string, unknown>;
-      if (data?.success) {
-        if (data.token && typeof data.token === 'string') {
-          localStorage.setItem('admin_token', data.token);
-        }
-        setIsAuthenticated(true);
-      }
-    } catch {
-      toast.error('Incorrect password');
-      setPasswordInput('');
-    }
-  };
-
   const handleLogout = () => {
-    localStorage.removeItem('admin_token');
-    setIsAuthenticated(false);
+    logout();
   };
-
-  if (!isAuthenticated) {
-    return (
-      <div className="flex items-center justify-center p-4">
-        <div className="w-full max-w-sm rounded-3xl border border-gray-800 bg-gray-900/30 p-8 shadow-2xl backdrop-blur-md">
-          <div className="mb-8 flex flex-col items-center">
-            <ShieldCheck className="mb-4 text-blue-500" size={48} />
-            <h2 className="text-2xl font-black text-white">Admin Access</h2>
-            <p className="mt-2 text-sm text-gray-400">
-              Please authenticate to continue
-            </p>
-          </div>
-          <form onSubmit={handlePasswordSubmit} className="space-y-6">
-            <div>
-              <input
-                type="password"
-                value={passwordInput}
-                onChange={(e) => setPasswordInput(e.target.value)}
-                className="w-full rounded-xl border border-gray-800 bg-gray-950 px-4 py-3 text-white placeholder-gray-600 transition-all focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                placeholder="Enter admin password"
-                autoFocus
-                data-focusable="true"
-              />
-            </div>
-            <button
-              type="submit"
-              className="w-full rounded-xl bg-blue-600 py-3.5 font-bold text-white shadow-lg shadow-blue-500/20 transition-all hover:-translate-y-0.5 hover:bg-blue-500 active:translate-y-0"
-              data-focusable="true"
-            >
-              Login
-            </button>
-          </form>
-        </div>
-      </div>
-    );
-  }
-
-  if (!isTokenVerified) {
-    return (
-      <div className="flex h-[80vh] w-full items-center justify-center p-4">
-        <div className="flex flex-col items-center gap-4">
-          <RefreshCw className="animate-spin text-blue-500" size={36} />
-          <p className="text-sm font-bold text-gray-500">
-            Verifying session...
-          </p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="text-gray-200 selection:bg-blue-500/30">
@@ -491,7 +378,8 @@ const Admin: React.FC<AdminProps> = ({ onBack }) => {
           <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
             <nav className="flex w-full items-center gap-1 rounded-2xl border border-gray-800 bg-gray-900/50 p-1.5 backdrop-blur-md sm:w-auto">
               {[
-                { id: 'profiles', label: 'Profiles', icon: Users },
+                { id: 'profiles', label: 'Profiles', icon: Globe },
+                { id: 'users', label: 'Users', icon: Users },
                 { id: 'carousel', label: 'Carousel', icon: Layout },
                 { id: 'config', label: 'Config', icon: Settings },
                 { id: 'logs', label: 'Logs', icon: Terminal },
@@ -499,7 +387,7 @@ const Admin: React.FC<AdminProps> = ({ onBack }) => {
                 <button
                   key={tab.id}
                   onClick={() =>
-                    setActiveTab(tab.id as 'profiles' | 'config' | 'logs' | 'carousel')
+                    setActiveTab(tab.id as 'profiles' | 'users' | 'config' | 'logs' | 'carousel')
                   }
                   className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 text-xs font-bold transition-all duration-200 sm:flex-none sm:gap-2 sm:px-4 sm:text-sm ${
                     activeTab === tab.id
@@ -551,6 +439,12 @@ const Admin: React.FC<AdminProps> = ({ onBack }) => {
           {activeTab === 'profiles' && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
               <ProfileManager />
+            </div>
+          )}
+
+          {activeTab === 'users' && (
+            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <UserManager />
             </div>
           )}
 

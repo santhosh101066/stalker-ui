@@ -20,6 +20,7 @@ export interface SocketContextProps {
   isConnected: boolean;
   receivers: Device[];
   isReceiver: boolean;
+  activeUserCount: number;
   castTo: (
     targetDeviceId: string,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -299,7 +299,7 @@ const TvChannelList = forwardRef<TvChannelListRef, TvChannelListProps>(
         {!isMobile && showCloseButton && (
           <button
             onClick={onBack}
-            className="absolute right-6 top-4 z-50 rounded-full p-2 text-gray-400 outline-none transition-transform hover:scale-110 hover:text-white focus:scale-110 focus:bg-white/10 focus:text-white"
+            className="absolute right-6 top-4 z-10 rounded-full p-2 text-gray-400 outline-none transition-transform hover:scale-110 hover:text-white focus:scale-110 focus:bg-white/10 focus:text-white"
             aria-label="Close"
             data-focusable="true"
           >

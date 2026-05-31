@@ -3,8 +3,38 @@
   margin: 0 auto;
   padding: 2rem; */
   text-align: center;
+   --toastify-color-dark: #0b0f19; 
+  --toastify-color-info: #3b82f6; 
+  --toastify-color-success: #10b981; 
+  --toastify-color-error: #ef4444; 
+  
+  --toastify-toast-min-height: 60px;
+  --toastify-z-index: 9999;
 }
 
+/* Base Toast styling */
+.Toastify__toast {
+  border-radius: 1rem !important; /* rounded-2xl */
+  backdrop-filter: blur(10px); /* Gives a slight glassy premium feel */
+}
+
+/* Gradient progress bar for standard/info toasts to match your active buttons */
+.Toastify__progress-bar--info {
+  background: linear-gradient(90deg, #3b82f6, #8b5cf6) !important; 
+}
+
+/* Subtle close button */
+.Toastify__close-button {
+  color: #64748b !important; /* slate-500 */
+  opacity: 0.8;
+  margin-top: 10px;
+  margin-right: 5px;
+}
+
+.Toastify__close-button:hover {
+  color: #f8fafc !important; 
+  opacity: 1;
+}
 .logo {
   height: 6em;
   padding: 1.5em;
