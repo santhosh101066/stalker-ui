@@ -69,6 +69,8 @@ export interface VideoContextType {
   onChannelSelect?: (item: any) => void;
   onEpisodeSelect?: (item: any) => void;
   onLoadMoreEpisodes?: () => Promise<void>;
+  playNextEpisode?: () => void;
+  playPrevEpisode?: () => void;
 
   toggleSettingsMenu: () => void;
   toggleChannelList: () => void;

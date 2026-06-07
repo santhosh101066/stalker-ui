@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import MediaCard from '@/components/molecules/MediaCard';
 import type { MediaItem } from '@/types';
+import { getUserProgress, deleteUserProgress } from '@/services/services';
 
 interface ContinueWatchingProps {
   onClick: (item: MediaItem) => void;
@@ -31,127 +32,111 @@ const ContinueWatching: React.FC<ContinueWatchingProps> = ({
   refreshKey,
 }) => {
   const [inProgressItems, setInProgressItems] = useState<MediaItem[]>([]);
-  console.log(inProgressItems);
-  
 
-  // Helper to extract logical keys ignoring the override prefix
-  const getLogicalInProgressKeys = useCallback(() => {
-    // Normal getItem will fetch 'config_hash' correctly since it's in your ignoredKeys
-    const hash = localStorage.getItem('config_hash');
-    const prefix = hash ? `${hash}_` : '';
+  const loadItems = useCallback(async () => {
+    try {
+      const progressRecords = await getUserProgress();
+      const items: MediaItem[] = [];
+      const addedIds = new Set<string>();
 
-    return Object.keys(localStorage)
-      .filter((rawKey) => prefix === '' || rawKey.startsWith(prefix))
-      .map((rawKey) => (prefix ? rawKey.substring(prefix.length) : rawKey))
-      .filter((logicalKey) => logicalKey.startsWith('video-in-progress-'));
-  }, []);
+      // Filter and sort progress records
+      const sortedRecords = progressRecords
+        .filter((record) => !record.completed && record.meta && record.meta.type !== 'tv')
+        .sort((a, b) => {
+          const timeA = a.meta.timestamp || 0;
+          const timeB = b.meta.timestamp || 0;
+          return timeB - timeA;
+        });
 
-  const loadItems = useCallback(() => {
-    const inProgressKeys = getLogicalInProgressKeys();
+      for (const record of sortedRecords) {
+        try {
+          const entry = record.meta as ProgressEntry;
+          const displayId = entry.id || entry.itemId || entry.mediaId || record.mediaId;
 
-    const items: MediaItem[] = [];
-    const addedIds = new Set<string>();
+          if (!displayId || addedIds.has(displayId.toString())) continue;
 
-    const sortedKeys = inProgressKeys.sort((a, b) => {
-      // Overridden getItem will automatically re-add the prefix when fetching
-      const dataA = JSON.parse(localStorage.getItem(a) || '{}');
-      const dataB = JSON.parse(localStorage.getItem(b) || '{}');
-      return (dataB.timestamp || 0) - (dataA.timestamp || 0);
-    });
+          // Check if there is a completed entry for this media/episode
+          const isCompleted = progressRecords.some(
+            (r) => r.completed && r.mediaId === displayId.toString()
+          );
+          if (isCompleted) continue;
 
-    for (const key of sortedKeys) {
-      const raw = localStorage.getItem(key);
-      console.log(raw);
-      
-      if (!raw) continue;
-      try {
-        const entry: ProgressEntry = JSON.parse(raw);
+          const isSeries = (entry.is_series ?? 0) === 1;
 
-        if (entry.type === 'tv') continue;
+          items.push({
+            id: displayId.toString(),
+            series_id: isSeries ? entry.mediaId : undefined,
+            season_id: isSeries
+              ? (entry as any).seasonId || undefined
+              : undefined,
 
-        const displayId = entry.id || entry.itemId || entry.mediaId;
+            title: isSeries
+              ? `${entry.title}${entry.episodeTitle ? ' – ' + entry.episodeTitle : ''}`
+              : entry.title,
+            name: isSeries
+              ? `${entry.name || entry.title}${entry.episodeTitle ? ' – ' + entry.episodeTitle : ''}`
+              : entry.name || entry.title,
 
-        if (!displayId || addedIds.has(displayId.toString())) continue;
-        
-        // Overridden getItem will handle this correctly
-        if (localStorage.getItem(`video-completed-${displayId}`)) continue;
+            screenshot_uri: entry.screenshot_uri,
 
-        const isSeries = (entry.is_series ?? 0) === 1;
+            is_series: 0,
+            is_season: 0,
+            is_episode: isSeries ? 1 : 0,
+            is_playable_movie: !isSeries,
+            is_continue_watching: true,
+            cmd: entry.cmd,
+            series_number: entry.series_number,
+            progressPercent: entry.progressPercent,
 
-        items.push({
-          id: displayId.toString(),
-          series_id: isSeries ? entry.mediaId : undefined,
-          season_id: isSeries
-            ? (entry as any).seasonId || undefined
-            : undefined,
+            playbackFileId:
+              (entry as any).playbackFileId || entry.itemId || entry.mediaId,
 
-          title: isSeries
-            ? `${entry.title}${entry.episodeTitle ? ' – ' + entry.episodeTitle : ''}`
-            : entry.title,
-          name: isSeries
-            ? `${entry.name || entry.title}${entry.episodeTitle ? ' – ' + entry.episodeTitle : ''}`
-            : entry.name || entry.title,
+            cw_content_type: entry.type,
+            cw_category_id: (entry as any).categoryId || null,
 
-          screenshot_uri: entry.screenshot_uri,
-
-          is_series: 0,
-          is_season: 0,
-          is_episode: isSeries ? 1 : 0,
-          is_playable_movie: !isSeries,
-          is_continue_watching: true,
-          cmd: entry.cmd,
-          series_number: entry.series_number,
-          progressPercent: entry.progressPercent,
-
-          playbackFileId:
-            (entry as any).playbackFileId || entry.itemId || entry.mediaId,
-
-          cw_content_type: entry.type,
-          cw_category_id: (entry as any).categoryId || null,
-
-          cw_episode_card_id:
-            (entry as any).episodeCardId || entry.itemId || null,
-        } as any);
-        addedIds.add(displayId.toString());
-      } catch (err) {
-        console.error(`Failed to parse CW entry for key ${key}`, err);
+            cw_episode_card_id:
+              (entry as any).episodeCardId || entry.itemId || null,
+          } as any);
+          addedIds.add(displayId.toString());
+        } catch (err) {
+          console.error(`Failed to parse CW entry for record`, record, err);
+        }
       }
+      setInProgressItems(items);
+    } catch (err) {
+      console.error('Failed to load continue watching items:', err);
     }
-    setInProgressItems(items);
-  }, [getLogicalInProgressKeys]);
+  }, []);
 
   useEffect(() => {
     loadItems();
   }, [loadItems, refreshKey]);
 
   const handleDismiss = useCallback(
-    (e: React.MouseEvent, targetId: string) => {
+    async (e: React.MouseEvent, targetId: string) => {
       e.stopPropagation();
-      
-      // Overridden removeItem will correctly remove the prefixed key
-      localStorage.removeItem(`video-in-progress-${targetId}`);
-      
-      const inProgressKeys = getLogicalInProgressKeys();
-      
-      inProgressKeys.forEach((logicalKey) => {
-        try {
-          const entry: ProgressEntry = JSON.parse(
-            localStorage.getItem(logicalKey) || '{}'
-          );
+      try {
+        await deleteUserProgress(targetId);
+        // Also delete progress for any record referencing this ID as its parent/itemId
+        const progressRecords = await getUserProgress();
+        for (const record of progressRecords) {
+          const entry = record.meta as ProgressEntry;
           if (
-            entry.id === targetId ||
-            entry.itemId === targetId ||
-            entry.mediaId === targetId
+            entry &&
+            (entry.id === targetId ||
+              entry.itemId === targetId ||
+              entry.mediaId === targetId ||
+              record.mediaId === targetId)
           ) {
-            localStorage.removeItem(logicalKey);
+            await deleteUserProgress(record.mediaId);
           }
-        } catch {
-          /* ignore */
         }
-      });
-      loadItems();
+        loadItems();
+      } catch (err) {
+        console.error('Failed to dismiss item:', err);
+      }
     },
-    [loadItems, getLogicalInProgressKeys]
+    [loadItems]
   );
 
   if (inProgressItems.length === 0) {

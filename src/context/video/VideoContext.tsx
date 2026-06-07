@@ -16,6 +16,8 @@ import {
   VideoContext,
   type VideoContextType,
 } from '@/context/video/VideoContextTypes';
+import { saveUserProgress, getUserProgress } from '@/services/services';
+import { useAuth } from '@/context/AuthContext';
 
 interface VideoProviderProps {
   children: ReactNode;
@@ -81,8 +83,9 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
   receivers,
   isReceiver,
   castTo,
-  refreshReceivers,
+    refreshReceivers,
 }) => {
+  const { user, updatePreferences } = useAuth();
   const isTizen = isTizenDevice();
 
   // --- Refs ---
@@ -118,9 +121,15 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
   const [seekOverlay, setSeekOverlay] = useState<SeekOverlayData | null>(null);
   const [subtitles, setSubtitles] = useState<any[]>([]);
 
-  const [fitMode, setFitMode] = useState<VideoFitMode>(() => {
-    return (localStorage.getItem('videoFitMode') as VideoFitMode) || 'contain';
-  });
+  const [fitMode, setFitMode] = useState<VideoFitMode>(
+    (user?.preferences?.videoFitMode as VideoFitMode) || 'contain'
+  );
+
+  useEffect(() => {
+    if (user?.preferences?.videoFitMode) {
+      setFitMode(user.preferences.videoFitMode as VideoFitMode);
+    }
+  }, [user]);
 
   const [isSettingsMenuOpen, setIsSettingsMenuOpen] = useState(false);
   const [activeSettingsMenu, setActiveSettingsMenu] = useState<
@@ -152,8 +161,10 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
   }, [contentType]);
 
   useEffect(() => {
-    localStorage.setItem('videoFitMode', fitMode);
-  }, [fitMode]);
+    if (fitMode && user) {
+      updatePreferences({ videoFitMode: fitMode });
+    }
+  }, [fitMode, user, updatePreferences]);
 
   useEffect(() => {
     setIsRecovering(false);
@@ -431,6 +442,97 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
     }
   }, [initialPlaybackState]);
 
+  const completePlayback = useCallback(async () => {
+    if (!mediaId || contentType === 'tv') return;
+    const player = playerRef.current;
+    const dur = player?.duration || 0;
+
+    // Resolve next episode
+    let nextEp: any = null;
+    if (contentType === 'series' && episodes && episodes.length > 0 && item) {
+      const activeCardId = item._episodeCardId || item.id;
+      const activeCardIdStr = activeCardId !== undefined && activeCardId !== null ? String(activeCardId) : '';
+      const curIndex = episodes.findIndex((ep: any) => {
+        if (ep.id === undefined || ep.id === null) return false;
+        const epIdStr = String(ep.id);
+        return (
+          epIdStr === activeCardIdStr ||
+          epIdStr === activeCardIdStr.replace('ep_', '') ||
+          activeCardIdStr === epIdStr.replace('ep_', '')
+        );
+      });
+
+      if (curIndex !== -1) {
+        const getEpNum = (ep: any) => {
+          const numVal = ep.series_number ?? ep.episode_number;
+          return numVal !== undefined ? Number(numVal) : NaN;
+        };
+
+        let isDescending = false;
+        const firstEpNum = getEpNum(episodes[0]);
+        const lastEpNum = getEpNum(episodes[episodes.length - 1]);
+        if (!isNaN(firstEpNum) && !isNaN(lastEpNum) && episodes.length > 1) {
+          isDescending = firstEpNum > lastEpNum;
+        }
+
+        const currentEpisodeObj = episodes[curIndex];
+        const curEpNum = getEpNum(currentEpisodeObj);
+
+        if (!isNaN(curEpNum)) {
+          nextEp = episodes.find((ep: any) => getEpNum(ep) === curEpNum + 1);
+        }
+
+        if (!nextEp) {
+          const nextIndex = isDescending ? curIndex - 1 : curIndex + 1;
+          if (nextIndex >= 0 && nextIndex < episodes.length) {
+            nextEp = episodes[nextIndex];
+          }
+        }
+      }
+    }
+
+    const completedMeta = {
+      mediaId,
+      itemId,
+      type: contentType,
+      timestamp: Date.now(),
+    };
+
+    // Mark current episode completed
+    await saveUserProgress(mediaId, dur, true, completedMeta).catch(() => {});
+
+    if (contentType === 'series' && itemId && itemId !== mediaId) {
+      if (nextEp) {
+        // If there is a next episode, update the series progress to point to that next episode (completed = false)
+        const nextProgressData = {
+          id: itemId,
+          playbackFileId: nextEp.id,
+          mediaId: nextEp.id, // next episode ID
+          itemId,             // series ID
+          seasonId,
+          categoryId,
+          type: contentType,
+          title: seriesItem?.name || seriesItem?.title || '',
+          currentTime: 0,
+          duration: 0,
+          progressPercent: 0,
+          timestamp: Date.now(),
+          name: seriesItem?.name || seriesItem?.title || '',
+          episodeTitle: nextEp.name || nextEp.title || '',
+          screenshot_uri: seriesItem?.screenshot_uri || nextEp.screenshot_uri || '',
+          is_series: 1,
+          cmd: nextEp.cmd || '',
+          series_number: nextEp.series_number,
+        };
+        await saveUserProgress(itemId, 0, false, nextProgressData).catch(() => {});
+        await saveUserProgress(nextEp.id, 0, false, nextProgressData).catch(() => {});
+      } else {
+        // If no next episode, mark the series as completed
+        await saveUserProgress(itemId, dur, true, completedMeta).catch(() => {});
+      }
+    }
+  }, [contentType, mediaId, itemId, episodes, item, seasonId, categoryId, seriesItem]);
+
   // Cleaned TimeUpdate: No UI Re-renders, only progress restore & completion logic
   const handleTimeUpdate = useCallback(() => {
     const player = playerRef.current;
@@ -442,34 +544,24 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
     if (!hasRestoredProgress.current && time >= 1) {
       hasRestoredProgress.current = true;
       let targetTime = initialPlaybackState?.currentTime || 0;
-      try {
-        const storedProgress = localStorage.getItem(
-          `video-in-progress-${itemId || mediaId}`
-        );
-        if (storedProgress) {
-          const parsed = JSON.parse(storedProgress);
-          if (parsed.currentTime > targetTime) targetTime = parsed.currentTime;
+      getUserProgress().then((records) => {
+        const record = records.find(r => r.mediaId === (itemId || mediaId));
+        if (record && !record.completed && record.progress > targetTime) {
+          targetTime = record.progress;
         }
-      } catch {
-        /* NOTHING */
-      }
-      if (targetTime > 2) player.currentTime = targetTime;
+        if (targetTime > 2) {
+          player.currentTime = targetTime;
+        }
+      }).catch(err => {
+        console.error("Failed to restore progress from API:", err);
+        if (targetTime > 2) player.currentTime = targetTime;
+      });
     }
 
     if (dur > 0 && contentType !== 'tv' && time / dur >= 0.9 && mediaId) {
-      localStorage.removeItem(`video-in-progress-${mediaId}`);
-      if (itemId) localStorage.removeItem(`video-in-progress-${itemId}`);
-      localStorage.setItem(
-        `video-completed-${mediaId}`,
-        JSON.stringify({
-          mediaId,
-          itemId,
-          type: contentType,
-          timestamp: Date.now(),
-        })
-      );
+      completePlayback();
     }
-  }, [contentType, mediaId, itemId, initialPlaybackState]);
+  }, [contentType, mediaId, itemId, initialPlaybackState, completePlayback]);
 
   const handleError = useCallback(
     async (event: any) => {
@@ -555,7 +647,7 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
     )
       return;
 
-    if (player.currentTime / player.duration >= 0.9) return; // Cleanup handled in handleTimeUpdate
+    if (player.currentTime / player.duration >= 0.9) return;
 
     const targetKeyId = itemId && itemId !== mediaId ? itemId : mediaId;
     const progressData = {
@@ -589,15 +681,12 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
       series_number: item?.series_number,
     };
 
-    localStorage.setItem(
-      `video-in-progress-${targetKeyId}`,
-      JSON.stringify(progressData)
-    );
-    if (mediaId)
-      localStorage.setItem(
-        `video-in-progress-${mediaId}`,
-        JSON.stringify(progressData)
-      );
+    saveUserProgress(targetKeyId, player.currentTime, false, progressData).catch(err => {
+      console.error('Failed to save progress to DB:', err);
+    });
+    if (mediaId) {
+      saveUserProgress(mediaId, player.currentTime, false, progressData).catch(() => {});
+    }
   }, [
     contentType,
     mediaId,
@@ -613,22 +702,10 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
     rawStreamUrl,
   ]);
 
+
+
   const handleEnded = useCallback(() => {
-    if (mediaId) {
-      localStorage.removeItem(`video-in-progress-${mediaId}`);
-      localStorage.setItem(
-        `video-completed-${mediaId}`,
-        JSON.stringify({
-          mediaId,
-          itemId,
-          type: contentType,
-          timestamp: Date.now(),
-        })
-      );
-    }
-    if (itemId && itemId !== mediaId) {
-      localStorage.removeItem(`video-in-progress-${itemId}`);
-    }
+    completePlayback();
 
     // Smart Auto-Play next episode
     if (episodes && episodes.length > 0 && item && onEpisodeSelect) {
@@ -689,7 +766,126 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
         }
       }
     }
-  }, [contentType, mediaId, itemId, episodes, item, onEpisodeSelect, onLoadMoreEpisodes]);
+  }, [episodes, item, onEpisodeSelect, onLoadMoreEpisodes, completePlayback]);
+
+  const playNextEpisode = useCallback(() => {
+    if (episodes && episodes.length > 0 && item && onEpisodeSelect) {
+      const activeCardId = item._episodeCardId || item.id;
+      const activeCardIdStr = activeCardId !== undefined && activeCardId !== null ? String(activeCardId) : '';
+      const curIndex = episodes.findIndex((ep: any) => {
+        if (ep.id === undefined || ep.id === null) return false;
+        const epIdStr = String(ep.id);
+        return (
+          epIdStr === activeCardIdStr ||
+          epIdStr === activeCardIdStr.replace('ep_', '') ||
+          activeCardIdStr === epIdStr.replace('ep_', '')
+        );
+      });
+
+      if (curIndex !== -1) {
+        const getEpNum = (ep: any) => {
+          const numVal = ep.series_number ?? ep.episode_number;
+          return numVal !== undefined ? Number(numVal) : NaN;
+        };
+
+        // Determine if the episode list is descending based on episode numbers
+        let isDescending = false;
+        const firstEpNum = getEpNum(episodes[0]);
+        const lastEpNum = getEpNum(episodes[episodes.length - 1]);
+        if (!isNaN(firstEpNum) && !isNaN(lastEpNum) && episodes.length > 1) {
+          isDescending = firstEpNum > lastEpNum;
+        }
+
+        const currentEpisodeObj = episodes[curIndex];
+        const curEpNum = getEpNum(currentEpisodeObj);
+
+        let nextEp = null;
+        if (!isNaN(curEpNum)) {
+          nextEp = episodes.find(
+            (ep: any) => getEpNum(ep) === curEpNum + 1
+          );
+        }
+
+        if (nextEp) {
+          saveProgress();
+          toast.info(`Playing Next Episode: ${nextEp.name || nextEp.title}`);
+          onEpisodeSelect(nextEp);
+          return;
+        }
+
+        const nextIndex = isDescending ? curIndex - 1 : curIndex + 1;
+        if (nextIndex >= 0 && nextIndex < episodes.length) {
+          const nextEp = episodes[nextIndex];
+          saveProgress();
+          toast.info(`Playing Next Episode: ${nextEp.name || nextEp.title}`);
+          onEpisodeSelect(nextEp);
+        } else if (nextIndex === episodes.length && onLoadMoreEpisodes) {
+          toast.info("Loading next episodes...");
+          setPendingNextIndex(nextIndex);
+          onLoadMoreEpisodes().catch((err) => {
+            console.error("Failed to load more episodes:", err);
+            setPendingNextIndex(null);
+          });
+        }
+      }
+    }
+  }, [episodes, item, onEpisodeSelect, onLoadMoreEpisodes, saveProgress]);
+
+  const playPrevEpisode = useCallback(() => {
+    if (episodes && episodes.length > 0 && item && onEpisodeSelect) {
+      const activeCardId = item._episodeCardId || item.id;
+      const activeCardIdStr = activeCardId !== undefined && activeCardId !== null ? String(activeCardId) : '';
+      const curIndex = episodes.findIndex((ep: any) => {
+        if (ep.id === undefined || ep.id === null) return false;
+        const epIdStr = String(ep.id);
+        return (
+          epIdStr === activeCardIdStr ||
+          epIdStr === activeCardIdStr.replace('ep_', '') ||
+          activeCardIdStr === epIdStr.replace('ep_', '')
+        );
+      });
+
+      if (curIndex !== -1) {
+        const getEpNum = (ep: any) => {
+          const numVal = ep.series_number ?? ep.episode_number;
+          return numVal !== undefined ? Number(numVal) : NaN;
+        };
+
+        // Determine if the episode list is descending based on episode numbers
+        let isDescending = false;
+        const firstEpNum = getEpNum(episodes[0]);
+        const lastEpNum = getEpNum(episodes[episodes.length - 1]);
+        if (!isNaN(firstEpNum) && !isNaN(lastEpNum) && episodes.length > 1) {
+          isDescending = firstEpNum > lastEpNum;
+        }
+
+        const currentEpisodeObj = episodes[curIndex];
+        const curEpNum = getEpNum(currentEpisodeObj);
+
+        let prevEp = null;
+        if (!isNaN(curEpNum)) {
+          prevEp = episodes.find(
+            (ep: any) => getEpNum(ep) === curEpNum - 1
+          );
+        }
+
+        if (prevEp) {
+          saveProgress();
+          toast.info(`Playing Previous Episode: ${prevEp.name || prevEp.title}`);
+          onEpisodeSelect(prevEp);
+          return;
+        }
+
+        const prevIndex = isDescending ? curIndex + 1 : curIndex - 1;
+        if (prevIndex >= 0 && prevIndex < episodes.length) {
+          const prevEp = episodes[prevIndex];
+          saveProgress();
+          toast.info(`Playing Previous Episode: ${prevEp.name || prevEp.title}`);
+          onEpisodeSelect(prevEp);
+        }
+      }
+    }
+  }, [episodes, item, onEpisodeSelect, saveProgress]);
 
   useEffect(() => {
     if (contentType === 'tv') return;
@@ -721,133 +917,135 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
       const current = programs.find(
         (p: any) =>
           now >= new Date(p.start).getTime() && now < new Date(p.end).getTime()
-      );
-      setCurrentProgram(current || null);
-
-      if (current) {
-        const start = new Date(current.start).getTime();
-        const end = new Date(current.end).getTime();
-        setProgramProgress(
-          Math.min(100, Math.max(0, ((now - start) / (end - start)) * 100))
         );
-        setNextProgram(
-          programs.find((p: any) => new Date(p.start).getTime() >= end) || null
-        );
+        setCurrentProgram(current || null);
+  
+        if (current) {
+          const start = new Date(current.start).getTime();
+          const end = new Date(current.end).getTime();
+          setProgramProgress(
+            Math.min(100, Math.max(0, ((now - start) / (end - start)) * 100))
+          );
+          setNextProgram(
+            programs.find((p: any) => new Date(p.start).getTime() >= end) || null
+          );
+        }
+      };
+      updateEPG();
+      const interval = setInterval(updateEPG, 10000);
+      return () => clearInterval(interval);
+    }, [contentType, channelInfo, epgData]);
+  
+    useEffect(() => {
+      setStreamError(null);
+      setRetryCount(0);
+    }, [itemId, streamUrl]);
+  
+    useEffect(() => {
+      if (previewChannelInfo) showControlsAndCursor();
+    }, [previewChannelInfo, showControlsAndCursor]);
+  
+    // Autoplay next page of episodes when they are loaded
+    useEffect(() => {
+      if (pendingNextIndex !== null && episodes && pendingNextIndex < episodes.length) {
+        const nextEp = episodes[pendingNextIndex];
+        setPendingNextIndex(null);
+        if (nextEp && onEpisodeSelect) {
+          toast.info(`Playing Next Episode: ${nextEp.name || nextEp.title}`);
+          onEpisodeSelect(nextEp);
+        }
       }
+    }, [episodes, pendingNextIndex, onEpisodeSelect]);
+  
+    // Note: Only the essential non-video states are passed here.
+    // Make sure your `VideoContextTypes.ts` matches the cleaned up version provided in the previous step!
+    const value: VideoContextType = {
+      playerRef,
+      playerContainerRef,
+      settingsMenuRef,
+  
+      controlsVisible,
+      cursorVisible,
+      copied,
+      useProxy,
+      isTooltipVisible,
+      focusedIndex,
+      showChannelList,
+      showEpisodeList,
+      seekOverlay,
+      fitMode,
+      isSettingsMenuOpen,
+      activeSettingsMenu,
+      showSettingsButton,
+  
+      currentProgram,
+      nextProgram,
+      programProgress,
+      liveTime,
+      isFavorite,
+      retryCount,
+      reloadTrigger,
+      isRecovering,
+      isTizen,
+      streamError,
+  
+      streamUrl,
+      rawStreamUrl,
+      itemId,
+      subtitles,
+      contentType,
+      mediaId,
+      item,
+      seriesItem,
+      channelInfo,
+      previewChannelInfo,
+      epgData,
+      channels,
+      episodes,
+      initialPlaybackState,
+      channelGroups,
+      favorites,
+      recentChannels,
+      receivers: receivers || [],
+      isReceiver: isReceiver || false,
+      refreshReceivers: refreshReceivers || (() => {}),
+  
+      onBack,
+      toggleFavorite,
+      onNextChannel,
+      onPrevChannel,
+      onChannelSelect,
+      onEpisodeSelect,
+      onLoadMoreEpisodes,
+      playNextEpisode,
+      playPrevEpisode,
+  
+      handleSkipButtonClick,
+      setControlsVisible,
+      setCursorVisible,
+      setIsTooltipVisible,
+      setFocusedIndex,
+      setShowChannelList,
+      setShowEpisodeList,
+      showControlsAndCursor,
+      cycleFitMode,
+      toggleSettingsMenu,
+      setActiveSettingsMenu,
+      setIsSettingsMenuOpen,
+      handleCopyLink,
+      setUseProxy: handleProxyToggle,
+      handleCast,
+      onProviderChange,
+      handleCanPlay,
+      handleTimeUpdate,
+      handleError,
+      handleEnded,
+      toggleChannelList,
+      handleVideoClick: showControlsAndCursor,
+      handleMouseMove: showControlsAndCursor,
     };
-    updateEPG();
-    const interval = setInterval(updateEPG, 10000);
-    return () => clearInterval(interval);
-  }, [contentType, channelInfo, epgData]);
-
-  useEffect(() => {
-    setStreamError(null);
-    setRetryCount(0);
-  }, [itemId, streamUrl]);
-
-  useEffect(() => {
-    if (previewChannelInfo) showControlsAndCursor();
-  }, [previewChannelInfo, showControlsAndCursor]);
-
-  // Autoplay next page of episodes when they are loaded
-  useEffect(() => {
-    if (pendingNextIndex !== null && episodes && pendingNextIndex < episodes.length) {
-      const nextEp = episodes[pendingNextIndex];
-      setPendingNextIndex(null);
-      if (nextEp && onEpisodeSelect) {
-        toast.info(`Playing Next Episode: ${nextEp.name || nextEp.title}`);
-        onEpisodeSelect(nextEp);
-      }
-    }
-  }, [episodes, pendingNextIndex, onEpisodeSelect]);
-
-  // Note: Only the essential non-video states are passed here.
-  // Make sure your `VideoContextTypes.ts` matches the cleaned up version provided in the previous step!
-  const value: VideoContextType = {
-    playerRef,
-    playerContainerRef,
-    settingsMenuRef,
-
-    controlsVisible,
-    cursorVisible,
-    copied,
-    useProxy,
-    isTooltipVisible,
-    focusedIndex,
-    showChannelList,
-    showEpisodeList,
-    seekOverlay,
-    fitMode,
-    isSettingsMenuOpen,
-    activeSettingsMenu,
-    showSettingsButton,
-
-    currentProgram,
-    nextProgram,
-    programProgress,
-    liveTime,
-    isFavorite,
-    retryCount,
-    reloadTrigger,
-    isRecovering,
-    isTizen,
-    streamError,
-
-    streamUrl,
-    rawStreamUrl,
-    itemId,
-    subtitles,
-    contentType,
-    mediaId,
-    item,
-    seriesItem,
-    channelInfo,
-    previewChannelInfo,
-    epgData,
-    channels,
-    episodes,
-    initialPlaybackState,
-    channelGroups,
-    favorites,
-    recentChannels,
-    receivers: receivers || [],
-    isReceiver: isReceiver || false,
-    refreshReceivers: refreshReceivers || (() => {}),
-
-    onBack,
-    toggleFavorite,
-    onNextChannel,
-    onPrevChannel,
-    onChannelSelect,
-    onEpisodeSelect,
-    onLoadMoreEpisodes,
-
-    handleSkipButtonClick,
-    setControlsVisible,
-    setCursorVisible,
-    setIsTooltipVisible,
-    setFocusedIndex,
-    setShowChannelList,
-    setShowEpisodeList,
-    showControlsAndCursor,
-    cycleFitMode,
-    toggleSettingsMenu,
-    setActiveSettingsMenu,
-    setIsSettingsMenuOpen,
-    handleCopyLink,
-    setUseProxy: handleProxyToggle,
-    handleCast,
-    onProviderChange,
-    handleCanPlay,
-    handleTimeUpdate,
-    handleError,
-    handleEnded,
-    toggleChannelList,
-    handleVideoClick: showControlsAndCursor,
-    handleMouseMove: showControlsAndCursor,
+  
+    return (
+      <VideoContext.Provider value={value}>{children}</VideoContext.Provider>
+    );
   };
-
-  return (
-    <VideoContext.Provider value={value}>{children}</VideoContext.Provider>
-  );
-};

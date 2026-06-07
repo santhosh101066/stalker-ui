@@ -23,6 +23,8 @@ interface TvChannelListProps {
   currentItemId: string | null | undefined;
   showCloseButton?: boolean;
   isOverlay?: boolean;
+  favorites?: string[];
+  recentChannels?: string[];
 }
 
 const TvChannelList = forwardRef<TvChannelListRef, TvChannelListProps>(
@@ -35,6 +37,8 @@ const TvChannelList = forwardRef<TvChannelListRef, TvChannelListProps>(
       currentItemId,
       showCloseButton = true,
       isOverlay = false,
+      favorites = [],
+      recentChannels = [],
     },
     ref
   ) => {
@@ -121,36 +125,19 @@ const TvChannelList = forwardRef<TvChannelListRef, TvChannelListProps>(
       }
 
       if (selectedGroup.id === 'fav') {
-        try {
-          const storedFavorites = localStorage.getItem('favorite_channels');
-          const favorites = storedFavorites ? JSON.parse(storedFavorites) : [];
-          const favIds = new Set(favorites);
-          return channels.filter((c) => favIds.has(c.id));
-        } catch (e) {
-          console.error('Failed to parse favorites', e);
-          return [];
-        }
+        const favIds = new Set(favorites);
+        return channels.filter((c) => favIds.has(c.id));
       }
       if (selectedGroup.id === 'recent') {
-        try {
-          const storedRecents = localStorage.getItem('recent_channels');
-          const recents: string[] = storedRecents
-            ? JSON.parse(storedRecents)
-            : [];
-
-          return recents
-            .map((id) => channels.find((c) => String(c.id) === String(id)))
-            .filter((c): c is MediaItem => c !== undefined);
-        } catch (e) {
-          console.error('Failed to parse recents', e);
-          return [];
-        }
+        return recentChannels
+          .map((id) => channels.find((c) => String(c.id) === String(id)))
+          .filter((c): c is MediaItem => c !== undefined);
       }
 
       return channels.filter(
         (c) => String(c.tv_genre_id) === String(selectedGroup.id)
       );
-    }, [channels, selectedGroup]);
+    }, [channels, selectedGroup, favorites, recentChannels]);
 
     const handleGroupClick = useCallback(
       (group: ChannelGroup, index: number) => {

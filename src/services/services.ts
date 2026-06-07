@@ -214,3 +214,44 @@ export const uploadFile = async (
     };
   }
 };
+
+export interface ProgressRecord {
+  userId?: number;
+  mediaId: string;
+  progress: number;
+  completed: boolean;
+  meta: Record<string, any>;
+  updatedAt?: string;
+}
+
+export const getUserProgress = async (): Promise<ProgressRecord[]> => {
+  const response = await api.get<ProgressRecord[]>('/user/progress');
+  return response.data || [];
+};
+
+export const saveUserProgress = async (
+  mediaId: string,
+  progress: number,
+  completed: boolean,
+  meta?: Record<string, any>
+): Promise<{ success: boolean }> => {
+  const response = await api.put<{ success: boolean }>('/user/progress', {
+    mediaId,
+    progress,
+    completed,
+    meta,
+  });
+  return response.data;
+};
+
+export const deleteUserProgress = async (
+  mediaId: string
+): Promise<{ success: boolean }> => {
+  const response = await api.delete<{ success: boolean }>(`/user/progress/${encodeURIComponent(mediaId)}`);
+  return response.data;
+};
+
+export const clearUserProgress = async (): Promise<{ success: boolean }> => {
+  const response = await api.post<{ success: boolean }>('/user/clear-history');
+  return response.data;
+};

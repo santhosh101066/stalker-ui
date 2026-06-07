@@ -22,6 +22,8 @@ import {
   ShieldCheck,
   ListVideo,
   MoreVertical,
+  SkipBack,
+  SkipForward,
 } from 'lucide-react';
 import { FaChromecast } from 'react-icons/fa';
 
@@ -55,6 +57,8 @@ export const VODControls = React.memo(() => {
     setShowEpisodeList,
     seekOverlay,
     controlsVisible,
+    playNextEpisode,
+    playPrevEpisode,
   } = useVideoContext();
 
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
@@ -136,6 +140,17 @@ export const VODControls = React.memo(() => {
             </PlayButton>
 
             <div className="flex items-center space-x-3 md:space-x-5">
+              {episodes && episodes.length > 0 && (
+                <button
+                  data-focusable="true"
+                  onClick={playPrevEpisode}
+                  className="flex items-center justify-center text-white transition-transform hover:scale-110 hover:text-blue-400"
+                  title="Previous Episode"
+                >
+                  <SkipBack className="h-5 w-5 md:h-7 md:w-7" />
+                </button>
+              )}
+
               <button
                 data-focusable="true"
                 onClick={() => handleSkipButtonClick(-10)}
@@ -151,6 +166,17 @@ export const VODControls = React.memo(() => {
               >
                 <FastForwardIcon className="h-5 w-5 md:h-7 md:w-7" />
               </button>
+
+              {episodes && episodes.length > 0 && (
+                <button
+                  data-focusable="true"
+                  onClick={playNextEpisode}
+                  className="flex items-center justify-center text-white transition-transform hover:scale-110 hover:text-blue-400"
+                  title="Next Episode"
+                >
+                  <SkipForward className="h-5 w-5 md:h-7 md:w-7" />
+                </button>
+              )}
             </div>
 
             {!isTizen && (

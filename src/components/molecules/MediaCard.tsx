@@ -6,15 +6,16 @@ interface MediaCardProps {
   item: MediaItem;
   onClick: (item: MediaItem) => void;
   progressPercent?: number;
+  isCompleted?: boolean;
 }
 
 const MediaCard: React.FC<MediaCardProps> = ({
   item,
   onClick,
   progressPercent,
+  isCompleted = false,
 }) => {
   const [imageError, setImageError] = useState(false);
-  const [isCompleted, setIsCompleted] = useState(false);
 
   const [isVisible, setIsVisible] = useState(false);
   const cardRef = React.useRef<HTMLDivElement>(null);
@@ -61,23 +62,6 @@ const MediaCard: React.FC<MediaCardProps> = ({
       }
     };
   }, []);
-
-  useEffect(() => {
-    const completed = localStorage.getItem(`video-completed-${item.id}`);
-    if (completed) {
-      try {
-        const completedData = JSON.parse(completed);
-        if (completedData && completedData.mediaId === item.id) {
-          setIsCompleted(true);
-        }
-      } catch (error) {
-        if (completed === 'true') {
-          setIsCompleted(true);
-        }
-        console.error(error);
-      }
-    }
-  }, [item.id]);
 
   const displayProgress = progressPercent ?? item.progressPercent;
 

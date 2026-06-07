@@ -5,6 +5,7 @@ export interface Device {
   name: string;
   type: 'receiver' | 'controller';
   ip: string;
+  socketId?: string;
 }
 
 export interface PlaybackInfo {
@@ -21,6 +22,7 @@ export interface SocketContextProps {
   receivers: Device[];
   isReceiver: boolean;
   activeUserCount: number;
+  activeDevices: Device[];
   castTo: (
     targetDeviceId: string,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

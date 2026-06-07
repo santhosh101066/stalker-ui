@@ -9,7 +9,7 @@ import { WelcomeCarousel } from '@/components/organisms/WelcomeCarousel';
 import { CategorySelector } from '@/components/organisms/CategorySelector';
 import { isTizenDevice } from '@/utils/helpers';
 import type { MediaItem, ContextType, ChannelGroup } from '@/types';
-import type { CarouselSlide } from '@/services/services';
+import type { CarouselSlide, ProgressRecord } from '@/services/services';
 
 interface MainContentGridProps {
   items: MediaItem[];
@@ -35,6 +35,10 @@ interface MainContentGridProps {
   carouselSlides?: CarouselSlide[];
   handleCarouselAction?: (slide: CarouselSlide) => void;
   onSelectCategory?: (categoryId: string, categoryTitle: string) => void;
+  favorites?: string[];
+  recentChannels?: string[];
+  progressRecords?: ProgressRecord[];
+  providerKey?: string;
 }
 
 const MainContentGrid = React.memo(
@@ -57,6 +61,10 @@ const MainContentGrid = React.memo(
     carouselSlides = [],
     handleCarouselAction = () => {},
     onSelectCategory = () => {},
+    favorites = [],
+    recentChannels = [],
+    progressRecords = [],
+    providerKey = 'default',
   }: MainContentGridProps) => {
     const isTizen = isTizenDevice();
     const isEpisodeList =
@@ -85,7 +93,9 @@ const MainContentGrid = React.memo(
       }));
     }, [items, isEpisodeList, currentSeriesItem]);
 
-    if (loading && items.length === 0) return <LoadingSpinner />;
+    const isRootVod = contentType !== 'tv' && !context.search && !context.movieId;
+
+    if (loading && items.length === 0 && !isRootVod) return <LoadingSpinner />;
 
     if (error) {
       return (
@@ -102,8 +112,6 @@ const MainContentGrid = React.memo(
       );
     }
 
-    const isRootVod = contentType !== 'tv' && !context.search && !context.movieId;
-
     return (
       <>
         {!isTizen && contentType === 'tv' ? (
@@ -115,6 +123,8 @@ const MainContentGrid = React.memo(
               onBack={handleBack}
               currentItemId={null}
               showCloseButton={false}
+              favorites={favorites}
+              recentChannels={recentChannels}
             />
           </div>
         ) : (
@@ -138,43 +148,63 @@ const MainContentGrid = React.memo(
                 selectedCategory={context.category}
                 onSelectCategory={onSelectCategory}
                 contentType={contentType as 'movie' | 'series'}
+                providerKey={providerKey}
               />
             )}
 
-            <div
-              className={`${
-                contentType === 'tv'
-                  ? 'channel-list flex flex-col gap-1'
-                  : isEpisodeList && !isTizen
-                    ? 'flex flex-col gap-4'
-                    : isEpisodeList
-                      ? 'grid grid-cols-1 gap-4 px-2 sm:px-0 md:grid-cols-2'
-                      : 'grid grid-cols-3 gap-2 px-2 sm:grid-cols-4 sm:gap-4 sm:px-0 md:grid-cols-5 md:gap-6 lg:grid-cols-6 xl:grid-cols-7'
-              } ${loading && items.length > 0 && context.page === 1 ? 'pointer-events-none opacity-50 transition-opacity duration-300' : 'opacity-100'}`}
-            >
-              {enrichedItems?.map((item, index) =>
-                contentType === 'tv' ? (
-                  <TvChannelListCard
-                    key={`${item.id}-${index}`}
-                    item={item}
-                    onClick={handleItemClick}
-                    isFocused={false}
-                  />
-                ) : isEpisodeList ? (
-                  <EpisodeCard
-                    key={`${item.id}-${index}`}
-                    item={item}
-                    onClick={handleItemClick}
-                  />
-                ) : (
-                  <MediaCard
-                    key={`${item.id}-${index}`}
-                    item={item}
-                    onClick={handleItemClick}
-                  />
-                )
-              )}
-            </div>
+            {loading && items.length === 0 ? (
+              <div className="flex w-full justify-center py-12">
+                <div className="h-10 w-10 animate-spin rounded-full border-b-2 border-t-2 border-blue-500"></div>
+              </div>
+            ) : (
+              <div
+                className={`${
+                  contentType === 'tv'
+                    ? 'channel-list flex flex-col gap-1'
+                    : isEpisodeList && !isTizen
+                      ? 'flex flex-col gap-4'
+                      : isEpisodeList
+                        ? 'grid grid-cols-1 gap-4 px-2 sm:px-0 md:grid-cols-2'
+                        : 'grid grid-cols-3 gap-2 px-2 sm:grid-cols-4 sm:gap-4 sm:px-0 md:grid-cols-5 md:gap-6 lg:grid-cols-6 xl:grid-cols-7'
+                } ${loading && items.length > 0 && context.page === 1 ? 'pointer-events-none opacity-50 transition-opacity duration-300' : 'opacity-100'}`}
+              >
+                {enrichedItems?.map((item, index) =>
+                  contentType === 'tv' ? (
+                    <TvChannelListCard
+                      key={`${item.id}-${index}`}
+                      item={item}
+                      onClick={handleItemClick}
+                      isFocused={false}
+                    />
+                  ) : isEpisodeList ? (
+                    (() => {
+                      const record = progressRecords.find((r) => String(r.mediaId) === String(item.id));
+                      return (
+                        <EpisodeCard
+                          key={`${item.id}-${index}`}
+                          item={item}
+                          onClick={handleItemClick}
+                          isCompleted={record?.completed}
+                        />
+                      );
+                    })()
+                  ) : (
+                    (() => {
+                      const record = progressRecords.find((r) => String(r.mediaId) === String(item.id));
+                      return (
+                        <MediaCard
+                          key={`${item.id}-${index}`}
+                          item={item}
+                          onClick={handleItemClick}
+                          isCompleted={record?.completed}
+                          progressPercent={record?.meta?.progressPercent}
+                        />
+                      );
+                    })()
+                  )
+                )}
+              </div>
+            )}
           </>
         )}
 

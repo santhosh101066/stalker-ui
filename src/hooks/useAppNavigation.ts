@@ -2,7 +2,8 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { toast } from 'react-toastify';
-import { getMedia, getMovieUrl } from '@/services/services';
+import { useAuth } from '@/context/AuthContext';
+import { getMedia, getMovieUrl, getUserProgress } from '@/services/services';
 import { BASE_URL, URL_PATHS } from '@/services/api';
 import type { MediaItem, ContextType } from '@/types';
 import { isTizenDevice } from '@/utils/helpers';
@@ -45,15 +46,8 @@ async function resolveStreamUrl(
   return { raw, proxied: buildProxiedUrl(raw) };
 }
 
-function getResumeTime(item: MediaItem): number | undefined {
-  try {
-    const raw = localStorage.getItem(`video-in-progress-${item.id}`);
-    if (!raw) return undefined;
-    const entry = JSON.parse(raw);
-    return entry.currentTime > 2 ? entry.currentTime : undefined;
-  } catch {
-    return undefined;
-  }
+function getResumeTime(): number | undefined {
+  return undefined;
 }
 
 export function useAppNavigation(
@@ -75,6 +69,7 @@ export function useAppNavigation(
   isRestoringFromHistory: React.MutableRefObject<boolean>,
   onOpenDetail?: (item: MediaItem) => void
 ) {
+  const { user, updatePreferences } = useAuth();
   const isTizen = isTizenDevice();
 
   const [history, setHistory] = useState<NavFrame[]>([]);
@@ -115,9 +110,10 @@ export function useAppNavigation(
     async (item: MediaItem, displayTitle: string) => {
       let savedResumeTime: number | undefined;
       try {
-        const raw = localStorage.getItem(`video-in-progress-${item.id}`);
-        if (raw) {
-          const entry = JSON.parse(raw);
+        const records = await getUserProgress();
+        const record = records.find(r => r.mediaId === item.id);
+        if (record && record.meta) {
+          const entry = record.meta;
           if (entry.currentTime && entry.currentTime > 2)
             savedResumeTime = entry.currentTime;
           if (entry.playbackFileId)
@@ -238,7 +234,12 @@ export function useAppNavigation(
           channelUrl = `${baseUrl}${channelUrl}`;
         }
 
-        localStorage.setItem('lastPlayedTvChannelId', item.id.toString());
+        updatePreferences({
+          lastSelectedCategory: {
+            ...(user?.preferences?.lastSelectedCategory || {}),
+            lastPlayedTvChannelId: item.id.toString(),
+          },
+        });
         addToRecentChannels(item);
         openPlayer(
           item,
@@ -258,7 +259,7 @@ export function useAppNavigation(
               isPortal,
               item.series_number
             );
-            openPlayer(item as any, raw, proxied, getResumeTime(item));
+            openPlayer(item as any, raw, proxied, getResumeTime());
             return;
           }
 
@@ -286,7 +287,7 @@ export function useAppNavigation(
             item.series_number
           );
 
-          openPlayer(enrichedItem as any, raw, proxied, getResumeTime(item));
+          openPlayer(enrichedItem as any, raw, proxied, getResumeTime());
         } catch (err) {
           console.error(err);
           toast.error('Could not fetch stream URL.');
@@ -301,7 +302,7 @@ export function useAppNavigation(
         try {
           if (!isPortal && item.cmd) {
             const { raw, proxied } = await resolveStreamUrl(item, isPortal);
-            openPlayer(item as any, raw, proxied, getResumeTime(item));
+            openPlayer(item as any, raw, proxied, getResumeTime());
             return;
           }
 
@@ -317,7 +318,7 @@ export function useAppNavigation(
           const finalMovieItem = { ...movieFile, ...filteredItem };
 
           const { raw, proxied } = await resolveStreamUrl(movieFile, isPortal);
-          openPlayer(finalMovieItem, raw, proxied, getResumeTime(item));
+          openPlayer(finalMovieItem, raw, proxied, getResumeTime());
         } catch (err) {
           console.error(err);
           toast.error('Could not fetch stream details.');
@@ -325,7 +326,15 @@ export function useAppNavigation(
         return;
       }
     },
-    [contentType, isPortal, addToRecentChannels, openPlayer, context]
+    [
+      contentType,
+      isPortal,
+      addToRecentChannels,
+      openPlayer,
+      context,
+      updatePreferences,
+      user?.preferences?.lastSelectedCategory,
+    ]
   );
 
   const handleItemClick = useCallback(

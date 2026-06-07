@@ -8,6 +8,7 @@ interface DetailModalProps {
   epgData?: Record<string, EPG_List[]>;
   onClose: () => void;
   onPlay: (item: MediaItem, startTime?: number, endTime?: number) => void;
+  onDownload?: (item: MediaItem) => void;
 }
 
 const formatTime = (timestampStr: string): string => {
@@ -25,6 +26,7 @@ const DetailModal: React.FC<DetailModalProps> = ({
   epgData = {},
   onClose,
   onPlay,
+  onDownload,
 }) => {
   const baseUrl = URL_PATHS.HOST === '/' ? '' : URL_PATHS.HOST;
   const displayTitle = item.title || item.name || 'Details';
@@ -155,6 +157,15 @@ const DetailModal: React.FC<DetailModalProps> = ({
                     : 'Play Movie'}
               </span>
             </button>
+            {!isTvChannel && onDownload && (
+              <button
+                onClick={() => onDownload(item)}
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-blue-500/30 bg-blue-950/20 py-3 font-bold text-blue-400 transition-all duration-200 hover:bg-blue-900/30 active:scale-95"
+                data-focusable="true"
+              >
+                <span>Download</span>
+              </button>
+            )}
           </div>
         </div>
 

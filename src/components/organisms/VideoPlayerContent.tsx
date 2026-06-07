@@ -85,9 +85,13 @@ const VideoPlayerContent: React.FC = () => {
     onNextChannel,
     onChannelSelect,
     onEpisodeSelect,
+    playNextEpisode,
+    playPrevEpisode,
     onBack,
     setIsSettingsMenuOpen,
     subtitles,
+    favorites,
+    recentChannels,
   } = useVideoContext();
 
   const remote = useMediaRemote(playerRef);
@@ -115,48 +119,55 @@ const VideoPlayerContent: React.FC = () => {
   useEffect(() => {
     navRef.current.isEpisodeListOpen = showEpisodeList;
   }, [showEpisodeList]);
-  useEffect(() => {
-    if (focusedIndex !== null) navRef.current.index = focusedIndex;
-  }, [focusedIndex]);
 
-  const setFocusSync = useCallback(
-    (newIndex: number) => {
-      navRef.current.index = newIndex; // Update instantly for the next fast keypress
-      setFocusedIndex(newIndex); // Update UI
-    },
-    [setFocusedIndex]
-  );
+  // Handle auto-focus sync on change
+  const setFocusSync = useCallback((idx: number) => {
+    navRef.current.index = idx;
+    setFocusedIndex(idx);
+  }, [setFocusedIndex]);
 
-  // 👻 FIX 2: Bulletproof Visibility Check (Kills invisible ghost menus)
-  const getVisibleFocusableElements = useCallback(() => {
-    const containerRef = navRef.current.isSettingsOpen
-      ? settingsMenuRef
-      : playerContainerRef;
-    if (!containerRef.current) return [];
+  const getVisibleFocusableElements = useCallback((): HTMLElement[] => {
+    if (!playerContainerRef.current) return [];
 
-    const allFocusable = Array.from(
-      containerRef.current.querySelectorAll('[data-focusable="true"]')
-    ) as HTMLElement[];
+    // Tizen TV settings menu items are nested.
+    if (navRef.current.isSettingsOpen && settingsMenuRef.current) {
+      const menuFocusables = Array.from(
+        settingsMenuRef.current.querySelectorAll<HTMLElement>(
+          '[data-focusable="true"]'
+        )
+      ).filter((el) => {
+        // filter out elements inside hidden menus
+        const parentMenu = el.closest('[data-submenu]');
+        if (parentMenu) {
+          return parentMenu.getAttribute('data-open') === 'true';
+        }
+        return true;
+      });
+      if (menuFocusables.length > 0) return menuFocusables;
+    }
 
-    return allFocusable.filter((el) => {
-      // 1. Must have physical dimensions
+    const elements = Array.from(
+      playerContainerRef.current.querySelectorAll<HTMLElement>(
+        '[data-focusable="true"]'
+      )
+    );
+
+    return elements.filter((el) => {
+      // 1. Ensure element is visible
       const rect = el.getBoundingClientRect();
-      if (rect.width === 0 || rect.height === 0) return false;
+      const isVisible = rect.width > 0 && rect.height > 0;
+      if (!isVisible) return false;
 
-      // 2. Ignore elements inside closed Vidstack menus
-      const parentMenu = el.closest('[data-open]');
-      if (parentMenu && parentMenu.getAttribute('data-open') === 'false')
-        return false;
+      // 2. Filter out elements in hidden menus
+      const parentMenu = el.closest('.more-options-menu');
+      if (parentMenu) {
+        // Only focus if the menu is open
+        return true;
+      }
 
-      // 3. Ignore transparent or disabled elements
-      const style = window.getComputedStyle(el);
-      if (
-        style.opacity === '0' ||
-        style.visibility === 'hidden' ||
-        style.display === 'none' ||
-        style.pointerEvents === 'none'
-      ) {
-        return false;
+      // If settings menu is open but it's not the active focused list, don't focus outer elements
+      if (navRef.current.isSettingsOpen) {
+        return el.closest('.settings-menu-container') !== null;
       }
 
       return true;
@@ -363,12 +374,16 @@ const VideoPlayerContent: React.FC = () => {
           contentType === 'tv' ? onNextChannel?.() : handleSkipButtonClick(30);
           break;
         case 427: // Channel Down
+        case 10232: // MediaTrackPrevious
           e.preventDefault();
           if (contentType === 'tv') onPrevChannel?.();
+          else if (contentType === 'series') playPrevEpisode?.();
           break;
         case 428: // Channel Up
+        case 10233: // MediaTrackNext
           e.preventDefault();
           if (contentType === 'tv') onNextChannel?.();
+          else if (contentType === 'series') playNextEpisode?.();
           break;
         case 0:
         case 10009:
@@ -447,6 +462,8 @@ const VideoPlayerContent: React.FC = () => {
     showControlsAndCursor,
     getVisibleFocusableElements,
     setFocusSync,
+    playNextEpisode,
+    playPrevEpisode,
     settingsMenuRef,
     setControlsVisible,
   ]);
@@ -638,6 +655,8 @@ const VideoPlayerContent: React.FC = () => {
                   onBack={() => setShowChannelList(false)}
                   currentItemId={itemId}
                   isOverlay={true}
+                  favorites={favorites}
+                  recentChannels={recentChannels}
                 />
               </div>
             )}

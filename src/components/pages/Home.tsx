@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
-import { Play, Shield, Tv, Sparkles, ChevronRight } from 'lucide-react';
+import { Play, Shield, Tv, Sparkles, ChevronRight, Bug, Rocket, AlertCircle } from 'lucide-react';
 import { isTizenDevice } from '@/utils/helpers';
 
 export default function Home() {
@@ -96,7 +96,6 @@ export default function Home() {
           </div>
 
           <div className="md:col-span-5 relative hidden md:block">
-            {/* Visual element representing TV portal screen mockup */}
             <div className="absolute -inset-1 rounded-3xl bg-gradient-to-r from-indigo-500 to-violet-600 opacity-20 blur-2xl"></div>
             <div className="relative border border-gray-800 bg-gray-900/60 backdrop-blur-md rounded-3xl p-6 shadow-2xl overflow-hidden aspect-[4/3] flex flex-col justify-between">
               <div className="flex items-center justify-between border-b border-gray-850 pb-4">
@@ -128,7 +127,7 @@ export default function Home() {
       </main>
 
       {/* Features List */}
-      <section className="bg-gray-950/60 border-t border-gray-900 py-16 px-6">
+      <section className="bg-gray-950/40 border-t border-gray-900/80 py-16 px-6">
         <div className="max-w-6xl mx-auto grid md:grid-cols-3 gap-8">
           <div className="bg-gray-900/40 border border-gray-850 rounded-2xl p-6 text-left space-y-4">
             <div className="w-12 h-12 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
@@ -162,8 +161,104 @@ export default function Home() {
         </div>
       </section>
 
+      {/* Tracker: Known Bugs & Upcoming Features */}
+      <section className="bg-gray-950/80 border-t border-gray-900 py-16 px-6">
+        <div className="max-w-6xl mx-auto grid md:grid-cols-2 gap-12">
+          
+          {/* Known Bugs Column */}
+          <div className="space-y-6 text-left">
+            <div className="flex items-center space-x-3 border-b border-gray-850 pb-3">
+              <div className="p-2 rounded-lg bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                <Bug className="w-5 h-5" />
+              </div>
+              <h2 className="text-xl font-bold tracking-wide">Known System Bugs</h2>
+            </div>
+            
+            <div className="space-y-3.5">
+              <div className="flex items-start space-x-3 bg-slate-900/30 border border-gray-850/60 p-4 rounded-xl">
+                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                <p className="text-sm text-gray-400 leading-normal">
+                  <strong className="text-gray-200">Continue Watching Delay:</strong> Progress tiles may occasionally ghost or cache incorrectly under edge network loops.
+                </p>
+              </div>
+
+              <div className="flex items-start space-x-3 bg-slate-900/30 border border-gray-850/60 p-4 rounded-xl">
+                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                <p className="text-sm text-gray-400 leading-normal">
+                  <strong className="text-gray-200">History Reset Flow:</strong> Clear Data trigger does not completely scrub the interactive Continue Watching active cache files.
+                </p>
+              </div>
+
+              <div className="flex items-start space-x-3 bg-slate-900/30 border border-gray-850/60 p-4 rounded-xl">
+                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                <p className="text-sm text-gray-400 leading-normal">
+                  <strong className="text-gray-200">Category Sorting & Desync:</strong> Last viewed category configurations are pulled from local storage and may not accurately match state changes across multi-device logins.
+                </p>
+              </div>
+
+              <div className="flex items-start space-x-3 bg-slate-900/30 border border-gray-850/60 p-4 rounded-xl">
+                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                <p className="text-sm text-gray-400 leading-normal">
+                  <strong className="text-gray-200">Google Registration Warning:</strong> New non-pre-registered email log-ins show up with generic error styling rather than an explicit access submission confirmation state.
+                </p>
+              </div>
+
+              <div className="flex items-start space-x-3 bg-slate-900/30 border border-gray-850/60 p-4 rounded-xl">
+                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                <p className="text-sm text-gray-400 leading-normal">
+                  <strong className="text-gray-200">Autoplay Hook initialization:</strong> Next episode auto-progression loop fails on content launched from Continue Watching unless the first chapter is selected manually.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Upcoming Features Column */}
+          <div className="space-y-6 text-left">
+            <div className="flex items-center space-x-3 border-b border-gray-850 pb-3">
+              <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                <Rocket className="w-5 h-5" />
+              </div>
+              <h2 className="text-xl font-bold tracking-wide">Upcoming Features</h2>
+            </div>
+
+            <div className="space-y-4">
+              <div className="relative pl-6 border-l-2 border-indigo-500/30 space-y-1">
+                <div className="absolute -left-[5px] top-1 w-2 h-2 rounded-full bg-indigo-400 shadow-[0_0_8px_rgba(129,140,248,0.8)]"></div>
+                <h4 className="text-sm font-semibold text-gray-200">Advanced Multi-Device Sync</h4>
+                <p className="text-xs text-gray-400 leading-relaxed">Migrating local storage arrays into cloud configurations for instantaneous state replication.</p>
+              </div>
+
+              <div className="relative pl-6 border-l-2 border-indigo-500/30 space-y-1">
+                <div className="absolute -left-[5px] top-1 w-2 h-2 rounded-full bg-indigo-400"></div>
+                <h4 className="text-sm font-semibold text-gray-200">Expanded TV Browser Support</h4>
+                <p className="text-xs text-gray-400 leading-relaxed">Optimizing responsive controls and layouts for generic internal web applications on smart televisions.</p>
+              </div>
+
+              <div className="relative pl-6 border-l-2 border-indigo-500/30 space-y-1">
+                <div className="absolute -left-[5px] top-1 w-2 h-2 rounded-full bg-indigo-400"></div>
+                <h4 className="text-sm font-semibold text-gray-200">User Feature Request Pipeline</h4>
+                <p className="text-xs text-gray-400 leading-relaxed">Direct community implementation board allowing viewers to submit and upvote client modifications.</p>
+              </div>
+
+              <div className="relative pl-6 border-l-2 border-indigo-500/30 space-y-1">
+                <div className="absolute -left-[5px] top-1 w-2 h-2 rounded-full bg-indigo-400"></div>
+                <h4 className="text-sm font-semibold text-gray-200">Centralized Bug Report Collection</h4>
+                <p className="text-xs text-gray-400 leading-relaxed">Automated exception logging to capture interface issues and improve application stability.</p>
+              </div>
+
+              <div className="relative pl-6 border-l-2 border-indigo-500/30 space-y-1">
+                <div className="absolute -left-[5px] top-1 w-2 h-2 rounded-full bg-indigo-400"></div>
+                <h4 className="text-sm font-semibold text-gray-200">Push Notification Engine</h4>
+                <p className="text-xs text-gray-400 leading-relaxed">Real-time inside-app banners and notifications regarding admin approvals, maintenance logs, or fresh updates.</p>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
       {/* Footer */}
-      <footer className="py-6 border-t border-gray-900 text-center text-xs text-gray-500">
+      <footer className="py-6 border-t border-gray-900 text-center text-xs text-gray-500 bg-gray-950">
         <p>&copy; {new Date().getFullYear()} Stalker VOD Portal. All Rights Reserved.</p>
       </footer>
     </div>

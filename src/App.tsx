@@ -9,6 +9,8 @@ import Login from '@/components/pages/Login';
 import Verify from '@/components/pages/Verify';
 import { Loader2 } from 'lucide-react';
 
+import { URL_PATHS } from '@/services/api';
+
 import { Header } from '@/components/organisms/Header';
 import Admin from '@/components/organisms/Admin';
 import VideoPlayer from '@/components/organisms/VideoPlayer';
@@ -69,6 +71,8 @@ function TVPortal({ onShowAdmin }: { onShowAdmin: () => void }) {
     vodCategories,
     loadingCategories,
     carouselSlides,
+    progressRecords,
+    providerKey,
   } = useMediaLibrary();
 
   const {
@@ -355,6 +359,10 @@ function TVPortal({ onShowAdmin }: { onShowAdmin: () => void }) {
                 carouselSlides={carouselSlides}
                 handleCarouselAction={handleCarouselAction}
                 onSelectCategory={onSelectCategory}
+                favorites={favorites}
+                recentChannels={recentChannels}
+                progressRecords={progressRecords}
+                providerKey={providerKey}
               />
             </main>
           </div>
@@ -375,6 +383,51 @@ function TVPortal({ onShowAdmin }: { onShowAdmin: () => void }) {
             setTimeout(() => {
               startPlayback(item, startTime, endTime);
             }, 50);
+          }}
+          onDownload={async (item) => {
+            try {
+              toast.info('Resolving download link...');
+              let downloadItem = item;
+              if (item.is_episode && !isPortal && !item.cmd) {
+                const res = await getMedia({
+                  movieId: context.movieId,
+                  seasonId: context.seasonId,
+                  episodeId: item.id,
+                  category: '*',
+                });
+                if (res.data?.length) {
+                  downloadItem = res.data[0];
+                }
+              } else if (contentType === 'movie' && !isPortal && !item.cmd) {
+                const res = await getMedia({
+                  movieId: item.id,
+                  category: context.category || '*',
+                });
+                if (res.data?.length) {
+                  downloadItem = res.data[0];
+                }
+              }
+
+              const isSeries = item.is_episode ? '1' : '0';
+              const cmdParam = downloadItem.cmd ? `&cmd=${encodeURIComponent(downloadItem.cmd)}` : '';
+              
+              let seriesVal = '';
+              if (item.series_number !== undefined) {
+                seriesVal = String(item.series_number);
+              } else if (item.is_episode) {
+                seriesVal = '1';
+              }
+              const seriesParam = seriesVal ? `&series=${seriesVal}` : '';
+
+              const baseUrl = URL_PATHS.HOST === '/' ? '' : URL_PATHS.HOST;
+              const downloadUrl = `${baseUrl}/api/v2/download?id=${downloadItem.id}&isSeries=${isSeries}${seriesParam}${cmdParam}`;
+              
+              window.open(downloadUrl, '_blank');
+              toast.success('Download started!');
+            } catch (err) {
+              console.error(err);
+              toast.error('Failed to start download');
+            }
           }}
         />
       )}

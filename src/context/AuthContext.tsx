@@ -25,6 +25,8 @@ export interface User {
     videoFitMode?: string;
     lastSelectedCategory?: Record<string, string>;
     lastSelectedCategoryTitle?: Record<string, string>;
+    recentCategories?: Record<string, string[]>;
+    pinnedCategories?: Record<string, string[]>;
   };
 }
 
@@ -81,96 +83,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     };
   }, []);
 
-  const syncDataFromServer = async (userData: User) => {
-    try {
-      (window as CustomWindow).__isSyncingFromServer = true;
-
-      // 1. Sync preferences to local storage
-      if (userData.preferences) {
-        if (userData.preferences.favorites) {
-          localStorage.setItem(
-            'favorite_channels',
-            JSON.stringify(userData.preferences.favorites)
-          );
-        }
-        if (userData.preferences.recentChannels) {
-          localStorage.setItem(
-            'recent_channels',
-            JSON.stringify(userData.preferences.recentChannels)
-          );
-        }
-        if (userData.preferences.preferredContentType) {
-          localStorage.setItem(
-            'preferredContentType',
-            userData.preferences.preferredContentType
-          );
-        }
-        if (userData.preferences.videoFitMode) {
-          localStorage.setItem(
-            'videoFitMode',
-            userData.preferences.videoFitMode
-          );
-        }
-        if (userData.preferences.lastSelectedCategory) {
-          Object.entries(userData.preferences.lastSelectedCategory).forEach(
-            ([type, catId]) => {
-              localStorage.setItem(`last_selected_category_${type}`, catId);
-            }
-          );
-        }
-        if (userData.preferences.lastSelectedCategoryTitle) {
-          Object.entries(
-            userData.preferences.lastSelectedCategoryTitle
-          ).forEach(([type, title]) => {
-            localStorage.setItem(`last_selected_category_title_${type}`, title);
-          });
-        }
-      }
-
-      // 2. Fetch and sync progress records
-      interface ProgressRecord {
-        mediaId: string;
-        progress: number;
-        completed: boolean;
-        updatedAt: string;
-        meta?: Record<string, string | number>;
-      }
-      const progressResponse = await api.get<ProgressRecord[]>('/user/progress');
-      if (progressResponse.data) {
-        progressResponse.data.forEach((record) => {
-          const key = record.mediaId;
-          
-          if (record.completed) {
-            localStorage.removeItem(`video-in-progress-${key}`);
-            
-            // Appdiye meta-va save pandrom
-            const completedData = record.meta && Object.keys(record.meta).length > 0 
-              ? record.meta 
-              : { mediaId: key, completed: true, timestamp: new Date(record.updatedAt).getTime() };
-              
-            localStorage.setItem(`video-completed-${key}`, JSON.stringify(completedData));
-          } else {
-            // Restore exact rich object from backend, fallback only if missing
-            const inProgressData = record.meta && Object.keys(record.meta).length > 0
-              ? record.meta
-              : {
-                  id: key,
-                  mediaId: key,
-                  currentTime: record.progress,
-                  timestamp: new Date(record.updatedAt).getTime()
-                };
-                
-            localStorage.setItem(`video-in-progress-${key}`, JSON.stringify(inProgressData));
-          }
-        });
-      }
-    } catch (error) {
-      console.error('Failed to sync data from server:', error);
-    } finally {
-      (window as CustomWindow).__isSyncingFromServer = false;
-    }
-  };
-
   const refreshProfile = useCallback(async () => {
     if (!token) return;
     try {
@@ -178,7 +90,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       if (response.data) {
         setUser(response.data);
         localStorage.setItem('auth_user', JSON.stringify(response.data));
-        await syncDataFromServer(response.data);
       }
     } catch (error) {
       console.error('Failed to refresh user profile:', error);
@@ -222,41 +133,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         localStorage.setItem('auth_token', accessToken);
         localStorage.setItem('refresh_token', newRefreshToken);
         localStorage.setItem('auth_user', JSON.stringify(userData));
-
-        // Sync fresh data from server
-        await syncDataFromServer(userData);
-
-        // Copy older localStorage preferences/favorites/recents if present on first login
-        try {
-          const oldFavs = localStorage.getItem('favorite_channels');
-          const oldRecents = localStorage.getItem('recent_channels');
-          const oldType = localStorage.getItem('preferredContentType');
-
-          const mergedPrefs: Partial<User['preferences']> = {};
-          if (oldFavs) mergedPrefs.favorites = JSON.parse(oldFavs);
-          if (oldRecents) mergedPrefs.recentChannels = JSON.parse(oldRecents);
-          if (oldType)
-            mergedPrefs.preferredContentType = oldType as
-              | 'movie'
-              | 'series'
-              | 'tv';
-
-          if (Object.keys(mergedPrefs).length > 0) {
-            await api.put('/user/preferences', mergedPrefs);
-            // Re-fetch profile to get fully merged states
-            const profileRes = await api.get<User>('/user/profile');
-            if (profileRes.data) {
-              setUser(profileRes.data);
-              localStorage.setItem(
-                'auth_user',
-                JSON.stringify(profileRes.data)
-              );
-              await syncDataFromServer(profileRes.data);
-            }
-          }
-        } catch (e) {
-          console.warn('Could not migrate local preferences:', e);
-        }
       }
     } catch (error) {
       console.error('Google Sign-In failed:', error);
@@ -292,9 +168,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         localStorage.setItem('auth_token', accessToken);
         localStorage.setItem('refresh_token', newRefreshToken);
         localStorage.setItem('auth_user', JSON.stringify(userData));
-
-        // Sync fresh data from server
-        await syncDataFromServer(userData);
       }
     } catch (error) {
       console.error('Credentials login failed:', error);
@@ -310,20 +183,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     localStorage.removeItem('auth_token');
     localStorage.removeItem('refresh_token');
     localStorage.removeItem('auth_user');
-
-    // Clear other user-specific UI states from localStorage
-    Object.keys(localStorage).forEach((key) => {
-      if (
-        key.includes('video-in-progress') ||
-        key.includes('video-completed') ||
-        key.includes('last_selected_category') ||
-        key.includes('favorite_channels') ||
-        key.includes('recent_channels') ||
-        key.includes('preferredContentType')
-      ) {
-        localStorage.removeItem(key);
-      }
-    });
 
     window.location.hash = '/home';
   }, []);

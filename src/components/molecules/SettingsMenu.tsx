@@ -6,7 +6,7 @@ import {
   useCaptionOptions,
   GoogleCastButton,
 } from '@vidstack/react';
-import { ChevronRightIcon, CheckIcon, ChevronLeftIcon } from 'lucide-react';
+import { ChevronRightIcon, CheckIcon, ChevronLeftIcon, X } from 'lucide-react';
 import { FaChromecast } from 'react-icons/fa';
 
 export const SettingsMenu = React.memo(() => {
@@ -24,6 +24,30 @@ export const SettingsMenu = React.memo(() => {
   const qualities = useVideoQualityOptions({ auto: true, sort: 'ascending' });
   const audioOptions = useAudioOptions();
   const captionOptions = useCaptionOptions();
+
+  // Close menu on click outside
+  React.useEffect(() => {
+    if (!isSettingsMenuOpen) return;
+
+    const handleClickOutside = (event: MouseEvent | TouchEvent) => {
+      if (
+        settingsMenuRef.current &&
+        !settingsMenuRef.current.contains(event.target as Node)
+      ) {
+        // Check if the clicked target is the settings button itself to prevent immediate re-opening
+        const target = event.target as HTMLElement;
+        if (target.closest('[data-control="settings-menu"]') || target.closest('[title="Settings"]')) {
+          return;
+        }
+        setIsSettingsMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('pointerdown', handleClickOutside);
+    return () => {
+      document.removeEventListener('pointerdown', handleClickOutside);
+    };
+  }, [isSettingsMenuOpen, setIsSettingsMenuOpen, settingsMenuRef]);
 
   // Helper function to handle menu changes smoothly
   const handleMenuChange = (
@@ -87,6 +111,16 @@ export const SettingsMenu = React.memo(() => {
               </span>
               <ChevronRightIcon className="h-4 w-4" />
             </div>
+          </button>
+
+          <button
+            data-focusable="true"
+            data-control="settings-close"
+            onClick={() => setIsSettingsMenuOpen(false)}
+            className="mt-1 flex items-center justify-between rounded border-t border-gray-700/60 px-3 pt-2 pb-1 text-red-400 transition-colors hover:bg-white/10 focus:bg-white/10 focus:outline-none"
+          >
+            <span>Close Menu</span>
+            <X className="h-4 w-4" />
           </button>
         </div>
       )}

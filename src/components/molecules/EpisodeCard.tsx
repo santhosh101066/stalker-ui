@@ -5,11 +5,11 @@ import type { MediaItem } from '@/types';
 interface EpisodeCardProps {
   item: MediaItem;
   onClick: (item: MediaItem) => void;
+  isCompleted?: boolean;
 }
 
-const EpisodeCard: React.FC<EpisodeCardProps> = ({ item, onClick }) => {
+const EpisodeCard: React.FC<EpisodeCardProps> = ({ item, onClick, isCompleted = false }) => {
   const [imageError, setImageError] = useState(false);
-  const [isCompleted, setIsCompleted] = useState(false);
 
   const displayTitle = item.title || item.name;
   const baseUrl = URL_PATHS.HOST === '/' ? '' : URL_PATHS.HOST;
@@ -25,11 +25,6 @@ const EpisodeCard: React.FC<EpisodeCardProps> = ({ item, onClick }) => {
   useEffect(() => {
     setImageError(false);
   }, [item.screenshot_uri]);
-
-  useEffect(() => {
-    const completed = localStorage.getItem(`video-completed-${item.id}`);
-    setIsCompleted(!!completed);
-  }, [item.id]);
 
   return (
     <div

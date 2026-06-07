@@ -1,6 +1,8 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import { toast } from 'react-toastify';
+import { useAuth } from '@/context/AuthContext';
+import { api } from '@/services/api';
 import {
   getChannels,
   getMedia,
@@ -11,37 +13,23 @@ import {
   getSeriesCategories,
   getCarouselSlides,
   type CarouselSlide,
+  clearUserProgress,
+  getUserProgress,
+  type ProgressRecord,
 } from '@/services/services';
 import type { MediaItem, ContextType, EPG_List, ChannelGroup } from '@/types';
 import type { PaginatedResponse } from '@/services/services';
 import { isTizenDevice } from '@/utils/helpers';
-
-const PREFERRED_CONTENT_TYPE_KEY = 'preferredContentType';
 
 export const getInitialState = (): {
   initialType: 'movie' | 'series' | 'tv';
   initialTitle: string;
   initialCategory: string | null;
 } => {
-  const savedType = localStorage.getItem(PREFERRED_CONTENT_TYPE_KEY) as
-    | 'movie'
-    | 'series'
-    | 'tv'
-    | null;
-  const initialType = savedType || 'movie';
-  const initialTitle = initialType === 'series' ? 'Series' : initialType === 'tv' ? 'TV' : 'Movies';
-
-  if (initialType === 'tv') {
-    return { initialType, initialTitle, initialCategory: null };
-  }
-
-  const lastCategory = localStorage.getItem(`last_selected_category_${initialType}`) || '*';
-  const lastCategoryTitle = localStorage.getItem(`last_selected_category_title_${initialType}`);
-
   return {
-    initialType,
-    initialTitle: lastCategory === '*' ? initialTitle : (lastCategoryTitle || initialTitle),
-    initialCategory: lastCategory,
+    initialType: 'movie',
+    initialTitle: 'Movies',
+    initialCategory: '*',
   };
 };
 
@@ -61,6 +49,7 @@ export const initialContext: ContextType = {
 };
 
 export function useMediaLibrary() {
+  const { user, updatePreferences } = useAuth();
   const [context, setContext] = useState<ContextType>(initialContext);
   const [items, setItems] = useState<MediaItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -82,6 +71,18 @@ export function useMediaLibrary() {
   const [vodCategories, setVodCategories] = useState<ChannelGroup[]>([]);
   const [loadingCategories, setLoadingCategories] = useState<boolean>(false);
   const [carouselSlides, setCarouselSlides] = useState<CarouselSlide[]>([]);
+  const [providerKey, setProviderKey] = useState<string>('');
+
+  const fetchProviderKey = useCallback(async () => {
+    try {
+      const response = await api.get<{ hostname?: string; providerType?: string }>('/config');
+      const host = response.data.hostname || 'default_host';
+      const type = response.data.providerType || 'stalker';
+      setProviderKey(`${type}_${host}`);
+    } catch (err) {
+      console.error('Failed to load active provider config:', err);
+    }
+  }, []);
 
   const fetchVodCategories = useCallback(async (type: 'movie' | 'series') => {
     setLoadingCategories(true);
@@ -108,23 +109,46 @@ export function useMediaLibrary() {
     }
   }, []);
 
-  const [favorites, setFavorites] = useState<string[]>(() => {
-    try {
-      const storedFavorites = localStorage.getItem('favorite_channels');
-      return storedFavorites ? JSON.parse(storedFavorites) : [];
-    } catch {
-      return [];
-    }
-  });
+  const [favorites, setFavorites] = useState<string[]>([]);
+  const [recentChannels, setRecentChannels] = useState<string[]>([]);
 
-  const [recentChannels, setRecentChannels] = useState<string[]>(() => {
-    try {
-      const storedRecents = localStorage.getItem('recent_channels');
-      return storedRecents ? JSON.parse(storedRecents) : [];
-    } catch {
-      return [];
+  useEffect(() => {
+    if (user?.preferences && providerKey) {
+      setFavorites(user.preferences.favorites || []);
+      setRecentChannels(user.preferences.recentChannels || []);
+
+      const savedType = user.preferences.preferredContentType || 'movie';
+      const key = `${providerKey}_${savedType}`;
+      const lastCategory = user.preferences.lastSelectedCategory?.[key] || '*';
+      const lastCategoryTitle = user.preferences.lastSelectedCategoryTitle?.[key];
+      const newTitle = savedType === 'series' ? 'Series' : savedType === 'tv' ? 'TV' : 'Movies';
+
+      setContentType(savedType);
+      setContext((prev) => ({
+        ...prev,
+        contentType: savedType,
+        category: savedType === 'tv' ? null : lastCategory,
+        parentTitle: savedType === 'tv' ? 'TV' : (lastCategory === '*' ? newTitle : (lastCategoryTitle || newTitle)),
+      }));
     }
-  });
+  }, [user, providerKey]);
+
+  const [progressRecords, setInProgressRecords] = useState<ProgressRecord[]>([]);
+
+  const fetchProgress = useCallback(async () => {
+    try {
+      const records = await getUserProgress();
+      setInProgressRecords(records);
+    } catch (err) {
+      console.error('Failed to load user progress:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (user) {
+      fetchProgress();
+    }
+  }, [user, fetchProgress, cwRefreshKey]);
 
   const isFetchingMore = useRef(false);
   const isRestoringFromHistory = useRef(false);
@@ -274,24 +298,44 @@ export function useMediaLibrary() {
   );
 
   useEffect(() => {
+    fetchProviderKey();
+  }, [fetchProviderKey]);
+
+  useEffect(() => {
+    if (!providerKey) return;
+
     if (!initialLoadRef.current) {
-      fetchData(initialContext);
+      // Determine initial category for this provider from preferences
+      const savedType = user?.preferences?.preferredContentType || 'movie';
+      const key = `${providerKey}_${savedType}`;
+      const lastCategory = user?.preferences?.lastSelectedCategory?.[key] || '*';
+      const lastCategoryTitle = user?.preferences?.lastSelectedCategoryTitle?.[key];
+      const newTitle = savedType === 'series' ? 'Series' : savedType === 'tv' ? 'TV' : 'Movies';
+
+      const initialCtx = {
+        ...initialContext,
+        contentType: savedType,
+        category: savedType === 'tv' ? null : lastCategory,
+        parentTitle: savedType === 'tv' ? 'TV' : (lastCategory === '*' ? newTitle : (lastCategoryTitle || newTitle)),
+      };
+
+      fetchData(initialCtx, savedType);
       initialLoadRef.current = true;
     }
 
     fetchCarousel();
-    if (initialContext.contentType !== 'tv') {
-      fetchVodCategories(initialContext.contentType as 'movie' | 'series');
+    if (contentType !== 'tv') {
+      fetchVodCategories(contentType as 'movie' | 'series');
     }
 
-    if (initialContext.contentType === 'tv') {
+    if (contentType === 'tv') {
       loadEpgData();
       if (isTizen) {
-        const lastPlayedId = localStorage.getItem('lastPlayedTvChannelId');
+        const lastPlayedId = user?.preferences?.lastSelectedCategory?.['lastPlayedTvChannelId'];
         setPlayLastTvChannel(lastPlayedId || '__play_first__');
       }
     }
-  }, [fetchData, loadEpgData, isTizen, fetchCarousel, fetchVodCategories]);
+  }, [fetchData, loadEpgData, isTizen, fetchCarousel, fetchVodCategories, user, contentType, providerKey, fetchProviderKey]);
 
   const handlePageChange = useCallback(
     (direction: number) => {
@@ -320,22 +364,23 @@ export function useMediaLibrary() {
         : [...favorites, item.id];
 
       setFavorites(newFavs);
-      localStorage.setItem('favorite_channels', JSON.stringify(newFavs));
+      updatePreferences({ favorites: newFavs });
       if (favorites.includes(item.id)) {
         toast.info(`Removed ${item.name || 'Channel'} from favorites`);
       } else {
         toast.success(`Added ${item.name || 'Channel'} to favorites`);
       }
     },
-    [favorites]
+    [favorites, updatePreferences]
   );
 
   const handleContentTypeChange = useCallback(
     (type: 'movie' | 'series' | 'tv') => {
       if (type === contentType) return;
       
-      const lastCategory = type === 'tv' ? null : (localStorage.getItem(`last_selected_category_${type}`) || '*');
-      const lastCategoryTitle = type === 'tv' ? 'TV' : (localStorage.getItem(`last_selected_category_title_${type}`) || (type === 'movie' ? 'Movies' : 'Series'));
+      const key = `${providerKey}_${type}`;
+      const lastCategory = type === 'tv' ? null : (user?.preferences?.lastSelectedCategory?.[key] || '*');
+      const lastCategoryTitle = type === 'tv' ? 'TV' : (user?.preferences?.lastSelectedCategoryTitle?.[key] || (type === 'movie' ? 'Movies' : 'Series'));
 
       const newContext = {
         ...initialContext,
@@ -346,7 +391,7 @@ export function useMediaLibrary() {
 
       if (type === 'tv') setChannelGroups([]);
       setContentType(type);
-      localStorage.setItem(PREFERRED_CONTENT_TYPE_KEY, type);
+      updatePreferences({ preferredContentType: type });
       setContext(newContext);
       fetchData(newContext, type);
 
@@ -356,13 +401,13 @@ export function useMediaLibrary() {
 
       if (type === 'tv') {
         loadEpgData();
-        const lastPlayedId = localStorage.getItem('lastPlayedTvChannelId');
+        const lastPlayedId = user?.preferences?.lastSelectedCategory?.['lastPlayedTvChannelId'];
         setPlayLastTvChannel(lastPlayedId || '__play_first__');
       } else {
         setPlayLastTvChannel(null);
       }
     },
-    [contentType, fetchData, loadEpgData, fetchVodCategories]
+    [contentType, fetchData, loadEpgData, fetchVodCategories, user, updatePreferences, providerKey]
   );
 
   const cycleSort = useCallback(() => {
@@ -411,20 +456,18 @@ export function useMediaLibrary() {
         message:
           'Are you sure you want to clear all watched and in-progress statuses?',
         isDestructive: true,
-        onConfirm: () => {
+        onConfirm: async () => {
           setConfirmModal((prev) => ({ ...prev, isOpen: false }));
-          Object.keys(localStorage).forEach((key) => {
-            if (
-              key.startsWith('video-completed-') ||
-              key.startsWith('video-in-progress-')
-            ) {
-              localStorage.removeItem(key);
-            }
-          });
-          toast.success(
-            'All watched and in-progress statuses have been cleared.'
-          );
-          fetchData(initialContext, contentType);
+          try {
+            await clearUserProgress();
+            toast.success(
+              'All watched and in-progress statuses have been cleared.'
+            );
+            fetchData(initialContext, contentType);
+          } catch (err) {
+            console.error('Failed to clear history:', err);
+            toast.error('Failed to clear history.');
+          }
         },
       });
     },
@@ -436,10 +479,10 @@ export function useMediaLibrary() {
     setRecentChannels((prev) => {
       const filtered = prev.filter((id) => id !== item.id);
       const updated = [item.id, ...filtered].slice(0, 20);
-      localStorage.setItem('recent_channels', JSON.stringify(updated));
+      updatePreferences({ recentChannels: updated });
       return updated;
     });
-  }, []);
+  }, [updatePreferences]);
 
   useEffect(() => {
     const isTizen = !!(window as Window & { tizen?: unknown }).tizen;
@@ -481,11 +524,25 @@ export function useMediaLibrary() {
   }, [contentType, handlePageChange]);
 
   useEffect(() => {
-    const handleConfigChange = () => {
+    const handleConfigChange = async () => {
       setItems([]);
       setTotalItemsCount(0);
-      const lastCategory = contentType === 'tv' ? null : (localStorage.getItem(`last_selected_category_${contentType}`) || '*');
-      const lastCategoryTitle = contentType === 'tv' ? 'TV' : (localStorage.getItem(`last_selected_category_title_${contentType}`) || (contentType === 'movie' ? 'Movies' : 'Series'));
+      
+      // Re-fetch provider config to get new providerKey
+      let freshProviderKey = providerKey;
+      try {
+        const response = await api.get<{ hostname?: string; providerType?: string }>('/config');
+        const host = response.data.hostname || 'default_host';
+        const type = response.data.providerType || 'stalker';
+        freshProviderKey = `${type}_${host}`;
+        setProviderKey(freshProviderKey);
+      } catch (err) {
+        console.error('Failed to reload active provider config:', err);
+      }
+
+      const key = `${freshProviderKey}_${contentType}`;
+      const lastCategory = contentType === 'tv' ? null : (user?.preferences?.lastSelectedCategory?.[key] || '*');
+      const lastCategoryTitle = contentType === 'tv' ? 'TV' : (user?.preferences?.lastSelectedCategoryTitle?.[key] || (contentType === 'movie' ? 'Movies' : 'Series'));
       const initCtx = {
         ...initialContext,
         category: lastCategory,
@@ -508,7 +565,7 @@ export function useMediaLibrary() {
     window.addEventListener('config-changed', handleConfigChange);
     return () =>
       window.removeEventListener('config-changed', handleConfigChange);
-  }, [fetchData, contentType, loadEpgData, fetchCarousel, fetchVodCategories]);
+  }, [fetchData, contentType, loadEpgData, fetchCarousel, fetchVodCategories, user, providerKey, fetchProviderKey]);
 
   useEffect(() => {
     const handleCarouselChange = () => {
@@ -555,5 +612,7 @@ export function useMediaLibrary() {
     setContext,
     isRestoringFromHistory,
     setTotalItemsCount,
+    progressRecords,
+    providerKey,
   };
 }

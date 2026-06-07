@@ -13,6 +13,7 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({
   const [isConnected, setIsConnected] = useState(false);
   const [receivers, setReceivers] = useState<Device[]>([]);
   const [activeUserCount, setActiveUserCount] = useState<number>(1);
+  const [activeDevices, setActiveDevices] = useState<Device[]>([]);
 
   const SOCKET_URL = URL_PATHS.HOST;
 
@@ -48,6 +49,11 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({
       setReceivers(filtered);
     };
 
+    const handleActiveDevicesUpdate = (data: unknown) => {
+      const list = (Array.isArray(data) ? data : []) as Device[];
+      setActiveDevices(list);
+    };
+
     newSocket.on('connect', () => {
       setIsConnected(true);
       newSocket.emit('register', {
@@ -57,6 +63,7 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({
       });
 
       newSocket.emit('get_receivers');
+      newSocket.emit('get_active_devices');
     });
 
     newSocket.on('receivers_updated', handleListUpdate);
@@ -65,6 +72,9 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({
     newSocket.on('active_user_count', (count: number) => {
       setActiveUserCount(count);
     });
+
+    newSocket.on('active_devices_updated', handleActiveDevicesUpdate);
+    newSocket.on('active_devices_list', handleActiveDevicesUpdate);
 
     newSocket.on('config_changed', (data: { hash: string }) => {
       const currentHash = localStorage.getItem('config_hash');
@@ -84,6 +94,8 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({
       newSocket.off('receivers_updated');
       newSocket.off('receivers_list');
       newSocket.off('active_user_count');
+      newSocket.off('active_devices_updated');
+      newSocket.off('active_devices_list');
       newSocket.off('config_changed');
       newSocket.disconnect();
     };
@@ -126,6 +138,7 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({
         receivers,
         isReceiver,
         activeUserCount,
+        activeDevices,
         castTo,
         refreshReceivers,
       }}
