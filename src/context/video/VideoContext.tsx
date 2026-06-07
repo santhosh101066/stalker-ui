@@ -101,6 +101,7 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
   const hasRestoredProgress = useRef(false);
   const isRetrying = useRef(false);
   const seekFadeOutTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hasCompletedPlayback = useRef(false);
 
   const SEEK_LEVELS = useMemo(() => [10, 30, 60, 180], []);
 
@@ -170,6 +171,7 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
     setIsRecovering(false);
     isRetrying.current = false;
     setRetryCount(0);
+    hasCompletedPlayback.current = false;
   }, [streamUrl, rawStreamUrl]);
 
   useEffect(() => {
@@ -443,7 +445,8 @@ export const VideoProvider: React.FC<VideoProviderProps> = ({
   }, [initialPlaybackState]);
 
   const completePlayback = useCallback(async () => {
-    if (!mediaId || contentType === 'tv') return;
+    if (!mediaId || contentType === 'tv' || hasCompletedPlayback.current) return;
+    hasCompletedPlayback.current = true;
     const player = playerRef.current;
     const dur = player?.duration || 0;
 

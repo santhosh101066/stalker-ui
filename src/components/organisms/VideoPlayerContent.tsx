@@ -100,6 +100,26 @@ const VideoPlayerContent: React.FC = () => {
   const [showExitToast, setShowExitToast] = useState(false);
   const backPressRef = useRef<NodeJS.Timeout | null>(null);
   const lastTouchTime = useRef(0);
+  const isKeyboardModeRef = useRef(false);
+
+  // Detect pointer vs keyboard usage to hide focus highlights on touch/click
+  useEffect(() => {
+    const handleKeyDown = () => {
+      isKeyboardModeRef.current = true;
+    };
+    const handlePointerDown = () => {
+      isKeyboardModeRef.current = false;
+      const focusedElements = document.querySelectorAll('.focused');
+      focusedElements.forEach((el) => el.classList.remove('focused'));
+    };
+
+    window.addEventListener('keydown', handleKeyDown, { capture: true });
+    window.addEventListener('pointerdown', handlePointerDown, { capture: true });
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown, { capture: true });
+      window.removeEventListener('pointerdown', handlePointerDown, { capture: true });
+    };
+  }, []);
 
   // 🚀 FIX 1: Synchronous Navigation Ref (Prevents getting stuck on fast clicks)
   const navRef = useRef({
@@ -221,7 +241,7 @@ const VideoPlayerContent: React.FC = () => {
             if (e.keyCode === 37) onPrevChannel?.();
             if (e.keyCode === 39) onNextChannel?.();
           }
-          
+
           // Special VOD shortcut: Left/Right key seeks immediately on first press
           if (contentType !== 'tv') {
             if (e.keyCode === 37) handleSkipButtonClick(-10, true);
@@ -289,7 +309,10 @@ const VideoPlayerContent: React.FC = () => {
               e.preventDefault();
               if (isMenuOpen) {
                 if (currentIndex > 0) setFocusSync(currentIndex - 1);
-              } else if (focusedElement?.getAttribute('data-control') === 'seekbar') {
+              } else if (
+                focusedElement?.getAttribute('data-control') === 'seekbar' ||
+                focusedElement?.getAttribute('data-control') === 'play-pause'
+              ) {
                 handleSkipButtonClick(-10, true);
               } else {
                 const minIndex = 1;
@@ -302,7 +325,10 @@ const VideoPlayerContent: React.FC = () => {
               e.preventDefault();
               if (isMenuOpen) {
                 if (currentIndex < focusable.length - 1) setFocusSync(currentIndex + 1);
-              } else if (focusedElement?.getAttribute('data-control') === 'seekbar') {
+              } else if (
+                focusedElement?.getAttribute('data-control') === 'seekbar' ||
+                focusedElement?.getAttribute('data-control') === 'play-pause'
+              ) {
                 handleSkipButtonClick(10, true);
               } else {
                 if (currentIndex < focusable.length - 1) {
@@ -480,7 +506,11 @@ const VideoPlayerContent: React.FC = () => {
 
     focusable.forEach((el, index) => {
       if (index === newIndex) {
-        el.classList.add('focused');
+        if (isKeyboardModeRef.current) {
+          el.classList.add('focused');
+        } else {
+          el.classList.remove('focused');
+        }
         el.focus();
       } else {
         el.classList.remove('focused');
@@ -498,20 +528,19 @@ const VideoPlayerContent: React.FC = () => {
     seekOverlay,
   ]);
 
-  // Default focus to Play button when controls transition to visible
+  // Default focus when controls transition to visible
   useEffect(() => {
     if (controlsVisible && !isSettingsMenuOpen && !showChannelList && !showEpisodeList) {
       const timer = setTimeout(() => {
         const focusable = getVisibleFocusableElements();
         
-        // Find play button
-        const playIndex = focusable.findIndex(
+        // Always focus the play-pause button by default
+        const defaultIndex = focusable.findIndex(
           (el) => el.getAttribute('data-control') === 'play-pause'
         );
-        if (playIndex !== -1) {
-          setFocusSync(playIndex);
+        if (defaultIndex !== -1) {
+          setFocusSync(defaultIndex);
         } else if (focusable.length > 0) {
-          // Fallback to seekbar (index 0) if play button is not found or not visible (e.g. seekbar-only mode)
           setFocusSync(0);
         }
       }, 50);
@@ -519,12 +548,12 @@ const VideoPlayerContent: React.FC = () => {
     }
   }, [
     controlsVisible,
-    seekOverlay,
     isSettingsMenuOpen,
     showChannelList,
     showEpisodeList,
     getVisibleFocusableElements,
     setFocusSync,
+    contentType,
   ]);
 
 

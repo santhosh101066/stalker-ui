@@ -8,6 +8,8 @@ interface CategorySelectorProps {
   onSelectCategory: (categoryId: string, categoryTitle: string) => void;
   contentType: 'movie' | 'series';
   providerKey: string;
+  showAllOverlay: boolean;
+  setShowAllOverlay: (show: boolean) => void;
 }
 
 export const CategorySelector: React.FC<CategorySelectorProps> = ({
@@ -16,10 +18,11 @@ export const CategorySelector: React.FC<CategorySelectorProps> = ({
   onSelectCategory,
   contentType,
   providerKey,
+  showAllOverlay,
+  setShowAllOverlay,
 }) => {
   const { user, updatePreferences } = useAuth();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const [showAllOverlay, setShowAllOverlay] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
   const key = `${providerKey}_${contentType}`;
@@ -200,7 +203,7 @@ export const CategorySelector: React.FC<CategorySelectorProps> = ({
                 className={`flex h-12 shrink-0 items-center justify-center rounded-full px-6 text-center transition-all duration-300 outline-none text-sm sm:text-base ${
                   isActive
                     ? 'border-transparent bg-gradient-to-r from-sky-400 via-blue-500 to-blue-600 text-white font-extrabold shadow-lg shadow-blue-500/30'
-                    : 'border-gray-800/80 bg-gray-900/30 text-gray-400 font-bold hover:border-gray-770 hover:text-gray-200'
+                    : 'border-gray-800/80 bg-gray-900/30 text-gray-400 font-bold hover:border-gray-750 hover:text-gray-200'
                 } focus:scale-105 focus:border-transparent focus:text-white focus:bg-gradient-to-r focus:from-sky-400 focus:to-blue-500 focus:shadow-[0_0_20px_rgba(56,189,248,0.4)] [&.focused]:scale-105 [&.focused]:!border-transparent [&.focused]:text-white [&.focused]:bg-gradient-to-r [&.focused]:from-sky-400 [&.focused]:to-blue-500 [&.focused]:shadow-[0_0_20px_rgba(56,189,248,0.4)]`}
               >
                 <span className="font-extrabold whitespace-nowrap">
@@ -226,7 +229,7 @@ export const CategorySelector: React.FC<CategorySelectorProps> = ({
 
       {/* Grid Overlay Modal */}
       {showAllOverlay && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4 animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4 animate-in fade-in duration-200 categories-modal-container">
           <div className="w-full max-w-4xl bg-gray-900/90 border border-gray-800 rounded-3xl p-6 shadow-2xl space-y-4 max-h-[85vh] flex flex-col">
             
             {/* Header */}
@@ -241,7 +244,8 @@ export const CategorySelector: React.FC<CategorySelectorProps> = ({
                 {pinnedIds.length > 0 && (
                   <button
                     onClick={handleClearAllPins}
-                    className="px-3 py-1.5 text-xs rounded-lg bg-red-950/40 border border-red-900/50 text-red-400 hover:bg-red-900/30 hover:text-red-200 transition-all cursor-pointer"
+                    data-focusable="true"
+                    className="px-3 py-1.5 text-xs rounded-lg bg-red-950/40 border border-red-900/50 text-red-400 hover:bg-red-900/30 hover:text-red-200 transition-all cursor-pointer outline-none focus:border-red-500 [&.focused]:border-red-500"
                   >
                     Clear All Pins
                   </button>
@@ -251,7 +255,8 @@ export const CategorySelector: React.FC<CategorySelectorProps> = ({
                     setShowAllOverlay(false);
                     setSearchQuery('');
                   }}
-                  className="p-1.5 rounded-lg bg-gray-800 hover:bg-gray-750 text-gray-400 hover:text-gray-200 transition-colors cursor-pointer"
+                  data-focusable="true"
+                  className="p-1.5 rounded-lg bg-gray-800 hover:bg-gray-755 text-gray-400 hover:text-gray-200 transition-colors cursor-pointer outline-none focus:bg-gray-700 [&.focused]:bg-gray-700"
                 >
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -267,7 +272,9 @@ export const CategorySelector: React.FC<CategorySelectorProps> = ({
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search categories..."
-                className="w-full bg-gray-950 border border-gray-800 hover:border-gray-750 focus:border-blue-500 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                data-focusable="true"
+                data-default-focus="true"
+                className="w-full bg-gray-950 border border-gray-800 hover:border-gray-750 focus:border-blue-500 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500 outline-none [&.focused]:border-blue-500 [&.focused]:ring-1 [&.focused]:ring-blue-500"
                 autoFocus
               />
               {searchQuery && (
@@ -296,24 +303,30 @@ export const CategorySelector: React.FC<CategorySelectorProps> = ({
                     return (
                       <div
                         key={cat.id || idx}
-                        onClick={() => handleSelect(cat.id, cat.title)}
-                        className={`flex items-center justify-between p-3.5 rounded-xl border text-xs sm:text-sm font-bold truncate transition-all cursor-pointer ${
+                        className={`flex items-center justify-between p-2 rounded-xl border transition-all ${
                           isActive
-                            ? 'bg-blue-600/30 border-blue-500 text-white shadow-lg'
-                            : 'bg-gray-950/40 border-gray-800 hover:border-gray-700 text-gray-400 hover:text-gray-200'
+                            ? 'bg-blue-600/20 border-blue-500 text-white'
+                            : 'bg-gray-950/40 border-gray-800 text-gray-400 hover:text-gray-200'
                         }`}
                       >
-                        <span className="truncate pr-2">{cat.title}</span>
+                        <button
+                          data-focusable="true"
+                          onClick={() => handleSelect(cat.id, cat.title)}
+                          className={`flex-grow text-left p-2.5 rounded-lg text-xs sm:text-sm font-bold truncate transition-all cursor-pointer outline-none focus:scale-[1.02] focus:bg-gray-800/40 [&.focused]:scale-[1.02] [&.focused]:bg-gray-800/40`}
+                        >
+                          <span className="truncate">{cat.title}</span>
+                        </button>
                         
                         {!isAll && (
                           <button
+                            data-focusable="true"
                             onClick={(e) => handleTogglePin(e, cat.id)}
                             title={isPinned ? "Unpin Category" : "Pin Category"}
-                            className={`p-1.5 rounded-lg border transition-all ${
+                            className={`p-2 rounded-lg border transition-all shrink-0 ml-1 outline-none ${
                               isPinned
                                 ? 'bg-sky-500/20 border-sky-400/50 text-sky-300 hover:bg-sky-500/30'
                                 : 'bg-gray-900 border-gray-800 hover:border-gray-700 text-gray-500 hover:text-gray-300'
-                            }`}
+                            } focus:scale-110 focus:border-sky-400 [&.focused]:scale-110 [&.focused]:border-sky-400`}
                           >
                             {/* Pin Icon */}
                             <svg

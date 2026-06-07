@@ -29,6 +29,7 @@ import { getMedia, getSeries, getChannels, type CarouselSlide } from '@/services
 function TVPortal({ onShowAdmin }: { onShowAdmin: () => void }) {
   const isTizen = isTizenDevice();
   const [detailItem, setDetailItem] = useState<MediaItem | null>(null);
+  const [isCategoriesOpen, setIsCategoriesOpen] = useState(false);
   // Track whether the detail modal pushed its own history entry
   const detailHistoryPushed = React.useRef(false);
   const [confirmModal, setConfirmModal] = useState({
@@ -133,6 +134,7 @@ function TVPortal({ onShowAdmin }: { onShowAdmin: () => void }) {
     handleClearWatched: onClearWatched,
     isConfirmingDelete: confirmModal.isOpen,
     isDetailOpen: !!detailItem,
+    isCategoriesOpen: isCategoriesOpen,
     focusedIndex,
     setFocusedIndex,
   });
@@ -363,6 +365,8 @@ function TVPortal({ onShowAdmin }: { onShowAdmin: () => void }) {
                 recentChannels={recentChannels}
                 progressRecords={progressRecords}
                 providerKey={providerKey}
+                isCategoriesOpen={isCategoriesOpen}
+                setIsCategoriesOpen={setIsCategoriesOpen}
               />
             </main>
           </div>

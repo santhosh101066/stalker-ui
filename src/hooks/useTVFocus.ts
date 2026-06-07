@@ -13,6 +13,7 @@ interface TVFocusProps {
   handleClearWatched: () => void;
   isConfirmingDelete: boolean;
   isDetailOpen: boolean;
+  isCategoriesOpen?: boolean;
   focusedIndex: number | null;
   setFocusedIndex: (index: number | null) => void;
 }
@@ -28,6 +29,7 @@ export function useTVFocus({
   handleClearWatched,
   isConfirmingDelete,
   isDetailOpen,
+  isCategoriesOpen = false,
   focusedIndex,
   setFocusedIndex,
 }: TVFocusProps) {
@@ -39,14 +41,19 @@ export function useTVFocus({
   const getFocusableElements = useCallback(() => {
     const detailModal = document.querySelector('.detail-modal-container');
     const confirmModal = document.querySelector('[role="dialog"]');
+    const categoriesModal = document.querySelector('.categories-modal-container');
 
-    if (detailModal) {
+    if (confirmModal) {
+      return Array.from(
+        confirmModal.querySelectorAll('[data-focusable="true"]')
+      ) as HTMLElement[];
+    } else if (detailModal) {
       return Array.from(
         detailModal.querySelectorAll('[data-focusable="true"]')
       ) as HTMLElement[];
-    } else if (confirmModal) {
+    } else if (categoriesModal) {
       return Array.from(
-        confirmModal.querySelectorAll('[data-focusable="true"]')
+        categoriesModal.querySelectorAll('[data-focusable="true"]')
       ) as HTMLElement[];
     } else {
       return Array.from(
@@ -72,7 +79,7 @@ export function useTVFocus({
   }, [focusedIndex]);
 
   useEffect(() => {
-    if (isDetailOpen || isConfirmingDelete) {
+    if (isDetailOpen || isConfirmingDelete || isCategoriesOpen) {
       savedGridIndex.current = latestFocusedIndex.current;
       const timer = setTimeout(() => {
         const focusable = getFocusableElements();
@@ -90,7 +97,7 @@ export function useTVFocus({
         savedGridIndex.current = null;
       }
     }
-  }, [isDetailOpen, isConfirmingDelete, getFocusableElements, setFocusedIndex]);
+  }, [isDetailOpen, isConfirmingDelete, isCategoriesOpen, getFocusableElements, setFocusedIndex]);
 
   useEffect(() => {
     if (isTizen) {

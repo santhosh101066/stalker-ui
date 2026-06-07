@@ -39,6 +39,8 @@ interface MainContentGridProps {
   recentChannels?: string[];
   progressRecords?: ProgressRecord[];
   providerKey?: string;
+  isCategoriesOpen?: boolean;
+  setIsCategoriesOpen?: (open: boolean) => void;
 }
 
 const MainContentGrid = React.memo(
@@ -65,6 +67,8 @@ const MainContentGrid = React.memo(
     recentChannels = [],
     progressRecords = [],
     providerKey = 'default',
+    isCategoriesOpen = false,
+    setIsCategoriesOpen = () => {},
   }: MainContentGridProps) => {
     const isTizen = isTizenDevice();
     const isEpisodeList =
@@ -149,6 +153,8 @@ const MainContentGrid = React.memo(
                 onSelectCategory={onSelectCategory}
                 contentType={contentType as 'movie' | 'series'}
                 providerKey={providerKey}
+                showAllOverlay={isCategoriesOpen}
+                setShowAllOverlay={setIsCategoriesOpen}
               />
             )}
 
